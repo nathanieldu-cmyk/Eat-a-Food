@@ -46,6 +46,7 @@
   const multiLeaveBtn = document.getElementById("multi-leave");
   const multiRoomCodeEl = document.getElementById("multi-room-code");
   const multiPlayersEl = document.getElementById("multi-players");
+  const multiLiveEl = document.getElementById("multi-live");
   const startBtn = document.getElementById("start-btn");
   const overlay = document.getElementById("overlay");
   const overlayTitle = document.getElementById("overlay-title");
@@ -606,8 +607,16 @@
     particles: [],
   };
 
+  let lastFrameAt = 0;
+  const ROOM_PREFIX = "eat-a-food-room-";
+  const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const MAX_ROOM_PLAYERS = 8;
+  const JOIN_TIMEOUT_MS = 15000;
+
   const net = {
-    ws: null,
+    peer: null,
+    hostConn: null,
+    guests: new Map(),
     role: null,
     id: null,
     code: null,
@@ -1995,6 +2004,7 @@
       if (state.running) return;
       const dt = Math.min(0.033, (now - last) / 1000 || 0.016);
       last = now;
+      lastFrameAt = performance.now();
       steerCamera(dt);
       if (updateLobby(dt)) return;
       draw();
@@ -2651,13 +2661,19 @@
     if (!state.running) return;
     const dt = Math.min(0.033, (now - lastTime) / 1000 || 0.016);
     lastTime = now;
+    lastFrameAt = performance.now();
 
     steerCamera(dt);
+    if (!runStep(dt, now)) return;
+    draw();
+    state.animId = requestAnimationFrame(loop);
+  }
+
+  // Returns false when the run ended during this step.
+  function runStep(dt, now) {
     if (net.role === "guest") {
       netPump(dt);
-      draw();
-      state.animId = requestAnimationFrame(loop);
-      return;
+      return true;
     }
     updateFoods(dt);
     resolveEats();
@@ -2681,7 +2697,7 @@
       const aliveHumans = (state.player ? 1 : 0) + net.humans.size;
       if (!aliveHumans) {
         endRun(true);
-        return;
+        return false;
       }
       if (!state.player && !net.waiting) {
         net.waiting = true;
@@ -2689,11 +2705,44 @@
       }
     } else if (!state.player) {
       endRun(true);
-      return;
+      return false;
     }
+    return true;
+  }
 
-    draw();
-    state.animId = requestAnimationFrame(loop);
+  // Background tabs stop animation frames, so a worker timer keeps a room
+  // host simulating and sending snapshots while its tab is hidden.
+  let lastBeatAt = 0;
+  let heartbeat = null;
+
+  function onHeartbeat() {
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastBeatAt) / 1000 || 0.033);
+    lastBeatAt = now;
+    if (!net.role || now - lastFrameAt < 150) return;
+    if (state.running) runStep(dt, now);
+    else updateLobby(dt);
+  }
+
+  function startHeartbeat() {
+    if (heartbeat) return;
+    lastBeatAt = performance.now();
+    try {
+      const src = "setInterval(() => postMessage(0), 33);";
+      const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+      const worker = new Worker(url);
+      URL.revokeObjectURL(url);
+      worker.onmessage = onHeartbeat;
+      heartbeat = { stop: () => worker.terminate() };
+    } catch (err) {
+      const id = setInterval(onHeartbeat, 33);
+      heartbeat = { stop: () => clearInterval(id) };
+    }
+  }
+
+  function stopHeartbeat() {
+    if (heartbeat) heartbeat.stop();
+    heartbeat = null;
   }
 
   function startRun() {
@@ -2871,9 +2920,20 @@
     return used;
   }
 
+  function netReady() {
+    if (net.role === "host") return !!net.peer;
+    if (net.role === "guest") return !!(net.hostConn && net.hostConn.open);
+    return false;
+  }
+
   function netSend(obj) {
-    if (!net.ws || net.ws.readyState !== 1) return;
-    net.ws.send(JSON.stringify(obj));
+    if (net.role === "host") {
+      for (const guest of net.guests.values()) {
+        if (guest.conn.open) guest.conn.send(obj);
+      }
+    } else if (net.role === "guest" && net.hostConn && net.hostConn.open) {
+      net.hostConn.send(obj);
+    }
   }
 
   function broadcastSnap(forceSpr) {
@@ -2894,15 +2954,35 @@
       })),
     };
     if (forceSpr || net.sendSpr) {
-      const spr = [];
-      for (const sprinkle of state.sprinkles) {
-        const index = SPRINKLE_TYPES.findIndex((type) => type.key === sprinkle.type.key);
-        spr.push(Math.round(sprinkle.x), Math.round(sprinkle.y), Math.max(0, index));
-      }
-      msg.spr = spr;
+      msg.spr = packSprinkles(state.sprinkles);
       net.sendSpr = false;
     }
     netSend(msg);
+  }
+
+  // PeerJS packs plain arrays recursively and overflows the stack on thousands
+  // of numbers, so sprinkles travel as binary: x | type << 12, then y.
+  function packSprinkles(sprinkles) {
+    const words = new Uint16Array(sprinkles.length * 2);
+    sprinkles.forEach((sprinkle, i) => {
+      const type = Math.max(0, SPRINKLE_TYPES.indexOf(sprinkle.type));
+      words[i * 2] = (Math.round(sprinkle.x) & 0xfff) | (type << 12);
+      words[i * 2 + 1] = Math.round(sprinkle.y);
+    });
+    return words.buffer;
+  }
+
+  function unpackSprinkles(data) {
+    const bytes = data instanceof ArrayBuffer
+      ? new Uint8Array(data)
+      : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    const words = new Uint16Array(bytes.slice().buffer, 0, Math.floor(bytes.byteLength / 2));
+    const sprinkles = [];
+    for (let i = 0; i + 1 < words.length; i += 2) {
+      const type = SPRINKLE_TYPES[words[i] >> 12] || SPRINKLE_TYPES[0];
+      sprinkles.push({ x: words[i] & 0xfff, y: words[i + 1], type, wobble: (i * 0.17) % 6.2 });
+    }
+    return sprinkles;
   }
 
   function packActor(food, id, name) {
@@ -2917,7 +2997,7 @@
   }
 
   function netPump(dt) {
-    if (!net.role || !net.ws || net.ws.readyState !== 1) return;
+    if (!netReady()) return;
     if (net.role === "guest") {
       net.inAcc += dt;
       if (net.inAcc < 0.05) return;
@@ -3008,12 +3088,16 @@
     multiSetupEl.classList.add("hidden");
     multiRoomEl.classList.remove("hidden");
     multiRoomCodeEl.textContent = code;
+    multiLiveEl.textContent = code;
+    multiLiveEl.classList.remove("hidden");
   }
 
   function showSetup() {
     multiRoomEl.classList.add("hidden");
     multiSetupEl.classList.remove("hidden");
     multiRoomCodeEl.textContent = "";
+    multiLiveEl.textContent = "";
+    multiLiveEl.classList.add("hidden");
   }
 
   function openMulti() {
@@ -3041,8 +3125,12 @@
   }
 
   function clearNet() {
-    const ws = net.ws;
-    net.ws = null;
+    const peer = net.peer;
+    net.peer = null;
+    net.hostConn = null;
+    net.guests.clear();
+    clearTimeout(net.joinTimer);
+    stopHeartbeat();
     net.role = null;
     net.id = null;
     net.code = null;
@@ -3054,9 +3142,8 @@
     if (state.player) state.player.netName = null;
     renderRoster();
     showSetup();
-    if (ws) {
-      ws.onclose = null;
-      try { ws.close(); } catch (err) { /* already closed */ }
+    if (peer) {
+      try { peer.destroy(); } catch (err) { /* already closed */ }
     }
   }
 
@@ -3147,14 +3234,7 @@
         return food;
       });
     }
-    if (msg.spr) {
-      const sprinkles = [];
-      for (let i = 0; i < msg.spr.length; i += 3) {
-        const type = SPRINKLE_TYPES[msg.spr[i + 2]] || SPRINKLE_TYPES[0];
-        sprinkles.push({ x: msg.spr[i], y: msg.spr[i + 1], type, wobble: (i * 0.17) % 6.2 });
-      }
-      state.sprinkles = sprinkles;
-    }
+    if (msg.spr) state.sprinkles = unpackSprinkles(msg.spr);
   }
 
   function onNetMessage(msg) {
@@ -3181,6 +3261,7 @@
       net.code = msg.code;
       net.alive = true;
       if (state.player) state.player.netName = net.name;
+      startHeartbeat();
       applyRoster(msg.players);
       showRoom(msg.code);
       setNetStatus(msg.host ? "Share this code." : "Joined the room.");
@@ -3213,57 +3294,179 @@
     }
   }
 
-  function connectRoom(first) {
+  function newRoomCode() {
+    let code = "";
+    for (let i = 0; i < 4; i++) {
+      code += ROOM_CODE_ALPHABET[Math.floor(Math.random() * ROOM_CODE_ALPHABET.length)];
+    }
+    return code;
+  }
+
+  function cleanRoomCode(value) {
+    return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+  }
+
+  function netErrorText(err) {
+    const type = err && err.type;
+    if (type === "browser-incompatible") return "This browser does not support multiplayer.";
+    if (type === "network" || type === "server-error" || type === "socket-error" || type === "socket-closed") {
+      return "Could not reach the multiplayer service. Check your internet and try again.";
+    }
+    return `Could not connect (${type || "unknown error"}). Try again.`;
+  }
+
+  function startNet() {
     if (net.role) {
       setNetStatus("Leave the current room first.");
-      return;
+      return false;
     }
-    if (!location.host) {
-      setNetStatus("Open this page from python3 server.py so friends can connect.");
-      return;
+    if (net.peer) clearNet();
+    if (!window.Peer) {
+      setNetStatus("Multiplayer could not load. Refresh the page and try again.");
+      return false;
     }
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    let ws;
-    try {
-      ws = new WebSocket(`${proto}://${location.host}/ws`);
-    } catch (err) {
-      setNetStatus("Could not connect. Start the game with python3 server.py.");
-      return;
-    }
-    net.ws = ws;
-    net.name = first.name;
-    ws.onopen = () => {
-      if (net.ws === ws) ws.send(JSON.stringify(first));
-    };
-    ws.onmessage = (event) => {
-      let msg;
-      try {
-        msg = JSON.parse(event.data);
-      } catch (err) {
-        return;
-      }
-      onNetMessage(msg);
-    };
-    ws.onerror = () => {
-      if (net.ws === ws && !net.role) setNetStatus("Could not connect. Start the game with python3 server.py.");
-    };
-    ws.onclose = () => {
-      if (net.ws !== ws || !net.role) {
-        if (net.ws === ws) net.ws = null;
-        return;
-      }
-      const running = state.running;
-      const dead = !net.alive;
-      clearNet();
-      if (running) endRun(dead);
-      const text = "The room closed. You are back in single player.";
-      overlayTitle.textContent = "Multiplayer";
-      overlayMsg.textContent = text;
-      startBtn.textContent = "Enter Lobby";
-      overlay.classList.remove("hidden");
-      setNetStatus(text);
-    };
+    return true;
   }
+
+  function hostRoster() {
+    const players = [{ id: net.id, name: net.name, food: equippedTier().name, host: true }];
+    for (const [id, guest] of net.guests) {
+      players.push({ id, name: guest.name, food: guest.food, host: false });
+    }
+    return players;
+  }
+
+  function shareRoster() {
+    if (net.role !== "host") return;
+    const players = hostRoster();
+    applyRoster(players);
+    netSend({ t: "roster", players });
+  }
+
+  function hostAccept(conn) {
+    let joined = false;
+    conn.on("data", (msg) => {
+      if (net.role !== "host" || !msg || typeof msg !== "object") return;
+      if (!joined) {
+        if (msg.t !== "join") return;
+        if (net.guests.size + 1 >= MAX_ROOM_PLAYERS) {
+          conn.send({ t: "err", msg: "That room is full (8 players)." });
+          setTimeout(() => conn.close(), 500);
+          return;
+        }
+        joined = true;
+        net.guests.set(conn.peer, {
+          conn,
+          name: String(msg.name || "Player").trim().slice(0, 12) || "Player",
+          food: String(msg.food || "").slice(0, 80),
+        });
+        conn.send({ t: "room", code: net.code, id: conn.peer, host: false, players: hostRoster() });
+        shareRoster();
+        return;
+      }
+      const guest = net.guests.get(conn.peer);
+      if (!guest) return;
+      if (msg.t === "in") {
+        msg.id = conn.peer;
+        const food = String(msg.food || "").slice(0, 80);
+        if (food && food !== guest.food) {
+          guest.food = food;
+          shareRoster();
+        }
+        onGuestInput(msg);
+      } else if (msg.t === "end" && state.running) {
+        endRun(false);
+      }
+    });
+    conn.on("close", () => {
+      const guest = net.guests.get(conn.peer);
+      if (!guest || guest.conn !== conn) return;
+      net.guests.delete(conn.peer);
+      shareRoster();
+    });
+    conn.on("error", () => {});
+  }
+
+  function createRoom(name, attempt = 0) {
+    if (!startNet()) return;
+    const code = newRoomCode();
+    const peer = new window.Peer(ROOM_PREFIX + code);
+    net.peer = peer;
+    net.name = name;
+    setNetStatus("Creating room…");
+    peer.on("open", () => {
+      if (net.peer !== peer) return;
+      net.name = name;
+      net.id = "host";
+      net.code = code;
+      net.role = "host";
+      onNetMessage({ t: "room", host: true, code, id: "host", players: hostRoster() });
+      setNetStatus("Share this code. Friends can join from any computer.");
+    });
+    peer.on("connection", hostAccept);
+    peer.on("disconnected", () => {
+      if (net.peer === peer && !peer.destroyed) peer.reconnect();
+    });
+    peer.on("error", (err) => {
+      if (net.peer !== peer) return;
+      if (!net.role && err.type === "unavailable-id" && attempt < 5) {
+        clearNet();
+        createRoom(name, attempt + 1);
+        return;
+      }
+      if (!net.role) onNetMessage({ t: "err", msg: netErrorText(err) });
+    });
+  }
+
+  function joinRoom(code, name) {
+    if (!startNet()) return;
+    const peer = new window.Peer();
+    net.peer = peer;
+    net.name = name;
+    setNetStatus("Connecting…");
+    net.joinTimer = setTimeout(() => {
+      if (net.peer === peer && !net.role) {
+        onNetMessage({ t: "err", msg: "Could not reach that room. Check the code and try again." });
+      }
+    }, JOIN_TIMEOUT_MS);
+    peer.on("open", () => {
+      if (net.peer !== peer) return;
+      const conn = peer.connect(ROOM_PREFIX + code, { reliable: true });
+      net.hostConn = conn;
+      conn.on("open", () => {
+        if (net.hostConn === conn) conn.send({ t: "join", name, food: equippedTier().name });
+      });
+      conn.on("data", (msg) => {
+        if (net.hostConn !== conn || !msg || typeof msg !== "object") return;
+        if (msg.t === "room") clearTimeout(net.joinTimer);
+        onNetMessage(msg);
+      });
+      conn.on("close", () => {
+        if (net.hostConn !== conn) return;
+        if (net.role) onNetMessage({ t: "closed", msg: "The host left. You are back in single player." });
+        else onNetMessage({ t: "err", msg: "Could not join that room." });
+      });
+      conn.on("error", () => {});
+    });
+    peer.on("disconnected", () => {
+      if (net.peer === peer && !peer.destroyed && net.role) peer.reconnect();
+    });
+    peer.on("error", (err) => {
+      if (net.peer !== peer) return;
+      if (err.type === "peer-unavailable") {
+        if (net.role) onNetMessage({ t: "closed", msg: "The host left. You are back in single player." });
+        else onNetMessage({ t: "err", msg: "No room with that code." });
+        return;
+      }
+      if (!net.role) onNetMessage({ t: "err", msg: netErrorText(err) });
+    });
+  }
+
+  window.addEventListener("pagehide", () => {
+    if (net.peer) {
+      try { net.peer.destroy(); } catch (err) { /* already closed */ }
+    }
+  });
 
   startBtn.addEventListener("click", closeOverlay);
   endBtn.addEventListener("click", () => {
@@ -3280,16 +3483,14 @@
   inventoryBtn.addEventListener("click", openInventory);
   multiBtn.addEventListener("click", openMulti);
   multiCloseBtn.addEventListener("click", closeMulti);
-  multiCreateBtn.addEventListener("click", () => {
-    connectRoom({ t: "create", name: playerNetName(), food: equippedTier().name });
-  });
+  multiCreateBtn.addEventListener("click", () => createRoom(playerNetName()));
   multiJoinBtn.addEventListener("click", () => {
-    const code = (multiCodeEl.value || "").trim();
+    const code = cleanRoomCode(multiCodeEl.value);
     if (code.length < 4) {
       setNetStatus("Enter the 4-character code.");
       return;
     }
-    connectRoom({ t: "join", code, name: playerNetName(), food: equippedTier().name });
+    joinRoom(code, playerNetName());
   });
   multiLeaveBtn.addEventListener("click", () => {
     const running = state.running;

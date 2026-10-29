@@ -48,6 +48,7 @@
           <button id="shop-btn" class="btn ghost" type="button">Shop</button>
           <button id="craft-btn" class="btn ghost" type="button">Craft</button>
           <button id="multi-btn" class="btn ghost" type="button">Multiplayer</button>
+          <p id="multi-live" class="multi-live hidden"></p>
         </div>
         <p id="potion-status" class="potion-status hidden"></p>
         <footer class="hud">
@@ -97,7 +98,7 @@
           <button id="multi-close" class="btn ghost small" type="button">Close</button>
         </div>
       </div>
-      <p id="multi-status" class="multi-status">Create a room, or join with a code. Friends use this same address.</p>
+      <p id="multi-status" class="multi-status">Create a room, or join with a friend's code. Works from any computer with internet.</p>
       <div id="multi-setup">
         <label class="multi-label">Name
           <input id="multi-name" maxlength="12" value="Player" autocomplete="nickname" />
@@ -157,7 +158,8 @@
     </div>
   </div>
 
+  <script src="vendor/peerjs.min.js?v=1"></script>
   <script src="foods.js?v=24"></script>
-  <script src="game.js?v=137"></script>
+  <script src="game.js?v=144"></script>
 </body>
 </html>

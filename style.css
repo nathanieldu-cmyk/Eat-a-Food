@@ -854,6 +854,19 @@ h1 {
   color: #ffe6c6;
 }
 
+.multi-live {
+  margin: 0;
+  text-align: center;
+  font-family: "Fredoka", sans-serif;
+  font-size: 1.4rem;
+  letter-spacing: 0.18em;
+  color: #ffd166;
+}
+
+.multi-live.hidden {
+  display: none;
+}
+
 .multi-label {
   display: grid;
   gap: 6px;
