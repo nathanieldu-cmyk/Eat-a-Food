@@ -163,6 +163,9 @@
     } else if (name.startsWith("Rainbow ") || name.startsWith("Shiny ")) {
       prefix = "Rainbow ";
       base = name.startsWith("Rainbow ") ? name.slice("Rainbow ".length) : name.slice("Shiny ".length);
+    } else if (name.startsWith("Shadow ")) {
+      prefix = "Shadow ";
+      base = name.slice("Shadow ".length);
     }
     if (FOOD_RENAMES[base]) return prefix + FOOD_RENAMES[base];
     if (prefix === "Rainbow " && name.startsWith("Shiny ")) return prefix + base;
@@ -232,9 +235,26 @@
     };
   }
 
+  function makeShadowFood(shiny) {
+    return {
+      name: `Shadow ${shiny.baseName}`,
+      emoji: shiny.emoji,
+      rarity: shiny.rarity,
+      multiplier: +(shiny.multiplier + 2).toFixed(2),
+      growth: +(shiny.growth * 1.5).toFixed(2),
+      speed: scaledSpeed(shiny.speed),
+      odds: shiny.odds * 4,
+      color: "#2a1438",
+      rim: "#9b5cff",
+      isShadow: true,
+      baseName: shiny.baseName,
+    };
+  }
+
   const GOLDEN_FOODS = FOOD_TIERS.map(makeGoldenFood);
   const SHINY_FOODS = GOLDEN_FOODS.map(makeShinyFood);
-  const ALL_FOODS = [...FOOD_TIERS, ...GOLDEN_FOODS, ...SHINY_FOODS];
+  const SHADOW_FOODS = SHINY_FOODS.map(makeShadowFood);
+  const ALL_FOODS = [...FOOD_TIERS, ...GOLDEN_FOODS, ...SHINY_FOODS, ...SHADOW_FOODS];
   const tierByName = Object.fromEntries(ALL_FOODS.map((t) => [t.name, t]));
   const foodsByRarity = Object.fromEntries(
     RARITIES.map((r) => [r.id, FOOD_TIERS.filter((t) => t.rarity === r.id)])
@@ -246,28 +266,73 @@
   const shinyByBase = Object.fromEntries(
     SHINY_FOODS.map((s) => [s.baseName, s])
   );
+  const shadowByBase = Object.fromEntries(
+    SHADOW_FOODS.map((s) => [s.baseName, s])
+  );
 
   function variantClass(tier) {
+    if (tier.isShadow) return "rarity-shadow";
     if (tier.isShiny) return "rarity-shiny";
     if (tier.isGolden) return "rarity-golden";
     return `rarity-${tier.rarity}`;
   }
 
-  const POTION_COST = 500;
+  function variantLabel(tier) {
+    if (tier.isShadow) return " · Shadow";
+    if (tier.isShiny) return " · Rainbow";
+    if (tier.isGolden) return " · Golden";
+    return "";
+  }
+
+  const POTION_COST = 1000;
   const POTION_DURATION_MS = 10 * 60 * 1000;
+  const LUCK_POTION_MAX_STACKS = 5;
   const POTIONS = [
-    { id: "luck", name: "Luck Potion", emoji: "🍀", detail: "+50% luck for 10 minutes" },
-    { id: "speed", name: "Speed Potion", emoji: "⚡", detail: "+25% speed for 10 minutes" },
-    { id: "growth", name: "Growth Potion", emoji: "🌱", detail: "+25% growth for 10 minutes" },
-    { id: "points", name: "Points Potion", emoji: "✨", detail: "+25% points for 10 minutes" },
+    {
+      id: "luck",
+      name: "Luck Potion",
+      emoji: "🍀",
+      detail: "+50% luck for 10 minutes. Strength stacks up to ×5. Time stacks forever",
+    },
+    {
+      id: "speed",
+      name: "Speed Potion",
+      emoji: "⚡",
+      detail: "+25% speed for 10 minutes. Time stacks forever; strength does not",
+    },
+    {
+      id: "growth",
+      name: "Growth Potion",
+      emoji: "🌱",
+      detail: "+25% growth for 10 minutes. Time stacks forever; strength does not",
+    },
+    {
+      id: "points",
+      name: "Points Potion",
+      emoji: "✨",
+      detail: "+25% points for 10 minutes. Time stacks forever; strength does not",
+    },
   ];
 
   function emptyPotions() {
     return { luck: 0, speed: 0, growth: 0, points: 0 };
   }
 
+  function starterPotions() {
+    return { luck: 1, speed: 1, growth: 1, points: 1 };
+  }
+
+  function emptyPotionEffect() {
+    return { endsAt: 0, stacks: 0 };
+  }
+
   function emptyActivePotions() {
-    return { luck: [], speed: [], growth: [], points: [] };
+    return {
+      luck: emptyPotionEffect(),
+      speed: emptyPotionEffect(),
+      growth: emptyPotionEffect(),
+      points: emptyPotionEffect(),
+    };
   }
 
   function formatRemaining(ms) {
@@ -293,7 +358,7 @@
       equipped: "Peanut",
       bestRun: 0,
       diamonds: 0,
-      potions: emptyPotions(),
+      potions: starterPotions(),
       activePotions: emptyActivePotions(),
       discovered: { Peanut: true },
       // Already applied, so a brand-new save is not given the old starter foods.
@@ -314,8 +379,8 @@
         (tier.rarity === best.rarity && tier.multiplier > best.multiplier) ||
         (tier.rarity === best.rarity &&
           tier.multiplier === best.multiplier &&
-          tier.isGolden &&
-          !best.isGolden)
+          (tier.isShadow ? 3 : tier.isShiny ? 2 : tier.isGolden ? 1 : 0) >
+            (best.isShadow ? 3 : best.isShiny ? 2 : best.isGolden ? 1 : 0))
       ) {
         best = tier;
       }
@@ -382,30 +447,81 @@
     }
   }
 
+  function normalizePotionEffect(raw, id, now = Date.now()) {
+    const effect = emptyPotionEffect();
+    if (Array.isArray(raw)) {
+      const live = raw
+        .map((time) => Number(time))
+        .filter((time) => Number.isFinite(time) && time > now);
+      if (!live.length) return effect;
+      // Old saves stored one expiry per drink. Fold remaining time together.
+      effect.endsAt = now + live.reduce((sum, time) => sum + (time - now), 0);
+      effect.stacks =
+        id === "luck" ? Math.min(LUCK_POTION_MAX_STACKS, live.length) : 1;
+      return effect;
+    }
+    if (raw && typeof raw === "object") {
+      effect.endsAt = Math.max(0, Number(raw.endsAt) || 0);
+      effect.stacks = Math.max(0, Math.floor(Number(raw.stacks) || 0));
+    }
+    if (effect.endsAt <= now) {
+      effect.endsAt = 0;
+      effect.stacks = 0;
+      return effect;
+    }
+    if (id === "luck") effect.stacks = Math.min(LUCK_POTION_MAX_STACKS, effect.stacks);
+    else effect.stacks = effect.stacks > 0 ? 1 : 0;
+    return effect;
+  }
+
   function readActivePotions(raw, readyRaw) {
     const active = emptyActivePotions();
     const now = Date.now();
     if (raw && typeof raw === "object") {
       for (const key of Object.keys(active)) {
-        const list = Array.isArray(raw[key]) ? raw[key] : [];
-        active[key] = list
-          .map((time) => Number(time))
-          .filter((time) => Number.isFinite(time) && time > now);
+        active[key] = normalizePotionEffect(raw[key], key, now);
       }
     }
     const ready = readPotionBag(readyRaw);
     for (const key of Object.keys(active)) {
-      for (let i = 0; i < ready[key]; i++) active[key].push(now + POTION_DURATION_MS);
+      for (let i = 0; i < ready[key]; i++) applyPotionDrink(active[key], key, now);
     }
     return active;
   }
 
-  function boostStacks(id) {
+  function applyPotionDrink(effect, id, now = Date.now()) {
+    const live = effect.endsAt > now;
+    const base = live ? effect.endsAt : now;
+    effect.endsAt = base + POTION_DURATION_MS;
+    if (id === "luck") {
+      effect.stacks = Math.min(LUCK_POTION_MAX_STACKS, (live ? effect.stacks : 0) + 1);
+    } else {
+      effect.stacks = 1;
+    }
+    return effect;
+  }
+
+  function potionEffect(id) {
+    const effect = save.activePotions[id] || emptyPotionEffect();
     const now = Date.now();
-    const list = save.activePotions[id] || [];
-    const live = list.filter((time) => time > now);
-    if (live.length !== list.length) save.activePotions[id] = live;
-    return live.length;
+    if (effect.endsAt <= now) {
+      if (effect.endsAt || effect.stacks) {
+        effect.endsAt = 0;
+        effect.stacks = 0;
+        save.activePotions[id] = effect;
+      }
+      return effect;
+    }
+    if (id === "luck") effect.stacks = Math.min(LUCK_POTION_MAX_STACKS, effect.stacks);
+    else effect.stacks = 1;
+    return effect;
+  }
+
+  function boostStacks(id) {
+    const effect = potionEffect(id);
+    if (effect.endsAt <= Date.now()) return 0;
+    if (id === "luck") return Math.min(LUCK_POTION_MAX_STACKS, effect.stacks);
+    return effect.stacks > 0 ? 1 : 0;
   }
 
   function persistSave() {
@@ -598,8 +714,34 @@
     };
   }
 
+  function randomArenaSpot(margin = 80) {
+    return {
+      x: rand(margin, ARENA - margin),
+      y: rand(margin, ARENA - margin),
+    };
+  }
+
+  function farArenaSpot(fromSpots, minDist, margin = 80) {
+    let best = null;
+    let bestMin = -1;
+    for (let i = 0; i < 48; i++) {
+      const spot = randomArenaSpot(margin);
+      let nearest = Infinity;
+      for (const other of fromSpots) {
+        nearest = Math.min(nearest, Math.hypot(spot.x - other.x, spot.y - other.y));
+      }
+      if (nearest >= minDist) return spot;
+      if (nearest > bestMin) {
+        bestMin = nearest;
+        best = spot;
+      }
+    }
+    return best || randomArenaSpot(margin);
+  }
+
   function spawnPlayer() {
-    const food = createFood(equippedTier(), ARENA / 2, ARENA / 2, false);
+    const spot = randomArenaSpot();
+    const food = createFood(equippedTier(), spot.x, spot.y, false);
     clampToArena(food);
     state.player = food;
   }
@@ -716,30 +858,34 @@
     return gained;
   }
 
+  function spawnRivalAt(tier, x, y, size) {
+    if (state.rivals.length >= MAX_RIVALS) return null;
+    const rival = createFood(tier, x, y, true);
+    rival.size = size;
+    clampToArena(rival);
+    state.rivals.push(rival);
+    return rival;
+  }
+
   function spawnRival() {
-    if (state.rivals.length >= MAX_RIVALS) return;
     const playerRank = rarityById[rarityForRunIndex(Math.max(0, state.foodsEarned - 1))].rank;
     const rivalRank = Math.max(0, Math.min(RARITIES.length - 1, playerRank + Math.floor(rand(-1, 2))));
     const tier = pickFoodFromRarity(RARITIES[rivalRank].id);
-    const side = Math.floor(Math.random() * 4);
-    let x = 40;
-    let y = 40;
-    if (side === 0) {
-      x = rand(40, ARENA - 40);
-      y = 40;
-    } else if (side === 1) {
-      x = ARENA - 40;
-      y = rand(40, ARENA - 40);
-    } else if (side === 2) {
-      x = rand(40, ARENA - 40);
-      y = ARENA - 40;
-    } else {
-      x = 40;
-      y = rand(40, ARENA - 40);
+    const spot = randomArenaSpot();
+    spawnRivalAt(tier, spot.x, spot.y, rand(8, 12 + state.foodsEarned * 0.35));
+  }
+
+  // Two same-food CPUs, kept far from the player and from each other.
+  function spawnTwinRivals() {
+    if (!state.player) return;
+    const tier = equippedTier();
+    const used = [{ x: state.player.x, y: state.player.y }];
+    const minAway = ARENA * 0.32;
+    for (let i = 0; i < 2; i++) {
+      const spot = farArenaSpot(used, minAway);
+      spawnRivalAt(tier, spot.x, spot.y, 10);
+      used.push(spot);
     }
-    const rival = createFood(tier, x, y, true);
-    rival.size = rand(8, 12 + state.foodsEarned * 0.35);
-    state.rivals.push(rival);
   }
 
   function pointInZone(nx, ny, zone) {
@@ -823,6 +969,21 @@
     updateHud();
   }
 
+  // Same as addPoints, but eating another food can award at most 10 foods.
+  function addEatPoints(amount) {
+    const before = foodsFromPoints(state.points);
+    state.points += amount;
+    const natural = foodsFromPoints(state.points) - before;
+    const gained = Math.min(10, natural);
+    if (natural > 10) {
+      const factor = foodGainFactor();
+      const into = (state.points * factor) % POINTS_PER_FOOD;
+      state.points = ((before + 10) * POINTS_PER_FOOD + into) / factor;
+    }
+    for (let i = 0; i < gained; i++) awardRunFood();
+    updateHud();
+  }
+
   function burst(x, y, color) {
     for (let i = 0; i < 8; i++) {
       const a = rand(0, Math.PI * 2);
@@ -859,7 +1020,8 @@
     const growthBoost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : 1;
     eater.size += preySize * eater.tier.growth * growthBoost;
     // Every 10 of their size → 1 point; foodGainFactor applies the points multiplier.
-    if (!eater.isRival && prey.isRival) addPoints(preySize / 10);
+    // At most 10 foods from one eat.
+    if (!eater.isRival && prey.isRival) addEatPoints(preySize / 10);
     burst(prey.x, prey.y, prey.tier.color);
     preyList.splice(preyIndex, 1);
 
@@ -917,27 +1079,58 @@
     );
   }
 
-  // Same choices the rival foods make: chase a smaller player, otherwise the nearest sprinkle.
-  function steerLikeCpu(food, spd) {
-    const prey =
-      food !== state.player && state.player && food.size >= state.player.size * 1.15 ? state.player : null;
-    const snack = nearestSprinkle(food);
-    if (prey && dist(food, prey) < 220) steerToward(food, prey, 0.42 * spd);
-    else if (snack) steerToward(food, snack, 0.4 * spd);
-    else steerToward(food, { x: ARENA / 2, y: ARENA / 2 }, 0.2 * spd);
+  function otherFoods(food) {
+    const others = [];
+    if (state.player && state.player !== food) others.push(state.player);
+    for (const rival of state.rivals) {
+      if (rival !== food) others.push(rival);
+    }
+    return others;
   }
 
-  function nearestSprinkle(food) {
+  // Prefer closer sprinkles, with a slight pull toward higher-point ones.
+  function preferredSprinkle(food) {
     let best = null;
-    let bestD = Infinity;
+    let bestScore = Infinity;
     for (const s of state.sprinkles) {
-      const d = dist(food, s);
-      if (d < bestD) {
-        bestD = d;
+      const score = dist(food, s) / (1 + s.type.points / 250);
+      if (score < bestScore) {
+        bestScore = score;
         best = s;
       }
     }
     return best;
+  }
+
+  // Flee bigger foods, chase smaller ones, otherwise hunt sprinkles with a size bias.
+  function steerLikeCpu(food, spd) {
+    let threat = null;
+    let threatD = Infinity;
+    let prey = null;
+    let preyD = Infinity;
+    for (const other of otherFoods(food)) {
+      const d = dist(food, other);
+      if (other.size > food.size && d < threatD) {
+        threat = other;
+        threatD = d;
+      } else if (other.size < food.size && d < preyD) {
+        prey = other;
+        preyD = d;
+      }
+    }
+
+    if (threat && threatD < 220 && threatD > 0) {
+      food.vx += ((food.x - threat.x) / threatD) * 0.55 * spd;
+      food.vy += ((food.y - threat.y) / threatD) * 0.55 * spd;
+      return;
+    }
+    if (prey && preyD < 280) {
+      steerToward(food, prey, 0.48 * spd);
+      return;
+    }
+    const snack = preferredSprinkle(food);
+    if (snack) steerToward(food, snack, 0.4 * spd);
+    else steerToward(food, { x: ARENA / 2, y: ARENA / 2 }, 0.2 * spd);
   }
 
   function moveSpeed(food) {
@@ -959,7 +1152,7 @@
       const dir = controlDirection();
       if (dir) {
         steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
-        const nearest = nearestSprinkle(food);
+        const nearest = preferredSprinkle(food);
         if (nearest && dist(food, nearest) < 140) {
           steerToward(food, nearest, 0.22 * spd);
         }
@@ -1003,6 +1196,7 @@
   const FOOD_MODEL_SCALE = 2.15;
 
   function ringColor(tier) {
+    if (tier.isShadow) return "#9b5cff";
     if (tier.isShiny) return "#7ec8ff";
     if (tier.isGolden) return "#ffd700";
     return "#ffffff";
@@ -1177,7 +1371,13 @@
     const tier = food.tier;
     const shinyHue = (t * 0.2 + entry.spin) % 1;
     for (const mat of entry.materials) {
-      if (tier.isShiny) {
+      if (tier.isShadow) {
+        mat.color.set("#1a0c28");
+        mat.emissive.set("#6b2dff");
+        mat.emissiveIntensity = 0.55 + Math.sin(t * 2.4 + entry.spin) * 0.12;
+        mat.metalness = 0.35;
+        mat.roughness = 0.42;
+      } else if (tier.isShiny) {
         mat.color.setHSL(shinyHue, 0.65, 0.62);
         mat.emissive.setHSL(shinyHue, 0.85, 0.38);
         mat.emissiveIntensity = 0.6;
@@ -1210,6 +1410,11 @@
     }
     if (entry.ring) {
       entry.ring.material.color.set(ringColor(tier));
+    }
+    if (entry.aura) {
+      const pulse = 0.22 + (Math.sin(t * 2.6 + entry.spin) + 1) * 0.08;
+      entry.aura.material.opacity = pulse;
+      entry.aura.visible = !!tier.isShadow;
     }
   }
 
@@ -1252,8 +1457,19 @@
         })
       );
       ring.rotation.x = Math.PI / 2;
+      const aura = new THREE.Mesh(
+        new THREE.SphereGeometry(0.92, 28, 20),
+        new THREE.MeshBasicMaterial({
+          color: 0x8a3dff,
+          transparent: true,
+          opacity: 0.28,
+          depthWrite: false,
+        })
+      );
+      aura.visible = !!food.tier.isShadow;
       const label = makeLabelSprite(THREE);
       group.add(holder);
+      group.add(aura);
       group.add(ring);
       group.add(label);
       view.scene.add(group);
@@ -1263,6 +1479,7 @@
         label,
         materials,
         ring,
+        aura,
         spin: Math.random() * Math.PI * 2,
         sizeText: "",
       };
@@ -1278,6 +1495,10 @@
     entry.ring.rotation.set(Math.PI / 2, 0, 0);
     entry.ring.scale.setScalar(scale);
     entry.ring.position.set(0, scale * (RING_TUBE + 0.02), 0);
+    if (entry.aura) {
+      entry.aura.scale.setScalar(scale);
+      entry.aura.position.set(0, scale * 0.45, 0);
+    }
     entry.group.position.set(worldX(food.x), bob, worldZ(food.y));
     entry.label.position.y = scale + 16;
     const sizeText = formatCount(food.displaySize());
@@ -1770,9 +1991,8 @@
 
   function tierStatsLabel(tier) {
     const rarity = rarityById[tier.rarity];
-    const variantTag = tier.isShiny ? " · Rainbow" : tier.isGolden ? " · Golden" : "";
     const oddsText = ` · 1 in ${formatOdds(tier.odds)}`;
-    return `${tier.emoji} ${tier.name} · ${rarity.label}${variantTag}${oddsText} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
+    return `${tier.emoji} ${tier.name} · ${rarity.label}${variantLabel(tier)}${oddsText} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
   }
 
   function spendCraft(fromName, toName) {
@@ -1787,7 +2007,15 @@
   }
 
   function craftGolden(baseTier, { persist = true } = {}) {
-    if (state.running || !baseTier || baseTier.isGolden || baseTier.isShiny) return false;
+    if (
+      state.running ||
+      !baseTier ||
+      baseTier.isGolden ||
+      baseTier.isShiny ||
+      baseTier.isShadow
+    ) {
+      return false;
+    }
     const golden = goldenByBase[baseTier.name];
     if (!golden || !spendCraft(baseTier.name, golden.name)) return false;
     if (persist) persistSave();
@@ -1802,6 +2030,14 @@
     return true;
   }
 
+  function craftShadow(shinyTier, { persist = true } = {}) {
+    if (state.running || !shinyTier?.isShiny) return false;
+    const shadow = shadowByBase[shinyTier.baseName];
+    if (!shadow || !spendCraft(shinyTier.name, shadow.name)) return false;
+    if (persist) persistSave();
+    return true;
+  }
+
   function craftableCounts() {
     let goldens = 0;
     const goldenAfter = {};
@@ -1812,24 +2048,36 @@
       goldenAfter[golden.name] = ownedCount(golden.name) + made;
     }
     let shinies = 0;
+    const shinyAfter = {};
     for (const golden of GOLDEN_FOODS) {
-      shinies += Math.floor((goldenAfter[golden.name] || 0) / CRAFT_COST);
+      const made = Math.floor((goldenAfter[golden.name] || 0) / CRAFT_COST);
+      shinies += made;
+      const shiny = shinyByBase[golden.baseName];
+      shinyAfter[shiny.name] = ownedCount(shiny.name) + made;
     }
-    return { goldens, shinies };
+    let shadows = 0;
+    for (const shiny of SHINY_FOODS) {
+      shadows += Math.floor((shinyAfter[shiny.name] || 0) / CRAFT_COST);
+    }
+    return { goldens, shinies, shadows };
   }
 
   function craftAll() {
-    if (state.running) return { goldens: 0, shinies: 0 };
+    if (state.running) return { goldens: 0, shinies: 0, shadows: 0 };
     let goldens = 0;
     let shinies = 0;
+    let shadows = 0;
     for (const tier of FOOD_TIERS) {
       while (craftGolden(tier, { persist: false })) goldens += 1;
     }
     for (const golden of GOLDEN_FOODS) {
       while (craftShiny(golden, { persist: false })) shinies += 1;
     }
-    if (goldens || shinies) persistSave();
-    return { goldens, shinies };
+    for (const shiny of SHINY_FOODS) {
+      while (craftShadow(shiny, { persist: false })) shadows += 1;
+    }
+    if (goldens || shinies || shadows) persistSave();
+    return { goldens, shinies, shadows };
   }
 
   function renderEquippedUi() {
@@ -1866,9 +2114,7 @@
       "inv-item " +
       variantClass(tier) +
       (save.equipped === tier.name ? " equipped" : "");
-    tile.title = `${tier.name} · ${rarity.label}${
-      tier.isShiny ? " · Rainbow" : tier.isGolden ? " · Golden" : ""
-    } · 1 in ${formatOdds(tier.odds)} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
+    tile.title = `${tier.name} · ${rarity.label}${variantLabel(tier)} · 1 in ${formatOdds(tier.odds)} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
 
     tile.innerHTML = `
       <span class="count">×${count}</span>
@@ -1923,16 +2169,17 @@
     const parts = [];
     if (counts.goldens) parts.push(`${counts.goldens} Golden`);
     if (counts.shinies) parts.push(`${counts.shinies} Rainbow`);
+    if (counts.shadows) parts.push(`${counts.shadows} Shadow`);
     craftAllBtn.textContent = parts.length
       ? `Craft All (${parts.join(", ")})`
       : `Craft All (need ${CRAFT_COST})`;
     craftAllBtn.disabled = state.running || parts.length === 0;
-    craftAllBtn.title = `50 of a food → 1 Golden. 50 Goldens → 1 Rainbow.`;
+    craftAllBtn.title = `50 of a food → 1 Golden. 50 Goldens → 1 Rainbow. 50 Rainbows → 1 Shadow.`;
     craftAllBtn.addEventListener("click", () => {
       const scrollTop = craftListEl.scrollTop;
       const beforeTypes = ownedTypeCount();
       const made = craftAll();
-      if (!made.goldens && !made.shinies) return;
+      if (!made.goldens && !made.shinies && !made.shadows) return;
       showLuckNotice(beforeTypes);
       renderEquippedUi();
       renderCraft();
@@ -2030,6 +2277,8 @@
         (a, b) => b.odds - a.odds
       );
       for (const base of bases) {
+        const shadow = shadowByBase[base.name];
+        if (shadow && ownedCount(shadow.name) > 0) group.push(shadow);
         const shiny = shinyByBase[base.name];
         if (shiny && ownedCount(shiny.name) > 0) group.push(shiny);
         const golden = goldenByBase[base.name];
@@ -2051,6 +2300,8 @@
       const rarity = RARITIES[i];
       const bases = FOOD_TIERS.filter((t) => t.rarity === rarity.id).sort((a, b) => b.odds - a.odds);
       for (const base of bases) {
+        const shiny = shinyByBase[base.name];
+        if (shiny && ownedCount(shiny.name) > 0) rows.push(shiny);
         const golden = goldenByBase[base.name];
         if (golden && ownedCount(golden.name) > 0) rows.push(golden);
         if (ownedCount(base.name) > 0) rows.push(base);
@@ -2061,7 +2312,11 @@
       return;
     }
     for (const tier of rows) {
-      const craftTarget = tier.isGolden ? shinyByBase[tier.baseName] : goldenByBase[tier.name];
+      const craftTarget = tier.isShiny
+        ? shadowByBase[tier.baseName]
+        : tier.isGolden
+          ? shinyByBase[tier.baseName]
+          : goldenByBase[tier.name];
       if (!craftTarget) continue;
       const count = ownedCount(tier.name);
       const canCraft = count >= CRAFT_COST;
@@ -2075,13 +2330,19 @@
       const actions = row.querySelector(".shop-actions");
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "btn craft small" + (tier.isGolden ? " shiny" : "");
+      button.className =
+        "btn craft small" +
+        (tier.isShiny ? " shadow" : tier.isGolden ? " shiny" : "");
       button.textContent = canCraft ? "Craft" : `${count}/${CRAFT_COST}`;
       button.disabled = state.running || !canCraft;
       button.title = `Combine ${CRAFT_COST} ${tier.name} into 1 ${craftTarget.name}`;
       button.addEventListener("click", () => {
         const beforeTypes = ownedTypeCount();
-        const ok = tier.isGolden ? craftShiny(tier) : craftGolden(tier);
+        const ok = tier.isShiny
+          ? craftShadow(tier)
+          : tier.isGolden
+            ? craftShiny(tier)
+            : craftGolden(tier);
         if (!ok) return;
         showLuckNotice(beforeTypes);
         renderEquippedUi();
@@ -2098,19 +2359,18 @@
     shopListEl.innerHTML = "";
     for (const potion of POTIONS) {
       const owned = save.potions[potion.id] || 0;
-      const stacks = boostStacks(potion.id);
       const row = document.createElement("div");
       row.className = "shop-row";
       row.innerHTML = `
         <h3>${potion.emoji} ${potion.name}</h3>
         <div class="shop-actions"></div>
-        <p>${potion.detail}. Owned ${owned}. <span class="potion-timer" data-potion="${potion.id}">${potionTimerText(potion.id, stacks)}</span></p>
+        <p>${potion.detail}. Owned ${owned}. <span class="potion-timer" data-potion="${potion.id}">${potionTimerText(potion.id)}</span></p>
       `;
       const actions = row.querySelector(".shop-actions");
       const buyBtn = document.createElement("button");
       buyBtn.type = "button";
       buyBtn.className = "btn ghost small";
-      buyBtn.textContent = "Buy 500";
+      buyBtn.textContent = `Buy ${POTION_COST}`;
       buyBtn.disabled = state.running || save.diamonds < POTION_COST;
       buyBtn.addEventListener("click", () => buyPotion(potion.id));
       const useBtn = document.createElement("button");
@@ -2125,19 +2385,26 @@
     }
   }
 
-  function potionTimerText(id, stacks = boostStacks(id)) {
-    if (!stacks) return "Not active.";
-    const latest = Math.max(...save.activePotions[id]);
-    return `Active ×${stacks} · ${formatRemaining(latest - Date.now())} left.`;
+  function potionTimerText(id) {
+    const effect = potionEffect(id);
+    if (effect.endsAt <= Date.now()) return "Not active.";
+    const power =
+      id === "luck"
+        ? ` · strength ×${boostStacks(id)}/${LUCK_POTION_MAX_STACKS}`
+        : "";
+    return `Active${power} · ${formatRemaining(effect.endsAt - Date.now())} left.`;
   }
 
   function renderPotionStatus() {
     const parts = [];
     for (const potion of POTIONS) {
-      const stacks = boostStacks(potion.id);
-      if (!stacks) continue;
-      const latest = Math.max(...save.activePotions[potion.id]);
-      parts.push(`${potion.emoji} ${potion.name} ×${stacks} · ${formatRemaining(latest - Date.now())}`);
+      const effect = potionEffect(potion.id);
+      if (effect.endsAt <= Date.now()) continue;
+      const power =
+        potion.id === "luck" ? ` ×${boostStacks(potion.id)}` : "";
+      parts.push(
+        `${potion.emoji} ${potion.name}${power} · ${formatRemaining(effect.endsAt - Date.now())}`
+      );
     }
     potionStatusEl.textContent = parts.join("   ");
     potionStatusEl.classList.toggle("hidden", parts.length === 0);
@@ -2160,7 +2427,10 @@
   function usePotion(id) {
     if (state.running || (save.potions[id] || 0) <= 0) return;
     save.potions[id] -= 1;
-    save.activePotions[id].push(Date.now() + POTION_DURATION_MS);
+    if (!save.activePotions[id] || Array.isArray(save.activePotions[id])) {
+      save.activePotions[id] = emptyPotionEffect();
+    }
+    applyPotionDrink(save.activePotions[id], id);
     persistSave();
     renderShop();
     renderPotionStatus();
@@ -2283,6 +2553,7 @@
     state.lastSpawnAt = performance.now();
     seedSprinkles();
     spawnPlayer();
+    spawnTwinRivals();
     if (view) view.distance = RUN_CAMERA_DISTANCE;
     updateHud();
     overlay.classList.add("hidden");

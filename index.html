@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=54" />
+  <link rel="stylesheet" href="style.css?v=55" />
   <script type="importmap">
     {
       "imports": {
@@ -71,7 +71,7 @@
       <div id="overlay" class="overlay">
         <div class="panel">
           <h2 id="overlay-title">Eat a Food</h2>
-          <p id="overlay-msg">Every 1000 points earns a food. Luck starts at +100%, and every 10 food types adds another +50%. Walk into the glowing circle to start a run. The gold stand sells potions, and the purple stand crafts Goldens and Rainbows.</p>
+          <p id="overlay-msg">Every 1000 points earns a food. Luck starts at +100%, and every 10 food types adds another +50%. Walk into the glowing circle to start a run. The gold stand sells potions, and the purple stand crafts Goldens, Rainbows, and Shadows.</p>
           <div id="pull-results" class="pull-results hidden"></div>
           <div class="panel-actions">
             <button id="start-btn" class="btn primary">Enter Lobby</button>
@@ -110,7 +110,7 @@
         <h2 id="shop-title">Shop</h2>
         <button id="shop-close" class="btn ghost small" type="button">Close</button>
       </div>
-      <p class="inv-hint">Potions cost 500 diamonds. Each one lasts 10 minutes, and another of the same kind stacks.</p>
+      <p class="inv-hint">Potions cost 1000 diamonds. Each one adds 10 minutes. Luck strength stacks up to ×5; other potions keep one strength and only stack time.</p>
       <p id="shop-diamonds" class="shop-diamonds"></p>
       <div id="shop-list" class="shop-list"></div>
     </div>
@@ -122,14 +122,14 @@
         <h2 id="craft-title">Craft</h2>
         <button id="craft-close" class="btn ghost small" type="button">Close</button>
       </div>
-      <p class="inv-hint">Combine 50 of a food into 1 Golden, then 50 Goldens into 1 Rainbow. Each step is +2 points, 1.5× growth, and 1.5× speed.</p>
+      <p class="inv-hint">Combine 50 of a food into 1 Golden, 50 Goldens into 1 Rainbow, then 50 Rainbows into 1 Shadow. Each step is +2 points, 1.5× growth, and 1.5× speed.</p>
       <div id="luck-notice" class="luck-notice hidden"></div>
       <div id="craft-all-slot" class="craft-all-bar"></div>
       <div id="craft-list" class="shop-list craft-list"></div>
     </div>
   </div>
 
-  <script src="foods.js?v=23"></script>
-  <script src="game.js?v=126"></script>
+  <script src="foods.js?v=24"></script>
+  <script src="game.js?v=134"></script>
 </body>
 </html>
