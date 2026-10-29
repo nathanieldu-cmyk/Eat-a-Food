@@ -31,23 +31,46 @@ body {
     radial-gradient(ellipse 70% 50% at 90% 80%, rgba(194, 59, 90, 0.18), transparent 50%),
     linear-gradient(160deg, var(--bg-deep), var(--bg-warm) 55%, #14100e);
   min-height: 100%;
-  display: grid;
-  place-items: center;
+  height: 100%;
+  overflow: hidden;
 }
 
 #app {
-  width: min(920px, 100vw - 24px);
+  width: 100%;
+  height: 100%;
+  max-height: 100dvh;
   display: grid;
-  gap: 14px;
-  padding: 16px 0 20px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px 18px 16px;
 }
 
-.top-bar {
+.play-row {
+  min-height: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  align-items: stretch;
+  gap: 16px;
+  container-type: size;
+}
+
+.side-panel {
+  flex: 0 0 280px;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.stage-slot {
+  flex: 0 0 auto;
+  width: min(100cqh, calc(100cqw - 296px));
+  min-width: 0;
+  min-height: 0;
+  display: grid;
 }
 
 h1 {
@@ -58,22 +81,15 @@ h1 {
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
 }
 
-.top-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 14px;
-}
-
 .stats {
-  display: flex;
-  gap: 18px;
+  display: grid;
+  gap: 10px;
 }
 
 .stat {
   display: grid;
   gap: 2px;
-  text-align: right;
+  text-align: left;
 }
 
 .stat .label {
@@ -99,8 +115,8 @@ h1 {
 
 .stage {
   position: relative;
-  width: min(720px, 100%);
-  margin: 0 auto;
+  width: 100%;
+  height: 100%;
   aspect-ratio: 1;
   border-radius: 18px;
   overflow: hidden;
@@ -289,8 +305,7 @@ h1 {
 .btn.danger {
   background: linear-gradient(180deg, #ef6d88, var(--berry));
   color: #fff8f4;
-  min-width: 120px;
-  align-self: stretch;
+  width: 100%;
 }
 
 .btn.ghost {
@@ -305,13 +320,15 @@ h1 {
 }
 
 .header-buttons {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 8px;
 }
 
+.header-buttons .btn {
+  width: 100%;
+}
+
 .potion-status {
-  flex: 1 0 100%;
   margin: 0;
   font-size: 0.9rem;
   color: #ffd166;
@@ -402,16 +419,21 @@ h1 {
 }
 
 .craft-panel {
-  width: min(560px, 100%);
+  width: min(860px, 100%);
   max-height: min(84vh, 760px);
   overflow: hidden;
   grid-template-rows: auto auto auto minmax(0, 1fr);
 }
 
 .craft-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: auto;
   min-height: 0;
   overscroll-behavior: contain;
+}
+
+.craft-list .inv-empty {
+  grid-column: 1 / -1;
 }
 
 .equipped-preview {
@@ -569,14 +591,15 @@ h1 {
 
 .best-equip-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
 .best-equip-bar .btn {
   width: 100%;
-  font-size: 0.92rem;
-  padding: 10px 8px;
+  font-size: 0.82rem;
+  padding: 10px 6px;
+  line-height: 1.15;
 }
 
 .craft-all-bar {
@@ -699,11 +722,17 @@ h1 {
 
 .hud {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 14px;
-  align-items: center;
-  width: min(720px, 100%);
-  margin: 0 auto;
+  gap: 10px;
+  width: 100%;
+}
+
+#auto-farm-btn {
+  width: 100%;
+}
+
+#auto-farm-btn[aria-pressed="true"] {
+  background: linear-gradient(180deg, #7dcea0, #3db88a);
+  color: #143026;
 }
 
 .food-meter {
@@ -723,10 +752,25 @@ h1 {
 }
 
 .meter-track {
-  height: 14px;
+  position: relative;
+  height: 22px;
   border-radius: 999px;
   background: var(--track);
   overflow: hidden;
+}
+
+.meter-value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: "Fredoka", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--cream);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
 }
 
 .meter-fill {
@@ -753,21 +797,38 @@ h1 {
   border: 1px solid rgba(255, 243, 224, 0.14);
 }
 
-@media (max-width: 640px) {
-  .hud {
+@media (max-width: 800px) {
+  body {
+    overflow: auto;
+  }
+
+  #app {
+    height: auto;
+    max-height: none;
+  }
+
+  .play-row {
+    display: grid;
     grid-template-columns: 1fr;
+    container-type: normal;
   }
 
-  .btn.danger {
+  .side-panel {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .stage-slot {
     width: 100%;
   }
 
-  .stats {
+  .stage {
     width: 100%;
-    justify-content: space-between;
+    height: auto;
+    aspect-ratio: 1;
   }
 
-  .stat {
-    text-align: left;
+  .craft-list {
+    grid-template-columns: 1fr;
   }
 }

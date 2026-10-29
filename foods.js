@@ -3,8 +3,8 @@
 // growth: growth multiplier
 // speed: speed stat, shown as-is in the inventory.
 // odds: pull rate, shown in the game as "1 in {odds}"
-// Golden and Shiny are not listed. Each craft step adds +2 points, 1.5× growth, and 1.5× speed.
-// model: 3D file in the models folder. Golden and Shiny use the same model as the normal food.
+// Golden and Rainbow are not listed. Each craft step adds +2 points, 1.5× growth, and 1.5× speed.
+// model: 3D file in the models folder. Golden and Rainbow use the same model as the normal food.
 // name, emoji, rarity, color, and rim can stay as they are.
 window.FOOD_LIST = [
     // Common — avg speed ~0.82
@@ -66,23 +66,23 @@ window.FOOD_LIST = [
     { name: "Mooncake", emoji: "🥮️", rarity: "legendary", points: 8.4, growth: 7.4, speed: 2.6, odds: 40000000, model: "mooncake-cartoon3.glb", color: "#e0b060", rim: "#c49030" },
     { name: "Bacon", emoji: "🥓", rarity: "legendary", points: 8.2, growth: 6.7, speed: 1.72, odds: 35000000, model: "bacon-cartoon3.glb", color: "#e07070", rim: "#f4d0c0" },
     { name: "Olive", emoji: "🫒", rarity: "legendary", points: 8.0, growth: 6.9, speed: 1.55, odds: 30000000, model: "olive-v2.glb", color: "#6a9a32", rim: "#4a7020" },
-    { name: "Pizza", emoji: "🍕", rarity: "legendary", points: 7.8, growth: 6.3, speed: 2.22, odds: 26000000, model: "pizza-cartoon3.glb", color: "#e8a04a", rim: "#d44838" },
-    { name: "Cake", emoji: "🎂", rarity: "legendary", points: 7.6, growth: 6.55, speed: 2.85, odds: 2200000, model: "cake-cartoon3.glb", color: "#ffd6a8", rim: "#f48ab0" },
-    { name: "Coconut", emoji: "🥥", rarity: "legendary", points: 7.2, growth: 6.0, speed: 1.9, odds: 2000000, model: "coconut-cartoon3.glb", color: "#f4efe4", rim: "#6a4a30" },
-    { name: "Waffle", emoji: "🧇", rarity: "legendary", points: 7.0, growth: 6.2, speed: 2.48, odds: 1800000, model: "waffle-cartoon3.glb", color: "#e0a04a", rim: "#c47828" },
-    { name: "Parfait Tower", emoji: "🥂", rarity: "legendary", points: 6.9, growth: 5.6, speed: 2.35, odds: 1400000, model: "parfait-tower-v2.glb", color: "#f7f4ee", rim: "#f2d56a" },
-    { name: "Dumpling", emoji: "🥟", rarity: "legendary", points: 6.6, growth: 5.85, speed: 1.88, odds: 1000000, model: "dumpling-cartoon3.glb", color: "#f0e0c8", rim: "#e8c8a0" },
+    { name: "Pizza", emoji: "🍕", rarity: "legendary", points: 7.8, growth: 6.3, speed: 2.22, odds: 27000000, model: "pizza-cartoon3.glb", color: "#e8a04a", rim: "#d44838" },
+    { name: "Cake", emoji: "🎂", rarity: "legendary", points: 7.6, growth: 6.55, speed: 2.85, odds: 2400000, model: "cake-cartoon3.glb", color: "#ffd6a8", rim: "#f48ab0" },
+    { name: "Coconut", emoji: "🥥", rarity: "legendary", points: 7.2, growth: 6.0, speed: 1.9, odds: 1900000, model: "coconut-cartoon3.glb", color: "#f4efe4", rim: "#6a4a30" },
+    { name: "Waffle", emoji: "🧇", rarity: "legendary", points: 7.0, growth: 6.2, speed: 2.48, odds: 1400000, model: "waffle-cartoon3.glb", color: "#e0a04a", rim: "#c47828" },
+    { name: "Parfait Tower", emoji: "🥂", rarity: "legendary", points: 6.9, growth: 5.6, speed: 2.35, odds: 1100000, model: "parfait-tower-v2.glb", color: "#f7f4ee", rim: "#f2d56a" },
+    { name: "Dumpling", emoji: "🥟", rarity: "legendary", points: 6.6, growth: 5.85, speed: 1.88, odds: 800000, model: "dumpling-cartoon3.glb", color: "#f0e0c8", rim: "#e8c8a0" },
     { name: "Ricecake", emoji: "🍙", rarity: "legendary", points: 6.5, growth: 5.5, speed: 2.15, odds: 500000, model: "ricecake-cartoon3.glb", color: "#f4f0e4", rim: "#2a2a2a" },
 
     // Mythic — avg speed ~2.80
-    { name: "Rice", emoji: "🍚", rarity: "mythic", points: 14.0, growth: 11.2, speed: 2.8, odds: 1000000000, model: "rice-cartoon3.glb", color: "#f7f4ee", rim: "#e8d8c0" },
-    { name: "Ramen", emoji: "🍜", rarity: "mythic", points: 13.2, growth: 10.6, speed: 2.72, odds: 950000000, model: "ramen-cartoon3.glb", color: "#e8a15a", rim: "#f4e4c8" },
-    { name: "Steak", emoji: "🥩", rarity: "mythic", points: 12.6, growth: 9.4, speed: 3.35, odds: 700000000, model: "steak-cartoon3.glb", color: "#a84838", rim: "#6a2820" },
-    { name: "Boba", emoji: "🧋", rarity: "mythic", points: 11.8, growth: 9.8, speed: 3.2, odds: 550000000, model: "boba-cartoon3.glb", color: "#c4a07a", rim: "#2a241c" },
-    { name: "Hotdog", emoji: "🌭", rarity: "mythic", points: 11.4, growth: 8.9, speed: 2.15, odds: 350000000, model: "hotdog-cartoon3.glb", color: "#e05838", rim: "#f0d2a0" },
-    { name: "Sushi", emoji: "🍣", rarity: "mythic", points: 10.8, growth: 9.2, speed: 2.35, odds: 250000000, model: "sushi-cartoon3.glb", color: "#f4a0a0", rim: "#f7f4ee" },
-    { name: "Avocado", emoji: "🥑", rarity: "mythic", points: 10.4, growth: 8.3, speed: 2.9, odds: 200000000, model: "avocado-cartoon3.glb", color: "#6aaa32", rim: "#c4a05a" },
-    { name: "Champagne", emoji: "🍾", rarity: "mythic", points: 9.8, growth: 8.6, speed: 2.95, odds: 150000000, model: "champagne-v2.glb", color: "#2a6a32", rim: "#f2d56a" },
-    { name: "Donut", emoji: "🍩", rarity: "mythic", points: 9.6, growth: 8.1, speed: 3.1, odds: 100000000, model: "donut.glb", color: "#e8a0c0", rim: "#f2d06a" },
+    { name: "Rice", emoji: "🍚", rarity: "mythic", points: 14.0, growth: 11.2, speed: 2.8, odds: 500000000, model: "rice-cartoon3.glb", color: "#f7f4ee", rim: "#e8d8c0" },
+    { name: "Ramen", emoji: "🍜", rarity: "mythic", points: 13.2, growth: 10.6, speed: 2.72, odds: 450000000, model: "ramen-cartoon3.glb", color: "#e8a15a", rim: "#f4e4c8" },
+    { name: "Steak", emoji: "🥩", rarity: "mythic", points: 12.6, growth: 9.4, speed: 3.35, odds: 380000000, model: "steak-cartoon3.glb", color: "#a84838", rim: "#6a2820" },
+    { name: "Boba", emoji: "🧋", rarity: "mythic", points: 11.8, growth: 9.8, speed: 3.2, odds: 300000000, model: "boba-cartoon3.glb", color: "#c4a07a", rim: "#2a241c" },
+    { name: "Hotdog", emoji: "🌭", rarity: "mythic", points: 11.4, growth: 8.9, speed: 2.15, odds: 250000000, model: "hotdog-cartoon3.glb", color: "#e05838", rim: "#f0d2a0" },
+    { name: "Sushi", emoji: "🍣", rarity: "mythic", points: 10.8, growth: 9.2, speed: 2.35, odds: 200000000, model: "sushi-cartoon3.glb", color: "#f4a0a0", rim: "#f7f4ee" },
+    { name: "Avocado", emoji: "🥑", rarity: "mythic", points: 10.4, growth: 8.3, speed: 2.9, odds: 150000000, model: "avocado-cartoon3.glb", color: "#6aaa32", rim: "#c4a05a" },
+    { name: "Champagne", emoji: "🍾", rarity: "mythic", points: 9.8, growth: 8.6, speed: 2.95, odds: 100000000, model: "champagne-v2.glb", color: "#2a6a32", rim: "#f2d56a" },
+    { name: "Donut", emoji: "🍩", rarity: "mythic", points: 9.6, growth: 8.1, speed: 3.1, odds: 75000000, model: "donut.glb", color: "#e8a0c0", rim: "#f2d06a" },
 ];
 

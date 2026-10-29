@@ -11,6 +11,7 @@
   const diamondsEl = document.getElementById("diamonds");
   const foodCountEl = document.getElementById("food-count");
   const foodFillEl = document.getElementById("food-fill");
+  const foodNextEl = document.getElementById("food-next");
   const equippedLineEl = document.getElementById("equipped-line");
   const inventoryGridEl = document.getElementById("inventory-grid");
   const inventoryScrollEl = document.getElementById("inventory-scroll");
@@ -31,6 +32,7 @@
   const shopDiamondsEl = document.getElementById("shop-diamonds");
   const invCloseBtn = document.getElementById("inv-close");
   const endBtn = document.getElementById("end-btn");
+  const autoFarmBtn = document.getElementById("auto-farm-btn");
   const startBtn = document.getElementById("start-btn");
   const overlay = document.getElementById("overlay");
   const overlayTitle = document.getElementById("overlay-title");
@@ -41,13 +43,14 @@
   const luckNoticeEl = document.getElementById("luck-notice");
   const potionStatusEl = document.getElementById("potion-status");
   const lobbyHintEl = document.getElementById("lobby-hint");
+  const afterRunActionsEl = document.getElementById("after-run-actions");
 
   const ARENA = 2880;
   const MAP_SCALE = ARENA / 720;
   const AREA_SCALE = MAP_SCALE * MAP_SCALE;
   const LOBBY_CAMERA_DISTANCE = 1150;
   const LOBBY_RADIUS = 420;
-  const PORTAL_RADIUS = 70;
+  const PORTAL_RADIUS = 120;
   const SHOP_PAD_RADIUS = 58;
   const SHOP_STALL_RADIUS = 62;
   const CRAFT_PAD_RADIUS = 58;
@@ -56,7 +59,6 @@
   const MIN_CAMERA_DISTANCE = 240;
   const MAX_CAMERA_DISTANCE = 1650 * MAP_SCALE;
   const POINTS_PER_FOOD = 1000;
-  const MAX_METER = 40;
   const MAX_RIVALS = 5;
   const MAX_SPRINKLES = Math.round(250 * AREA_SCALE);
   const MAX_XS_SPRINKLES = Math.round(140 * AREA_SCALE);
@@ -158,11 +160,13 @@
     if (name.startsWith("Golden ")) {
       prefix = "Golden ";
       base = name.slice(7);
-    } else if (name.startsWith("Shiny ")) {
-      prefix = "Shiny ";
-      base = name.slice(6);
+    } else if (name.startsWith("Rainbow ") || name.startsWith("Shiny ")) {
+      prefix = "Rainbow ";
+      base = name.startsWith("Rainbow ") ? name.slice("Rainbow ".length) : name.slice("Shiny ".length);
     }
-    return FOOD_RENAMES[base] ? prefix + FOOD_RENAMES[base] : name;
+    if (FOOD_RENAMES[base]) return prefix + FOOD_RENAMES[base];
+    if (prefix === "Rainbow " && name.startsWith("Shiny ")) return prefix + base;
+    return name;
   }
 
   // Small/medium: anywhere. Large: outer ring. XL: inside the inner two circles only.
@@ -214,7 +218,7 @@
 
   function makeShinyFood(golden) {
     return {
-      name: `Shiny ${golden.baseName}`,
+      name: `Rainbow ${golden.baseName}`,
       emoji: golden.emoji,
       rarity: golden.rarity,
       multiplier: +(golden.multiplier + 2).toFixed(2),
@@ -326,17 +330,20 @@
       const parsed = JSON.parse(raw);
       const next = defaultSave();
       const fromVersion = Number(parsed.version || 1);
+      let renamed = false;
       if (parsed.inventory && typeof parsed.inventory === "object") {
         next.inventory = {};
         for (const [rawName, count] of Object.entries(parsed.inventory)) {
           const n = Math.floor(Number(count) || 0);
           const name = renameSheetFood(migrateFoodName(rawName, fromVersion));
+          if (name !== rawName) renamed = true;
           if (n <= 0 || !tierByName[name]) continue;
           next.inventory[name] = (next.inventory[name] || 0) + n;
         }
         if (Object.keys(next.inventory).length === 0) next.inventory = { Peanut: 1 };
       }
       const equippedName = renameSheetFood(migrateFoodName(parsed.equipped || "", fromVersion));
+      if (equippedName !== (parsed.equipped || "")) renamed = true;
       if (equippedName && next.inventory[equippedName]) {
         next.equipped = equippedName;
       } else {
@@ -360,12 +367,13 @@
           : [];
       for (const rawName of rawDiscovered) {
         const name = renameSheetFood(migrateFoodName(String(rawName), fromVersion));
+        if (name !== String(rawName)) renamed = true;
         if (tierByName[name]) next.discovered[name] = true;
       }
       for (const [name, count] of Object.entries(next.inventory)) {
         if (count > 0 && tierByName[name]) next.discovered[name] = true;
       }
-      if (fromVersion < SAVE_VERSION || hadReady) {
+      if (fromVersion < SAVE_VERSION || hadReady || renamed) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       }
       return next;
@@ -457,6 +465,7 @@
     mode: "lobby",
     onShopPad: false,
     onCraftPad: false,
+    autoFarm: false,
     points: 0,
     foodsEarned: 0,
     player: null,
@@ -843,12 +852,14 @@
 
   function tryEatFood(eater, prey, preyList, preyIndex) {
     if (eater.size <= prey.size) return false;
-    if (dist(eater, prey) > eater.drawRadius() * 0.55) return false;
+    // Eat when the food models touch. The ring sits outside the model.
+    if (dist(eater, prey) > bodyReach(eater) + bodyReach(prey)) return false;
 
     const preySize = prey.size;
     const growthBoost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : 1;
     eater.size += preySize * eater.tier.growth * growthBoost;
-    if (!eater.isRival && prey.isRival) addPoints(Math.floor(preySize));
+    // Every 10 of their size → 1 point; foodGainFactor applies the points multiplier.
+    if (!eater.isRival && prey.isRival) addPoints(preySize / 10);
     burst(prey.x, prey.y, prey.tier.color);
     preyList.splice(preyIndex, 1);
 
@@ -895,6 +906,27 @@
     food.vy += (dy / d) * speed;
   }
 
+  function playerIsMoving() {
+    return (
+      moveKeys.has("w") ||
+      moveKeys.has("a") ||
+      moveKeys.has("s") ||
+      moveKeys.has("d") ||
+      moveKeys.has("arrowup") ||
+      moveKeys.has("arrowdown")
+    );
+  }
+
+  // Same choices the rival foods make: chase a smaller player, otherwise the nearest sprinkle.
+  function steerLikeCpu(food, spd) {
+    const prey =
+      food !== state.player && state.player && food.size >= state.player.size * 1.15 ? state.player : null;
+    const snack = nearestSprinkle(food);
+    if (prey && dist(food, prey) < 220) steerToward(food, prey, 0.42 * spd);
+    else if (snack) steerToward(food, snack, 0.4 * spd);
+    else steerToward(food, { x: ARENA / 2, y: ARENA / 2 }, 0.2 * spd);
+  }
+
   function nearestSprinkle(food) {
     let best = null;
     let bestD = Infinity;
@@ -925,10 +957,14 @@
     if (food) {
       const spd = moveSpeed(food);
       const dir = controlDirection();
-      if (dir) steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
-      const nearest = nearestSprinkle(food);
-      if (nearest && dist(food, nearest) < 140) {
-        steerToward(food, nearest, 0.22 * spd);
+      if (dir) {
+        steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
+        const nearest = nearestSprinkle(food);
+        if (nearest && dist(food, nearest) < 140) {
+          steerToward(food, nearest, 0.22 * spd);
+        }
+      } else if (state.autoFarm && !playerIsMoving()) {
+        steerLikeCpu(food, spd);
       }
 
       for (const rival of state.rivals) {
@@ -949,11 +985,7 @@
 
     for (const rival of state.rivals) {
       const spd = moveSpeed(rival);
-      const prey = state.player && rival.size >= state.player.size * 1.15 ? state.player : null;
-      const snack = nearestSprinkle(rival);
-      if (prey && dist(rival, prey) < 220) steerToward(rival, prey, 0.42 * spd);
-      else if (snack) steerToward(rival, snack, 0.4 * spd);
-      else steerToward(rival, { x: ARENA / 2, y: ARENA / 2 }, 0.2 * spd);
+      steerLikeCpu(rival, spd);
 
       rival.vx *= 0.88;
       rival.vy *= 0.88;
@@ -979,6 +1011,11 @@
   // Outer edge of the ring. It scales with the food, and an orb is eaten when it touches it.
   function ringReach(food) {
     return (RING_MAJOR + RING_TUBE) * food.drawRadius() * FOOD_MODEL_SCALE;
+  }
+
+  // Half of the fitted model. Models are scaled so their longest side equals this reach times two.
+  function bodyReach(food) {
+    return 0.5 * food.drawRadius() * FOOD_MODEL_SCALE;
   }
 
   function resolveEats() {
@@ -1378,7 +1415,7 @@
     portalDisc.rotation.x = -Math.PI / 2;
     portalDisc.position.y = 0.8;
     const portalRing = new THREE.Mesh(
-      new THREE.TorusGeometry(PORTAL_RADIUS, 5, 12, 96),
+      new THREE.TorusGeometry(PORTAL_RADIUS, 8, 12, 96),
       new THREE.MeshStandardMaterial({
         color: 0xbfe6ff,
         emissive: 0x4aa8ff,
@@ -1684,6 +1721,9 @@
       );
       mesh.count = 0;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      // Instance positions move every frame. The mesh bounds stay at the origin,
+      // so turning the camera would cull every sprinkle of that size at once.
+      mesh.frustumCulled = false;
       scene.add(mesh);
       sprinkles[type.key] = mesh;
     }
@@ -1730,7 +1770,7 @@
 
   function tierStatsLabel(tier) {
     const rarity = rarityById[tier.rarity];
-    const variantTag = tier.isShiny ? " · Shiny" : tier.isGolden ? " · Golden" : "";
+    const variantTag = tier.isShiny ? " · Rainbow" : tier.isGolden ? " · Golden" : "";
     const oddsText = ` · 1 in ${formatOdds(tier.odds)}`;
     return `${tier.emoji} ${tier.name} · ${rarity.label}${variantTag}${oddsText} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
   }
@@ -1827,7 +1867,7 @@
       variantClass(tier) +
       (save.equipped === tier.name ? " equipped" : "");
     tile.title = `${tier.name} · ${rarity.label}${
-      tier.isShiny ? " · Shiny" : tier.isGolden ? " · Golden" : ""
+      tier.isShiny ? " · Rainbow" : tier.isGolden ? " · Golden" : ""
     } · 1 in ${formatOdds(tier.odds)} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
 
     tile.innerHTML = `
@@ -1882,12 +1922,12 @@
     craftAllBtn.className = "btn craft";
     const parts = [];
     if (counts.goldens) parts.push(`${counts.goldens} Golden`);
-    if (counts.shinies) parts.push(`${counts.shinies} Shiny`);
+    if (counts.shinies) parts.push(`${counts.shinies} Rainbow`);
     craftAllBtn.textContent = parts.length
       ? `Craft All (${parts.join(", ")})`
       : `Craft All (need ${CRAFT_COST})`;
     craftAllBtn.disabled = state.running || parts.length === 0;
-    craftAllBtn.title = `50 of a food → 1 Golden. 50 Goldens → 1 Shiny.`;
+    craftAllBtn.title = `50 of a food → 1 Golden. 50 Goldens → 1 Rainbow.`;
     craftAllBtn.addEventListener("click", () => {
       const scrollTop = craftListEl.scrollTop;
       const beforeTypes = ownedTypeCount();
@@ -2178,10 +2218,11 @@
     pointsEl.textContent = Math.floor(state.points).toLocaleString();
     const effective = state.points * foodGainFactor();
     const into = effective % POINTS_PER_FOOD;
+    const remaining = Math.max(0, Math.ceil(POINTS_PER_FOOD - into));
     nextFoodEl.textContent = `${Math.floor(into)} / ${POINTS_PER_FOOD}`;
     foodCountEl.textContent = String(state.foodsEarned);
-    const pct = Math.min(100, (state.foodsEarned / MAX_METER) * 100);
-    foodFillEl.style.width = `${pct}%`;
+    foodFillEl.style.width = `${(into / POINTS_PER_FOOD) * 100}%`;
+    foodNextEl.textContent = `${remaining.toLocaleString()} pts`;
     renderEquippedUi();
   }
 
@@ -2326,6 +2367,7 @@
       ? `A rival ate you. ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`
       : `Nice run! ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`;
     startBtn.textContent = "Back to Lobby";
+    afterRunActionsEl.classList.remove("hidden");
     overlay.classList.remove("hidden");
     enterLobby();
     renderEquippedUi();
@@ -2370,6 +2412,10 @@
 
   startBtn.addEventListener("click", closeOverlay);
   endBtn.addEventListener("click", () => endRun(false));
+  autoFarmBtn.addEventListener("click", () => {
+    state.autoFarm = !state.autoFarm;
+    autoFarmBtn.setAttribute("aria-pressed", state.autoFarm ? "true" : "false");
+  });
   inventoryBtn.addEventListener("click", openInventory);
   overlayInventoryBtn.addEventListener("click", openInventory);
   shopBtn.addEventListener("click", openShop);

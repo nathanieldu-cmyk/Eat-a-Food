@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=45" />
+  <link rel="stylesheet" href="style.css?v=54" />
   <script type="importmap">
     {
       "imports": {
@@ -18,9 +18,9 @@
 </head>
 <body>
   <div id="app">
-    <header class="top-bar">
-      <h1>Eat a Food</h1>
-      <div class="top-actions">
+    <h1>Eat a Food</h1>
+    <div class="play-row">
+      <aside class="side-panel">
         <div class="stats">
           <div class="stat">
             <span class="label">Points</span>
@@ -48,21 +48,34 @@
           <button id="shop-btn" class="btn ghost" type="button">Shop</button>
           <button id="craft-btn" class="btn ghost" type="button">Craft</button>
         </div>
-      </div>
-      <p id="potion-status" class="potion-status hidden"></p>
-    </header>
-
+        <p id="potion-status" class="potion-status hidden"></p>
+        <footer class="hud">
+          <button id="auto-farm-btn" class="btn ghost" type="button" aria-pressed="false">Auto Farm</button>
+          <div class="food-meter">
+            <div class="meter-label">
+              <span>Foods this run</span>
+              <span id="food-count">0</span>
+            </div>
+            <div class="meter-track">
+              <div id="food-fill" class="meter-fill"></div>
+              <span id="food-next" class="meter-value">1,000</span>
+            </div>
+          </div>
+          <button id="end-btn" class="btn danger" disabled>End Run</button>
+        </footer>
+      </aside>
+      <div class="stage-slot">
     <main class="stage">
       <canvas id="arena" width="720" height="720"></canvas>
       <div id="lobby-hint" class="lobby-hint">Blue circle: start a run · Gold pad: shop · Purple pad: craft</div>
       <div id="overlay" class="overlay">
         <div class="panel">
           <h2 id="overlay-title">Eat a Food</h2>
-          <p id="overlay-msg">Every 1000 points earns a food. Luck starts at +100%, and every 10 food types adds another +50%. Walk into the glowing circle to start a run. The gold stand sells potions, and the purple stand crafts Goldens and Shinies.</p>
+          <p id="overlay-msg">Every 1000 points earns a food. Luck starts at +100%, and every 10 food types adds another +50%. Walk into the glowing circle to start a run. The gold stand sells potions, and the purple stand crafts Goldens and Rainbows.</p>
           <div id="pull-results" class="pull-results hidden"></div>
           <div class="panel-actions">
             <button id="start-btn" class="btn primary">Enter Lobby</button>
-            <div id="after-run-actions" class="after-run-actions">
+            <div id="after-run-actions" class="after-run-actions hidden">
               <button id="overlay-inventory-btn" class="btn ghost" type="button">Inventory</button>
               <button id="overlay-shop-btn" class="btn ghost" type="button">Shop</button>
               <button id="overlay-craft-btn" class="btn ghost" type="button">Craft</button>
@@ -71,19 +84,8 @@
         </div>
       </div>
     </main>
-
-    <footer class="hud">
-      <div class="food-meter">
-        <div class="meter-label">
-          <span>Foods this run</span>
-          <span id="food-count">0</span>
-        </div>
-        <div class="meter-track">
-          <div id="food-fill" class="meter-fill"></div>
-        </div>
       </div>
-      <button id="end-btn" class="btn danger" disabled>End Run</button>
-    </footer>
+    </div>
   </div>
 
   <div id="inventory-modal" class="inv-modal hidden" aria-hidden="true">
@@ -120,14 +122,14 @@
         <h2 id="craft-title">Craft</h2>
         <button id="craft-close" class="btn ghost small" type="button">Close</button>
       </div>
-      <p class="inv-hint">Combine 50 of a food into 1 Golden, then 50 Goldens into 1 Shiny. Each step is +2 points, 1.5× growth, and 1.5× speed.</p>
+      <p class="inv-hint">Combine 50 of a food into 1 Golden, then 50 Goldens into 1 Rainbow. Each step is +2 points, 1.5× growth, and 1.5× speed.</p>
       <div id="luck-notice" class="luck-notice hidden"></div>
       <div id="craft-all-slot" class="craft-all-bar"></div>
       <div id="craft-list" class="shop-list craft-list"></div>
     </div>
   </div>
 
-  <script src="foods.js?v=22"></script>
-  <script src="game.js?v=113"></script>
+  <script src="foods.js?v=23"></script>
+  <script src="game.js?v=126"></script>
 </body>
 </html>
