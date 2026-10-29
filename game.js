@@ -1,4 +1,9 @@
 (() => {
+  const GAME_VERSION = (() => {
+    const src = (document.currentScript && document.currentScript.src) || "";
+    const match = src.match(/[?&]v=(\d+)/);
+    return match ? Number(match[1]) : 0;
+  })();
   try {
   const canvas = document.getElementById("arena");
   const uuid = () =>
@@ -609,6 +614,8 @@
 
   let lastFrameAt = 0;
   const ROOM_PREFIX = "eat-a-food-room-";
+  const PENDING_NET_KEY = "eatAFoodPendingRoom";
+  const UPDATE_TRIED_KEY = "eatAFoodUpdateTried";
   const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const MAX_ROOM_PLAYERS = 8;
   const JOIN_TIMEOUT_MS = 15000;
@@ -3103,6 +3110,7 @@
   function openMulti() {
     multiModal.classList.remove("hidden");
     multiModal.setAttribute("aria-hidden", "false");
+    if (!net.role) reloadIfOutdated();
   }
 
   function closeMulti() {
@@ -3343,12 +3351,71 @@
     netSend({ t: "roster", players });
   }
 
+  async function latestVersion() {
+    try {
+      const res = await fetch(`index.html?check=${Date.now()}`, { cache: "no-store" });
+      const match = (await res.text()).match(/game\.js\?v=(\d+)/);
+      return match ? Number(match[1]) : 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  function reloadForUpdate(version, pending) {
+    if (sessionStorage.getItem(UPDATE_TRIED_KEY) === String(version)) return false;
+    sessionStorage.setItem(UPDATE_TRIED_KEY, String(version));
+    if (pending) sessionStorage.setItem(PENDING_NET_KEY, JSON.stringify(pending));
+    setNetStatus("Updating the game…");
+    location.reload();
+    return true;
+  }
+
+  async function reloadIfOutdated(pending) {
+    if (!GAME_VERSION || state.running || net.role) return false;
+    const latest = await latestVersion();
+    if (!latest || latest <= GAME_VERSION) return false;
+    return reloadForUpdate(latest, pending);
+  }
+
+  function resumePendingNet() {
+    const raw = sessionStorage.getItem(PENDING_NET_KEY);
+    if (!raw) return;
+    sessionStorage.removeItem(PENDING_NET_KEY);
+    let pending = null;
+    try {
+      pending = JSON.parse(raw);
+    } catch (err) {
+      return;
+    }
+    if (!pending || !pending.action) return;
+    multiNameEl.value = pending.name || "";
+    multiCodeEl.value = pending.code || "";
+    openMulti();
+    if (pending.action === "create") createRoom(playerNetName());
+    else if (pending.action === "join" && pending.code) joinRoom(pending.code, playerNetName());
+  }
+
   function hostAccept(conn) {
     let joined = false;
     conn.on("data", (msg) => {
       if (net.role !== "host" || !msg || typeof msg !== "object") return;
       if (!joined) {
         if (msg.t !== "join") return;
+        const guestVersion = Number(msg.v) || 0;
+        if (guestVersion !== GAME_VERSION) {
+          const guestOld = guestVersion < GAME_VERSION;
+          conn.send({
+            t: "err",
+            update: guestOld,
+            v: GAME_VERSION,
+            msg: guestOld
+              ? "This page is out of date. Refresh and join again."
+              : "The host's page is out of date. Ask them to refresh and make a new room.",
+          });
+          if (!guestOld) setNetStatus("A friend has a newer version. Refresh this page and make a new room.");
+          setTimeout(() => conn.close(), 500);
+          return;
+        }
         if (net.guests.size + 1 >= MAX_ROOM_PLAYERS) {
           conn.send({ t: "err", msg: "That room is full (8 players)." });
           setTimeout(() => conn.close(), 500);
@@ -3434,11 +3501,15 @@
       const conn = peer.connect(ROOM_PREFIX + code, { reliable: true });
       net.hostConn = conn;
       conn.on("open", () => {
-        if (net.hostConn === conn) conn.send({ t: "join", name, food: equippedTier().name });
+        if (net.hostConn === conn) conn.send({ t: "join", v: GAME_VERSION, name, food: equippedTier().name });
       });
       conn.on("data", (msg) => {
         if (net.hostConn !== conn || !msg || typeof msg !== "object") return;
         if (msg.t === "room") clearTimeout(net.joinTimer);
+        if (msg.t === "err" && msg.update && !net.role) {
+          clearNet();
+          if (reloadForUpdate(Number(msg.v) || "host", { action: "join", code, name })) return;
+        }
         onNetMessage(msg);
       });
       conn.on("close", () => {
@@ -3483,14 +3554,20 @@
   inventoryBtn.addEventListener("click", openInventory);
   multiBtn.addEventListener("click", openMulti);
   multiCloseBtn.addEventListener("click", closeMulti);
-  multiCreateBtn.addEventListener("click", () => createRoom(playerNetName()));
-  multiJoinBtn.addEventListener("click", () => {
+  multiCreateBtn.addEventListener("click", async () => {
+    const name = playerNetName();
+    if (await reloadIfOutdated({ action: "create", name })) return;
+    createRoom(name);
+  });
+  multiJoinBtn.addEventListener("click", async () => {
     const code = cleanRoomCode(multiCodeEl.value);
     if (code.length < 4) {
       setNetStatus("Enter the 4-character code.");
       return;
     }
-    joinRoom(code, playerNetName());
+    const name = playerNetName();
+    if (await reloadIfOutdated({ action: "join", code, name })) return;
+    joinRoom(code, name);
   });
   multiLeaveBtn.addEventListener("click", () => {
     const running = state.running;
@@ -3565,6 +3642,7 @@
 
   enterLobby();
   updateHud();
+  resumePendingNet();
   initView().catch((err) => {
     console.error("3D view failed:", err);
     const msg = document.getElementById("overlay-msg");
