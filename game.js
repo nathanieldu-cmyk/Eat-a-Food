@@ -49,6 +49,8 @@
   const multiCreateBtn = document.getElementById("multi-create");
   const multiJoinBtn = document.getElementById("multi-join");
   const multiLeaveBtn = document.getElementById("multi-leave");
+  const multiCpusBtn = document.getElementById("multi-cpus");
+  const multiCpuNoteEl = document.getElementById("multi-cpu-note");
   const multiRoomCodeEl = document.getElementById("multi-room-code");
   const multiPlayersEl = document.getElementById("multi-players");
   const multiLiveEl = document.getElementById("multi-live");
@@ -638,7 +640,13 @@
     sprAcc: 0,
     inAcc: 0,
     sendSpr: true,
+    cpus: true,
   };
+
+  // CPUs can only be turned off while at least two people share a room.
+  function cpusActive() {
+    return !net.role || net.roster.length <= 1 || net.cpus;
+  }
 
   bestRunEl.textContent = `${save.bestRun} foods`;
   renderDiamonds();
@@ -958,9 +966,9 @@
 
   // Two same-food CPUs, kept far from the player and from each other.
   function spawnTwinRivals(extra = []) {
-    if (!state.player) return;
-    const tier = equippedTier();
-    const used = [{ x: state.player.x, y: state.player.y }, ...extra];
+    const used = [...(state.player ? [{ x: state.player.x, y: state.player.y }] : []), ...extra];
+    if (!used.length) return;
+    const tier = state.player ? equippedTier() : extra[0].tier || equippedTier();
     const minAway = ARENA * 0.32;
     for (let i = 0; i < 2; i++) {
       const spot = farArenaSpot(used, minAway);
@@ -2688,7 +2696,7 @@
     if (net.role === "host") netPump(dt);
 
     const rivalDelay = state.rivals.length === 0 ? 10000 : 8000;
-    if (now - state.lastSpawnAt > rivalDelay && state.foodsEarned >= 2) {
+    if (cpusActive() && now - state.lastSpawnAt > rivalDelay && state.foodsEarned >= 2) {
       spawnRival();
       state.lastSpawnAt = now;
     }
@@ -2778,7 +2786,7 @@
     spawnPlayer();
     if (net.role && state.player) state.player.netName = net.name;
     const placed = net.role === "host" ? spawnNetHumansForRun() : [];
-    spawnTwinRivals(placed);
+    if (cpusActive()) spawnTwinRivals(placed);
     if (view) view.distance = RUN_CAMERA_DISTANCE;
     updateHud();
     overlay.classList.add("hidden");
@@ -3049,10 +3057,13 @@
     return food;
   }
 
-  function applyRoster(players) {
+  function applyRoster(players, cpus) {
     net.roster = players || [];
+    if (net.role === "guest" && typeof cpus === "boolean") net.cpus = cpus;
+    if (net.role === "host" && net.roster.length <= 1) net.cpus = true;
     renderRoster();
     if (net.role !== "host") return;
+    syncCpus();
     const ids = new Set();
     for (const person of net.roster) {
       if (person.id === net.id) continue;
@@ -3085,6 +3096,38 @@
       item.textContent = `${person.name}${person.host ? " (host)" : ""}${food}`;
       multiPlayersEl.appendChild(item);
     }
+    renderCpuToggle();
+  }
+
+  function renderCpuToggle() {
+    const on = cpusActive();
+    const alone = net.roster.length <= 1;
+    multiCpusBtn.textContent = `CPUs: ${on ? "On" : "Off"}`;
+    multiCpusBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    multiCpusBtn.disabled = net.role !== "host" || alone;
+    if (alone) multiCpuNoteEl.textContent = "CPUs stay on until someone else joins.";
+    else if (net.role === "host") multiCpuNoteEl.textContent = "Only the host can change this.";
+    else multiCpuNoteEl.textContent = "The host chooses whether CPUs play.";
+  }
+
+  // Host only: drop CPUs when they are switched off, and bring the twins back
+  // mid-run when they come back on and the arena has none.
+  function syncCpus() {
+    if (net.role !== "host" || !state.running) return;
+    if (!cpusActive()) {
+      state.rivals = [];
+      return;
+    }
+    if (state.rivals.length === 0) {
+      spawnTwinRivals(livingHumans().filter((food) => food !== state.player));
+      state.lastSpawnAt = performance.now();
+    }
+  }
+
+  function setRoomCpus(on) {
+    if (net.role !== "host" || net.roster.length <= 1) return;
+    net.cpus = on;
+    shareRoster();
   }
 
   function setNetStatus(text) {
@@ -3147,6 +3190,7 @@
     net.roster = [];
     net.alive = true;
     net.waiting = false;
+    net.cpus = true;
     if (state.player) state.player.netName = null;
     renderRoster();
     showSetup();
@@ -3270,7 +3314,7 @@
       net.alive = true;
       if (state.player) state.player.netName = net.name;
       startHeartbeat();
-      applyRoster(msg.players);
+      applyRoster(msg.players, msg.cpus);
       showRoom(msg.code);
       setNetStatus(msg.host ? "Share this code." : "Joined the room.");
       closeOverlay();
@@ -3278,7 +3322,7 @@
       return;
     }
     if (msg.t === "roster") {
-      applyRoster(msg.players);
+      applyRoster(msg.players, msg.cpus);
       return;
     }
     if (msg.t === "in" && net.role === "host") {
@@ -3348,7 +3392,7 @@
     if (net.role !== "host") return;
     const players = hostRoster();
     applyRoster(players);
-    netSend({ t: "roster", players });
+    netSend({ t: "roster", players, cpus: cpusActive() });
   }
 
   async function latestVersion() {
@@ -3427,7 +3471,7 @@
           name: String(msg.name || "Player").trim().slice(0, 12) || "Player",
           food: String(msg.food || "").slice(0, 80),
         });
-        conn.send({ t: "room", code: net.code, id: conn.peer, host: false, players: hostRoster() });
+        conn.send({ t: "room", code: net.code, id: conn.peer, host: false, players: hostRoster(), cpus: net.cpus });
         shareRoster();
         return;
       }
@@ -3569,6 +3613,7 @@
     if (await reloadIfOutdated({ action: "join", code, name })) return;
     joinRoom(code, name);
   });
+  multiCpusBtn.addEventListener("click", () => setRoomCpus(!net.cpus));
   multiLeaveBtn.addEventListener("click", () => {
     const running = state.running;
     const dead = !net.alive;
