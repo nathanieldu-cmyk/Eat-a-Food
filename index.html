@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=55" />
+  <link rel="stylesheet" href="style.css?v=56" />
   <script type="importmap">
     {
       "imports": {
@@ -47,6 +47,7 @@
           <button id="inventory-btn" class="btn ghost" type="button">Inventory</button>
           <button id="shop-btn" class="btn ghost" type="button">Shop</button>
           <button id="craft-btn" class="btn ghost" type="button">Craft</button>
+          <button id="multi-btn" class="btn ghost" type="button">Multiplayer</button>
         </div>
         <p id="potion-status" class="potion-status hidden"></p>
         <footer class="hud">
@@ -84,6 +85,33 @@
         </div>
       </div>
     </main>
+      </div>
+    </div>
+  </div>
+
+  <div id="multi-modal" class="shop-modal hidden" aria-hidden="true">
+    <div class="shop-panel" role="dialog" aria-labelledby="multi-title">
+      <div class="inv-top">
+        <div class="inv-header">
+          <h2 id="multi-title">Multiplayer</h2>
+          <button id="multi-close" class="btn ghost small" type="button">Close</button>
+        </div>
+      </div>
+      <p id="multi-status" class="multi-status">Create a room, or join with a code. Friends use this same address.</p>
+      <div id="multi-setup">
+        <label class="multi-label">Name
+          <input id="multi-name" maxlength="12" value="Player" autocomplete="nickname" />
+        </label>
+        <button id="multi-create" class="btn primary" type="button">Create room</button>
+        <div class="multi-join">
+          <input id="multi-code" maxlength="4" placeholder="Code" autocomplete="off" spellcheck="false" />
+          <button id="multi-join" class="btn ghost" type="button">Join</button>
+        </div>
+      </div>
+      <div id="multi-room" class="hidden">
+        <p id="multi-room-code" class="room-code"></p>
+        <ul id="multi-players"></ul>
+        <button id="multi-leave" class="btn danger" type="button">Leave room</button>
       </div>
     </div>
   </div>
@@ -130,6 +158,6 @@
   </div>
 
   <script src="foods.js?v=24"></script>
-  <script src="game.js?v=134"></script>
+  <script src="game.js?v=137"></script>
 </body>
 </html>

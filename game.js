@@ -33,6 +33,19 @@
   const invCloseBtn = document.getElementById("inv-close");
   const endBtn = document.getElementById("end-btn");
   const autoFarmBtn = document.getElementById("auto-farm-btn");
+  const multiBtn = document.getElementById("multi-btn");
+  const multiModal = document.getElementById("multi-modal");
+  const multiCloseBtn = document.getElementById("multi-close");
+  const multiStatusEl = document.getElementById("multi-status");
+  const multiSetupEl = document.getElementById("multi-setup");
+  const multiRoomEl = document.getElementById("multi-room");
+  const multiNameEl = document.getElementById("multi-name");
+  const multiCodeEl = document.getElementById("multi-code");
+  const multiCreateBtn = document.getElementById("multi-create");
+  const multiJoinBtn = document.getElementById("multi-join");
+  const multiLeaveBtn = document.getElementById("multi-leave");
+  const multiRoomCodeEl = document.getElementById("multi-room-code");
+  const multiPlayersEl = document.getElementById("multi-players");
   const startBtn = document.getElementById("start-btn");
   const overlay = document.getElementById("overlay");
   const overlayTitle = document.getElementById("overlay-title");
@@ -593,6 +606,24 @@
     particles: [],
   };
 
+  const net = {
+    ws: null,
+    role: null,
+    id: null,
+    code: null,
+    name: "Player",
+    humans: new Map(),
+    inputs: new Map(),
+    roster: [],
+    alive: true,
+    waiting: false,
+    lastFocus: null,
+    snapAcc: 0,
+    sprAcc: 0,
+    inAcc: 0,
+    sendSpr: true,
+  };
+
   bestRunEl.textContent = `${save.bestRun} foods`;
   renderDiamonds();
 
@@ -766,6 +797,26 @@
     state.onShopPad = false;
     state.onCraftPad = false;
     spawnLobbyPlayer();
+    if (net.role && state.player) state.player.netName = net.name;
+    if (net.role === "host") {
+      for (const person of net.roster) {
+        if (person.id !== net.id) ensureNetHuman(person);
+      }
+      let seat = 1;
+      for (const food of net.humans.values()) {
+        const spot = lobbySpot(seat++);
+        const named = food.wantFood && tierByName[food.wantFood];
+        if (named) food.tier = tierByName[food.wantFood];
+        food.x = spot.x;
+        food.y = spot.y;
+        food.vx = 0;
+        food.vy = 0;
+        food.size = 10;
+        clampToLobby(food);
+      }
+    }
+    net.waiting = false;
+    net.alive = true;
     if (view) view.distance = LOBBY_CAMERA_DISTANCE;
     lobbyHintEl.classList.remove("hidden");
   }
@@ -800,27 +851,41 @@
       !overlay.classList.contains("hidden") ||
       !shopModal.classList.contains("hidden") ||
       !craftModal.classList.contains("hidden") ||
-      !inventoryModal.classList.contains("hidden")
+      !inventoryModal.classList.contains("hidden") ||
+      !multiModal.classList.contains("hidden")
     );
+  }
+
+  function lobbySpot(index) {
+    const angle = (index / 8) * Math.PI * 2;
+    return {
+      x: LOBBY_SPAWN.x + Math.cos(angle) * 80,
+      y: LOBBY_SPAWN.y + Math.sin(angle) * 80,
+    };
   }
 
   // Returns true when the player walked into the portal and a run started.
   function updateLobby(dt) {
+    if (net.role === "guest") {
+      netPump(dt);
+      return false;
+    }
     if (!state.player || state.player.tier !== equippedTier()) {
       spawnLobbyPlayer(state.player || LOBBY_SPAWN);
+      if (net.role && state.player) state.player.netName = net.name;
     }
     const food = state.player;
-    const blocked = lobbyBlocked();
-    const dir = blocked ? null : controlDirection();
-    if (dir) {
-      const spd = Math.max(0.75, moveSpeed(food));
-      steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
+    const blocked = applyLobbySteer(food, dt, null);
+    if (net.role === "host") {
+      for (const human of [...net.humans.values()]) {
+        applyLobbySteer(human, dt, net.inputs.get(human.netId));
+        if (dist(human, PORTAL_SPOT) < PORTAL_RADIUS * 0.8) {
+          startRun();
+          if (state.running) return true;
+        }
+      }
+      netPump(dt);
     }
-    food.vx *= 0.86;
-    food.vy *= 0.86;
-    food.x += food.vx * dt * 60;
-    food.y += food.vy * dt * 60;
-    clampToLobby(food);
     if (blocked) return false;
 
     if (dist(food, PORTAL_SPOT) < PORTAL_RADIUS * 0.8) {
@@ -876,10 +941,10 @@
   }
 
   // Two same-food CPUs, kept far from the player and from each other.
-  function spawnTwinRivals() {
+  function spawnTwinRivals(extra = []) {
     if (!state.player) return;
     const tier = equippedTier();
-    const used = [{ x: state.player.x, y: state.player.y }];
+    const used = [{ x: state.player.x, y: state.player.y }, ...extra];
     const minAway = ARENA * 0.32;
     for (let i = 0; i < 2; i++) {
       const spot = farArenaSpot(used, minAway);
@@ -1001,9 +1066,10 @@
 
   function eatSprinkle(food, sprinkle, index) {
     const pts = sprinkle.type.points;
-    const growthBoost = food === state.player ? Math.pow(1.25, boostStacks("growth")) : 1;
+    const growthBoost = food === state.player ? Math.pow(1.25, boostStacks("growth")) : food.growthBoost || 1;
     food.size += pts * food.tier.growth * growthBoost;
-    if (!food.isRival) addPoints(pts);
+    if (food === state.player) addPoints(pts);
+    else if (net.role === "host" && food.netId) netSend({ t: "ev", kind: "pts", id: food.netId, pts });
     burst(sprinkle.x, sprinkle.y, sprinkle.type.color);
     state.sprinkles.splice(index, 1);
     setTimeout(() => {
@@ -1012,20 +1078,29 @@
   }
 
   function tryEatFood(eater, prey, preyList, preyIndex) {
+    if (!eater || !prey || eater === prey || prey.eaten) return false;
     if (eater.size <= prey.size) return false;
     // Eat when the food models touch. The ring sits outside the model.
     if (dist(eater, prey) > bodyReach(eater) + bodyReach(prey)) return false;
 
     const preySize = prey.size;
-    const growthBoost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : 1;
+    const growthBoost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : eater.growthBoost || 1;
     eater.size += preySize * eater.tier.growth * growthBoost;
     // Every 10 of their size → 1 point; foodGainFactor applies the points multiplier.
-    // At most 10 foods from one eat.
-    if (!eater.isRival && prey.isRival) addEatPoints(preySize / 10);
+    // At most 10 foods from one eat. Guests apply that on their own save.
+    if (eater === state.player && (prey.isRival || prey.netId)) addEatPoints(preySize / 10);
+    if (net.role === "host" && eater.netId) netSend({ t: "ev", kind: "eat", id: eater.netId, preySize });
     burst(prey.x, prey.y, prey.tier.color);
-    preyList.splice(preyIndex, 1);
-
-    if (prey === state.player) state.player = null;
+    prey.eaten = true;
+    if (prey.netId) {
+      net.humans.delete(prey.netId);
+      if (net.role === "host") netSend({ t: "ev", kind: "dead", id: prey.netId });
+    } else if (prey === state.player) {
+      state.player = null;
+      if (net.role === "host") netSend({ t: "ev", kind: "dead", id: net.id });
+    } else if (preyList && preyList[preyIndex] === prey) {
+      preyList.splice(preyIndex, 1);
+    }
     return true;
   }
 
@@ -1082,6 +1157,11 @@
   function otherFoods(food) {
     const others = [];
     if (state.player && state.player !== food) others.push(state.player);
+    if (net.role === "host") {
+      for (const human of net.humans.values()) {
+        if (human !== food) others.push(human);
+      }
+    }
     for (const rival of state.rivals) {
       if (rival !== food) others.push(rival);
     }
@@ -1134,7 +1214,8 @@
   }
 
   function moveSpeed(food) {
-    const base = (food.tier.speed || 1) * SPEED_SCALE * (food === state.player ? Math.pow(1.25, boostStacks("speed")) : 1);
+    const boost = food === state.player ? Math.pow(1.25, boostStacks("speed")) : food.speedBoost || 1;
+    const base = (food.tier.speed || 1) * SPEED_SCALE * boost;
     // Bigger body = slower. Starts full speed around size 10, soft-floors later.
     const bulk = Math.max(0, food.size - 10);
     const sizeFactor = Math.max(0.32, 1 / (1 + bulk / 180));
@@ -1145,35 +1226,78 @@
     return tier.speed;
   }
 
+  function directionFromKeys(keys, yaw) {
+    const held = new Set(keys || []);
+    let strafe = 0;
+    let forward = 0;
+    if (held.has("d")) strafe += 1;
+    if (held.has("a")) strafe -= 1;
+    if (held.has("w") || held.has("arrowup")) forward += 1;
+    if (held.has("s") || held.has("arrowdown")) forward -= 1;
+    const mag = Math.hypot(strafe, forward);
+    if (!mag) return null;
+    const fx = -Math.sin(yaw || 0);
+    const fz = -Math.cos(yaw || 0);
+    const rx = Math.cos(yaw || 0);
+    const rz = -Math.sin(yaw || 0);
+    return {
+      x: (rx * strafe + fx * forward) / mag,
+      y: (rz * strafe + fz * forward) / mag,
+    };
+  }
+
+  function keysAreMoving(keys) {
+    const held = new Set(keys || []);
+    return held.has("w") || held.has("a") || held.has("s") || held.has("d") || held.has("arrowup") || held.has("arrowdown");
+  }
+
+  function applyLobbySteer(food, dt, remote) {
+    const blocked = !remote && lobbyBlocked();
+    const dir = blocked ? null : remote ? directionFromKeys(remote.keys, remote.yaw) : controlDirection();
+    if (dir) {
+      const spd = Math.max(0.75, moveSpeed(food));
+      steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
+    }
+    food.vx *= 0.86;
+    food.vy *= 0.86;
+    food.x += food.vx * dt * 60;
+    food.y += food.vy * dt * 60;
+    clampToLobby(food);
+    return blocked;
+  }
+
+  function applyRunSteer(food, dt, remote) {
+    const spd = moveSpeed(food);
+    const dir = remote ? directionFromKeys(remote.keys, remote.yaw) : controlDirection();
+    const moving = remote ? keysAreMoving(remote.keys) : playerIsMoving();
+    const farming = remote ? !!remote.autoFarm : state.autoFarm;
+    if (dir) {
+      steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
+      const nearest = preferredSprinkle(food);
+      if (nearest && dist(food, nearest) < 140) steerToward(food, nearest, 0.22 * spd);
+    } else if (farming && !moving) {
+      steerLikeCpu(food, spd);
+    }
+    for (const other of otherFoods(food)) {
+      if (other.size <= food.size) continue;
+      const d = dist(food, other);
+      if (d < 120 && d > 0) {
+        food.vx += ((food.x - other.x) / d) * 0.45 * spd;
+        food.vy += ((food.y - other.y) / d) * 0.45 * spd;
+      }
+    }
+    food.vx *= 0.86;
+    food.vy *= 0.86;
+    food.x += food.vx * dt * 60;
+    food.y += food.vy * dt * 60;
+    clampToArena(food);
+  }
+
   function updateFoods(dt) {
     const food = state.player;
-    if (food) {
-      const spd = moveSpeed(food);
-      const dir = controlDirection();
-      if (dir) {
-        steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
-        const nearest = preferredSprinkle(food);
-        if (nearest && dist(food, nearest) < 140) {
-          steerToward(food, nearest, 0.22 * spd);
-        }
-      } else if (state.autoFarm && !playerIsMoving()) {
-        steerLikeCpu(food, spd);
-      }
-
-      for (const rival of state.rivals) {
-        if (rival.size <= food.size) continue;
-        const d = dist(food, rival);
-        if (d < 120 && d > 0) {
-          food.vx += ((food.x - rival.x) / d) * 0.45 * spd;
-          food.vy += ((food.y - rival.y) / d) * 0.45 * spd;
-        }
-      }
-
-      food.vx *= 0.86;
-      food.vy *= 0.86;
-      food.x += food.vx * dt * 60;
-      food.y += food.vy * dt * 60;
-      clampToArena(food);
+    if (food) applyRunSteer(food, dt, null);
+    if (net.role === "host") {
+      for (const human of net.humans.values()) applyRunSteer(human, dt, net.inputs.get(human.netId));
     }
 
     for (const rival of state.rivals) {
@@ -1212,9 +1336,17 @@
     return 0.5 * food.drawRadius() * FOOD_MODEL_SCALE;
   }
 
+  function livingHumans() {
+    const list = [];
+    if (state.player) list.push(state.player);
+    if (net.role === "host") {
+      for (const human of net.humans.values()) list.push(human);
+    }
+    return list;
+  }
+
   function resolveEats() {
-    const actors = [];
-    if (state.player) actors.push(state.player);
+    const actors = livingHumans();
     actors.push(...state.rivals);
 
     for (let i = state.sprinkles.length - 1; i >= 0; i--) {
@@ -1232,15 +1364,25 @@
       if (eater) eatSprinkle(eater, s, i);
     }
 
-    if (state.player) {
+    const humans = livingHumans();
+    for (const human of humans) {
       for (let j = state.rivals.length - 1; j >= 0; j--) {
-        tryEatFood(state.player, state.rivals[j], state.rivals, j);
+        tryEatFood(human, state.rivals[j], state.rivals, j);
+      }
+    }
+
+    for (const human of humans) {
+      if (human.netId && !net.humans.has(human.netId)) continue;
+      if (human === state.player && !state.player) continue;
+      for (const other of livingHumans()) {
+        if (human === other) continue;
+        tryEatFood(human, other, [other], 0);
       }
     }
 
     for (let i = state.rivals.length - 1; i >= 0; i--) {
       const r = state.rivals[i];
-      if (state.player) tryEatFood(r, state.player, [state.player], 0);
+      for (const human of livingHumans()) tryEatFood(r, human, [human], 0);
       for (let j = state.rivals.length - 1; j >= 0; j--) {
         if (i === j) continue;
         if (tryEatFood(r, state.rivals[j], state.rivals, j) && j < i) i -= 1;
@@ -1501,7 +1643,9 @@
     }
     entry.group.position.set(worldX(food.x), bob, worldZ(food.y));
     entry.label.position.y = scale + 16;
-    const sizeText = formatCount(food.displaySize());
+    const sizeText = food.netName
+      ? `${food.netName}  ${formatCount(food.displaySize())}`
+      : formatCount(food.displaySize());
     if (entry.sizeText !== sizeText) {
       writeLabel(entry.label, sizeText);
       entry.sizeText = sizeText;
@@ -1563,6 +1707,9 @@
     const alive = new Set();
     for (const rival of state.rivals) alive.add(syncFood(view.THREE, rival, t));
     if (state.player) alive.add(syncFood(view.THREE, state.player, t));
+    if (net.role === "host" || net.role === "guest") {
+      for (const human of net.humans.values()) alive.add(syncFood(view.THREE, human, t));
+    }
     for (const [id, entry] of view.foods) {
       if (alive.has(id)) continue;
       view.scene.remove(entry.group);
@@ -1822,13 +1969,16 @@
   function updateCamera() {
     if (!view) return;
     if (state.player) {
+      net.lastFocus = { x: state.player.x, y: state.player.y };
       const reach = ringReach(state.player);
       const needed = Math.max(RUN_CAMERA_DISTANCE, reach * 2.6);
       if (view.distance < needed) view.distance = Math.min(MAX_CAMERA_DISTANCE, needed);
     }
     const focus = state.player
       ? { x: worldX(state.player.x), z: worldZ(state.player.y) }
-      : { x: 0, z: 0 };
+      : net.lastFocus
+        ? { x: worldX(net.lastFocus.x), z: worldZ(net.lastFocus.y) }
+        : { x: 0, z: 0 };
     const horizontal = Math.cos(view.pitch) * view.distance;
     view.camera.position.set(
       focus.x + Math.sin(view.yaw) * horizontal,
@@ -2503,9 +2653,16 @@
     lastTime = now;
 
     steerCamera(dt);
+    if (net.role === "guest") {
+      netPump(dt);
+      draw();
+      state.animId = requestAnimationFrame(loop);
+      return;
+    }
     updateFoods(dt);
     resolveEats();
     updateParticles(dt);
+    if (net.role === "host") netPump(dt);
 
     const rivalDelay = state.rivals.length === 0 ? 10000 : 8000;
     if (now - state.lastSpawnAt > rivalDelay && state.foodsEarned >= 2) {
@@ -2520,7 +2677,17 @@
       spawnSprinkle(sprinkleType("small"));
     }
 
-    if (!state.player) {
+    if (net.role === "host") {
+      const aliveHumans = (state.player ? 1 : 0) + net.humans.size;
+      if (!aliveHumans) {
+        endRun(true);
+        return;
+      }
+      if (!state.player && !net.waiting) {
+        net.waiting = true;
+        showWaiting();
+      }
+    } else if (!state.player) {
       endRun(true);
       return;
     }
@@ -2553,7 +2720,9 @@
     state.lastSpawnAt = performance.now();
     seedSprinkles();
     spawnPlayer();
-    spawnTwinRivals();
+    if (net.role && state.player) state.player.netName = net.name;
+    const placed = net.role === "host" ? spawnNetHumansForRun() : [];
+    spawnTwinRivals(placed);
     if (view) view.distance = RUN_CAMERA_DISTANCE;
     updateHud();
     overlay.classList.add("hidden");
@@ -2561,8 +2730,10 @@
     inventoryBtn.disabled = true;
     shopBtn.disabled = true;
     craftBtn.disabled = true;
+    closeMulti();
     lastTime = performance.now();
     cancelAnimationFrame(state.animId);
+    if (net.role === "host") broadcastSnap(true);
     state.animId = requestAnimationFrame(loop);
   }
 
@@ -2642,6 +2813,7 @@
     overlay.classList.remove("hidden");
     enterLobby();
     renderEquippedUi();
+    if (net.role === "host") broadcastSnap(true);
     draw();
     startLobbyLoop();
   }
@@ -2681,13 +2853,456 @@
   renderPotionStatus();
   setInterval(renderPotionStatus, 1000);
 
+  function spawnNetHumansForRun() {
+    const used = [];
+    for (const food of net.humans.values()) {
+      const named = food.wantFood && tierByName[food.wantFood];
+      if (named) food.tier = tierByName[food.wantFood];
+      food.eaten = false;
+      food.size = 10;
+      food.vx = 0;
+      food.vy = 0;
+      const spot = farArenaSpot([{ x: state.player.x, y: state.player.y }, ...used], ARENA * 0.22);
+      food.x = spot.x;
+      food.y = spot.y;
+      clampToArena(food);
+      used.push({ x: food.x, y: food.y });
+    }
+    return used;
+  }
+
+  function netSend(obj) {
+    if (!net.ws || net.ws.readyState !== 1) return;
+    net.ws.send(JSON.stringify(obj));
+  }
+
+  function broadcastSnap(forceSpr) {
+    if (net.role !== "host") return;
+    const players = [];
+    if (state.player) players.push(packActor(state.player, net.id, net.name));
+    for (const food of net.humans.values()) players.push(packActor(food, food.netId, food.netName));
+    const msg = {
+      t: "snap",
+      mode: state.mode === "run" ? "run" : "lobby",
+      players,
+      rivals: state.rivals.map((food) => ({
+        id: food.id,
+        food: food.tier.name,
+        x: Math.round(food.x),
+        y: Math.round(food.y),
+        size: Math.round(food.size),
+      })),
+    };
+    if (forceSpr || net.sendSpr) {
+      const spr = [];
+      for (const sprinkle of state.sprinkles) {
+        const index = SPRINKLE_TYPES.findIndex((type) => type.key === sprinkle.type.key);
+        spr.push(Math.round(sprinkle.x), Math.round(sprinkle.y), Math.max(0, index));
+      }
+      msg.spr = spr;
+      net.sendSpr = false;
+    }
+    netSend(msg);
+  }
+
+  function packActor(food, id, name) {
+    return {
+      id,
+      name: name || "Player",
+      food: food.tier.name,
+      x: Math.round(food.x * 10) / 10,
+      y: Math.round(food.y * 10) / 10,
+      size: Math.round(food.size),
+    };
+  }
+
+  function netPump(dt) {
+    if (!net.role || !net.ws || net.ws.readyState !== 1) return;
+    if (net.role === "guest") {
+      net.inAcc += dt;
+      if (net.inAcc < 0.05) return;
+      net.inAcc = 0;
+      netSend({
+        t: "in",
+        keys: [...moveKeys],
+        autoFarm: state.autoFarm,
+        yaw: view ? view.yaw : 0,
+        food: equippedTier().name,
+        growth: Math.pow(1.25, boostStacks("growth")),
+        speed: Math.pow(1.25, boostStacks("speed")),
+      });
+      return;
+    }
+    net.snapAcc += dt;
+    net.sprAcc += dt;
+    if (net.sprAcc >= 0.25) {
+      net.sprAcc = 0;
+      net.sendSpr = true;
+    }
+    if (net.snapAcc >= 0.1) {
+      net.snapAcc = 0;
+      broadcastSnap(false);
+    }
+  }
+
+  function ensureNetHuman(person) {
+    let food = net.humans.get(person.id);
+    const tier = (person.food && tierByName[person.food]) || tierByName.Peanut || FOOD_TIERS[0];
+    if (!food) {
+      const spot = lobbySpot(net.humans.size + 1);
+      food = createFood(tier, spot.x, spot.y, false);
+      food.netId = person.id;
+      food.netName = String(person.name || "Player").slice(0, 12);
+      food.growthBoost = 1;
+      food.speedBoost = 1;
+      net.humans.set(person.id, food);
+    } else {
+      food.netName = String(person.name || food.netName || "Player").slice(0, 12);
+    }
+    return food;
+  }
+
+  function applyRoster(players) {
+    net.roster = players || [];
+    renderRoster();
+    if (net.role !== "host") return;
+    const ids = new Set();
+    for (const person of net.roster) {
+      if (person.id === net.id) continue;
+      ids.add(person.id);
+      if (state.mode === "lobby") ensureNetHuman(person);
+    }
+    for (const id of [...net.humans.keys()]) {
+      if (!ids.has(id)) {
+        net.humans.delete(id);
+        net.inputs.delete(id);
+      }
+    }
+  }
+
+  function onGuestInput(msg) {
+    const food = net.humans.get(msg.id);
+    if (!food) return;
+    net.inputs.set(msg.id, msg);
+    food.growthBoost = Number(msg.growth) > 0 ? Number(msg.growth) : 1;
+    food.speedBoost = Number(msg.speed) > 0 ? Number(msg.speed) : 1;
+    food.wantFood = msg.food;
+    if (state.mode === "lobby" && msg.food && tierByName[msg.food]) food.tier = tierByName[msg.food];
+  }
+
+  function renderRoster() {
+    multiPlayersEl.innerHTML = "";
+    for (const person of net.roster) {
+      const item = document.createElement("li");
+      const food = person.food ? ` · ${person.food}` : "";
+      item.textContent = `${person.name}${person.host ? " (host)" : ""}${food}`;
+      multiPlayersEl.appendChild(item);
+    }
+  }
+
+  function setNetStatus(text) {
+    multiStatusEl.textContent = text;
+  }
+
+  function showRoom(code) {
+    multiSetupEl.classList.add("hidden");
+    multiRoomEl.classList.remove("hidden");
+    multiRoomCodeEl.textContent = code;
+  }
+
+  function showSetup() {
+    multiRoomEl.classList.add("hidden");
+    multiSetupEl.classList.remove("hidden");
+    multiRoomCodeEl.textContent = "";
+  }
+
+  function openMulti() {
+    multiModal.classList.remove("hidden");
+    multiModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeMulti() {
+    multiModal.classList.add("hidden");
+    multiModal.setAttribute("aria-hidden", "true");
+  }
+
+  function showWaiting() {
+    overlayTitle.textContent = "Eaten";
+    overlayMsg.textContent = "Waiting for the run to end.";
+    startBtn.textContent = "Waiting";
+    afterRunActionsEl.classList.add("hidden");
+    pullResultsEl.classList.add("hidden");
+    overlay.classList.remove("hidden");
+  }
+
+  function playerNetName() {
+    const name = (multiNameEl.value || "Player").trim().slice(0, 12);
+    return name || "Player";
+  }
+
+  function clearNet() {
+    const ws = net.ws;
+    net.ws = null;
+    net.role = null;
+    net.id = null;
+    net.code = null;
+    net.humans.clear();
+    net.inputs.clear();
+    net.roster = [];
+    net.alive = true;
+    net.waiting = false;
+    if (state.player) state.player.netName = null;
+    renderRoster();
+    showSetup();
+    if (ws) {
+      ws.onclose = null;
+      try { ws.close(); } catch (err) { /* already closed */ }
+    }
+  }
+
+  function guestBeginRun() {
+    closeInventory();
+    closeShop();
+    closeCraft();
+    closeMulti();
+    pullResultsEl.classList.add("hidden");
+    pullResultsEl.innerHTML = "";
+    state.running = true;
+    state.mode = "run";
+    net.alive = true;
+    net.waiting = false;
+    state.points = 0;
+    state.foodsEarned = 0;
+    state.particles = [];
+    lobbyHintEl.classList.add("hidden");
+    overlay.classList.add("hidden");
+    endBtn.disabled = false;
+    inventoryBtn.disabled = true;
+    shopBtn.disabled = true;
+    craftBtn.disabled = true;
+    if (view) view.distance = RUN_CAMERA_DISTANCE;
+    updateHud();
+    cancelAnimationFrame(previewId);
+    cancelAnimationFrame(state.animId);
+    lastTime = performance.now();
+    state.animId = requestAnimationFrame(loop);
+  }
+
+  function applySnap(msg) {
+    if (net.role !== "guest") return;
+    if (msg.mode === "run" && !state.running) guestBeginRun();
+    if (msg.mode === "lobby" && state.running) endRun(!net.alive);
+    state.mode = msg.mode === "run" ? "run" : "lobby";
+    const players = msg.players || [];
+    const mine = players.find((person) => person.id === net.id);
+    if (mine) {
+      net.alive = true;
+      net.waiting = false;
+      if (!state.player) spawnLobbyPlayer();
+      state.player.tier = tierByName[mine.food] || state.player.tier;
+      state.player.netName = net.name;
+      state.player.x = mine.x;
+      state.player.y = mine.y;
+      state.player.size = Math.max(10, mine.size || 10);
+      state.player.vx = 0;
+      state.player.vy = 0;
+      net.lastFocus = { x: state.player.x, y: state.player.y };
+    } else if (state.running && net.alive) {
+      net.alive = false;
+      if (state.player) net.lastFocus = { x: state.player.x, y: state.player.y };
+      state.player = null;
+      showWaiting();
+    }
+    const keep = new Set();
+    for (const person of players) {
+      if (person.id === net.id) continue;
+      keep.add(person.id);
+      let food = net.humans.get(person.id);
+      const tier = tierByName[person.food] || FOOD_TIERS[0];
+      if (!food) {
+        food = createFood(tier, person.x, person.y, false);
+        food.netId = person.id;
+        net.humans.set(person.id, food);
+      }
+      food.tier = tier;
+      food.netName = String(person.name || "Player").slice(0, 12);
+      food.x = person.x;
+      food.y = person.y;
+      food.size = Math.max(10, person.size || 10);
+    }
+    for (const id of [...net.humans.keys()]) if (!keep.has(id)) net.humans.delete(id);
+    if (msg.rivals) {
+      const previous = new Map(state.rivals.map((food) => [food.id, food]));
+      state.rivals = msg.rivals.map((rival) => {
+        const tier = tierByName[rival.food] || FOOD_TIERS[0];
+        let food = previous.get(rival.id);
+        if (!food) {
+          food = createFood(tier, rival.x, rival.y, true);
+          food.id = rival.id;
+        }
+        food.tier = tier;
+        food.x = rival.x;
+        food.y = rival.y;
+        food.size = Math.max(1, rival.size || 1);
+        return food;
+      });
+    }
+    if (msg.spr) {
+      const sprinkles = [];
+      for (let i = 0; i < msg.spr.length; i += 3) {
+        const type = SPRINKLE_TYPES[msg.spr[i + 2]] || SPRINKLE_TYPES[0];
+        sprinkles.push({ x: msg.spr[i], y: msg.spr[i + 1], type, wobble: (i * 0.17) % 6.2 });
+      }
+      state.sprinkles = sprinkles;
+    }
+  }
+
+  function onNetMessage(msg) {
+    if (msg.t === "err") {
+      setNetStatus(msg.msg || "Could not join.");
+      clearNet();
+      return;
+    }
+    if (msg.t === "closed") {
+      const running = state.running;
+      const dead = !net.alive;
+      clearNet();
+      if (running) endRun(dead);
+      overlayTitle.textContent = "Multiplayer";
+      overlayMsg.textContent = msg.msg || "The host left. You are back in single player.";
+      startBtn.textContent = "Enter Lobby";
+      overlay.classList.remove("hidden");
+      setNetStatus(msg.msg || "The host left. You are back in single player.");
+      return;
+    }
+    if (msg.t === "room") {
+      net.role = msg.host ? "host" : "guest";
+      net.id = msg.id;
+      net.code = msg.code;
+      net.alive = true;
+      if (state.player) state.player.netName = net.name;
+      applyRoster(msg.players);
+      showRoom(msg.code);
+      setNetStatus(msg.host ? "Share this code." : "Joined the room.");
+      closeOverlay();
+      openMulti();
+      return;
+    }
+    if (msg.t === "roster") {
+      applyRoster(msg.players);
+      return;
+    }
+    if (msg.t === "in" && net.role === "host") {
+      onGuestInput(msg);
+      return;
+    }
+    if (msg.t === "end" && net.role === "host") {
+      endRun(false);
+      return;
+    }
+    if (msg.t === "snap" && net.role === "guest") applySnap(msg);
+    if (msg.t === "ev" && net.role === "guest") {
+      if (msg.kind === "eat" && msg.id === net.id) addEatPoints(Number(msg.preySize) / 10);
+      if (msg.kind === "pts" && msg.id === net.id) addPoints(Number(msg.pts) || 0);
+      if (msg.kind === "dead" && msg.id === net.id) {
+        net.alive = false;
+        if (state.player) net.lastFocus = { x: state.player.x, y: state.player.y };
+        state.player = null;
+        showWaiting();
+      }
+    }
+  }
+
+  function connectRoom(first) {
+    if (net.role) {
+      setNetStatus("Leave the current room first.");
+      return;
+    }
+    if (!location.host) {
+      setNetStatus("Open this page from python3 server.py so friends can connect.");
+      return;
+    }
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    let ws;
+    try {
+      ws = new WebSocket(`${proto}://${location.host}/ws`);
+    } catch (err) {
+      setNetStatus("Could not connect. Start the game with python3 server.py.");
+      return;
+    }
+    net.ws = ws;
+    net.name = first.name;
+    ws.onopen = () => {
+      if (net.ws === ws) ws.send(JSON.stringify(first));
+    };
+    ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (err) {
+        return;
+      }
+      onNetMessage(msg);
+    };
+    ws.onerror = () => {
+      if (net.ws === ws && !net.role) setNetStatus("Could not connect. Start the game with python3 server.py.");
+    };
+    ws.onclose = () => {
+      if (net.ws !== ws || !net.role) {
+        if (net.ws === ws) net.ws = null;
+        return;
+      }
+      const running = state.running;
+      const dead = !net.alive;
+      clearNet();
+      if (running) endRun(dead);
+      const text = "The room closed. You are back in single player.";
+      overlayTitle.textContent = "Multiplayer";
+      overlayMsg.textContent = text;
+      startBtn.textContent = "Enter Lobby";
+      overlay.classList.remove("hidden");
+      setNetStatus(text);
+    };
+  }
+
   startBtn.addEventListener("click", closeOverlay);
-  endBtn.addEventListener("click", () => endRun(false));
+  endBtn.addEventListener("click", () => {
+    if (net.role === "guest") {
+      netSend({ t: "end" });
+      return;
+    }
+    endRun(false);
+  });
   autoFarmBtn.addEventListener("click", () => {
     state.autoFarm = !state.autoFarm;
     autoFarmBtn.setAttribute("aria-pressed", state.autoFarm ? "true" : "false");
   });
   inventoryBtn.addEventListener("click", openInventory);
+  multiBtn.addEventListener("click", openMulti);
+  multiCloseBtn.addEventListener("click", closeMulti);
+  multiCreateBtn.addEventListener("click", () => {
+    connectRoom({ t: "create", name: playerNetName(), food: equippedTier().name });
+  });
+  multiJoinBtn.addEventListener("click", () => {
+    const code = (multiCodeEl.value || "").trim();
+    if (code.length < 4) {
+      setNetStatus("Enter the 4-character code.");
+      return;
+    }
+    connectRoom({ t: "join", code, name: playerNetName(), food: equippedTier().name });
+  });
+  multiLeaveBtn.addEventListener("click", () => {
+    const running = state.running;
+    const dead = !net.alive;
+    clearNet();
+    if (running) endRun(dead);
+    setNetStatus("Left the room. You are back in single player.");
+  });
+  multiCodeEl.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") multiJoinBtn.click();
+  });
+  multiNameEl.addEventListener("keydown", (e) => e.stopPropagation());
   overlayInventoryBtn.addEventListener("click", openInventory);
   shopBtn.addEventListener("click", openShop);
   overlayShopBtn.addEventListener("click", openShop);
@@ -2732,10 +3347,13 @@
       closeShop();
       closeCraft();
       closeInventory();
+      closeMulti();
       return;
     }
     const name = e.key.toLowerCase();
     if (!MOVE_KEYS.has(name)) return;
+    const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
+    if (typing) return;
     moveKeys.add(name);
     e.preventDefault();
   });

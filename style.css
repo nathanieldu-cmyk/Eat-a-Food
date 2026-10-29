@@ -848,3 +848,59 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+.multi-status {
+  margin: 0;
+  color: #ffe6c6;
+}
+
+.multi-label {
+  display: grid;
+  gap: 6px;
+  font-family: "Fredoka", sans-serif;
+}
+
+.multi-label input,
+.multi-join input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 243, 224, 0.2);
+  background: #1b100c;
+  color: #fff6ea;
+  font: inherit;
+}
+
+.multi-join {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.room-code {
+  margin: 0;
+  text-align: center;
+  font-family: "Fredoka", sans-serif;
+  font-size: 2.6rem;
+  letter-spacing: 0.28em;
+  color: #ffd166;
+}
+
+#multi-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+#multi-players li {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 243, 224, 0.06);
+}
+
+#multi-setup.hidden,
+#multi-room.hidden {
+  display: none;
+}
