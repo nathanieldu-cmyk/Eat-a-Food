@@ -621,6 +621,9 @@
   const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const MAX_ROOM_PLAYERS = 8;
   const JOIN_TIMEOUT_MS = 15000;
+  const REJOIN_WINDOW_MS = 30000;
+  const CPU_IDLE_SIZE = 20;
+  const CPU_LEAD = 1.25;
 
   const net = {
     peer: null,
@@ -633,19 +636,49 @@
     humans: new Map(),
     inputs: new Map(),
     roster: [],
-    alive: true,
-    waiting: false,
     lastFocus: null,
     snapAcc: 0,
-    sprAcc: 0,
     inAcc: 0,
-    sendSpr: true,
     cpus: true,
+    worldReady: false,
+    cpuCap: 0,
+    run: 0,
+    endedRun: 0,
+    migrating: false,
+    rejoinUntil: 0,
+    claimAt: 0,
+    lastTry: "",
+    retryTimer: 0,
   };
 
   // CPUs can only be turned off while at least two people share a room.
   function cpusActive() {
     return !net.role || net.roster.length <= 1 || net.cpus;
+  }
+
+  // A room host keeps the arena running for everyone, even when nobody is in it.
+  function arenaLive() {
+    return state.running || net.role === "host";
+  }
+
+  function localZone() {
+    return state.mode === "run" ? "arena" : "lobby";
+  }
+
+  // Random so run ids never repeat when a different friend takes over as host.
+  function nextRunId() {
+    return 1 + Math.floor(Math.random() * 2147483646);
+  }
+
+  function arenaHumans() {
+    const list = [];
+    if (state.player && state.mode === "run") list.push(state.player);
+    if (net.role === "host") {
+      for (const human of net.humans.values()) {
+        if (human.zone === "arena" && !human.eaten) list.push(human);
+      }
+    }
+    return list;
   }
 
   bestRunEl.textContent = `${save.bestRun} foods`;
@@ -815,9 +848,11 @@
 
   function enterLobby() {
     state.mode = "lobby";
-    state.rivals = [];
-    state.sprinkles = [];
-    state.particles = [];
+    if (!net.role) {
+      state.rivals = [];
+      state.sprinkles = [];
+      state.particles = [];
+    }
     state.onShopPad = false;
     state.onCraftPad = false;
     spawnLobbyPlayer();
@@ -826,21 +861,7 @@
       for (const person of net.roster) {
         if (person.id !== net.id) ensureNetHuman(person);
       }
-      let seat = 1;
-      for (const food of net.humans.values()) {
-        const spot = lobbySpot(seat++);
-        const named = food.wantFood && tierByName[food.wantFood];
-        if (named) food.tier = tierByName[food.wantFood];
-        food.x = spot.x;
-        food.y = spot.y;
-        food.vx = 0;
-        food.vy = 0;
-        food.size = 10;
-        clampToLobby(food);
-      }
     }
-    net.waiting = false;
-    net.alive = true;
     if (view) view.distance = LOBBY_CAMERA_DISTANCE;
     lobbyHintEl.classList.remove("hidden");
   }
@@ -892,6 +913,7 @@
   function updateLobby(dt) {
     if (net.role === "guest") {
       netPump(dt);
+      if (state.player && !lobbyBlocked()) checkLobbyPads(state.player);
       return false;
     }
     if (!state.player || state.player.tier !== equippedTier()) {
@@ -901,13 +923,8 @@
     const food = state.player;
     const blocked = applyLobbySteer(food, dt, null);
     if (net.role === "host") {
-      for (const human of [...net.humans.values()]) {
-        applyLobbySteer(human, dt, net.inputs.get(human.netId));
-        if (dist(human, PORTAL_SPOT) < PORTAL_RADIUS * 0.8) {
-          startRun();
-          if (state.running) return true;
-        }
-      }
+      stepWorld(dt, performance.now());
+      stepLobbyGuests(dt);
       netPump(dt);
     }
     if (blocked) return false;
@@ -918,13 +935,70 @@
       spawnLobbyPlayer();
       return false;
     }
+    checkLobbyPads(food);
+    return false;
+  }
+
+  function checkLobbyPads(food) {
     const onPad = dist(food, SHOP_PAD_SPOT) < SHOP_PAD_RADIUS;
     if (onPad && !state.onShopPad) openShop();
     state.onShopPad = onPad;
     const onCraft = dist(food, CRAFT_PAD_SPOT) < CRAFT_PAD_RADIUS;
     if (onCraft && !state.onCraftPad) openCraft();
     state.onCraftPad = onCraft;
-    return false;
+  }
+
+  // Host only: friends in the lobby walk around and enter the arena on their own.
+  function stepLobbyGuests(dt) {
+    for (const human of net.humans.values()) {
+      if (human.zone !== "lobby") continue;
+      applyLobbySteer(human, dt, net.inputs.get(human.netId));
+      if (dist(human, PORTAL_SPOT) < PORTAL_RADIUS * 0.8) enterArena(human);
+    }
+  }
+
+  function enterArena(food) {
+    ensureWorld();
+    const named = food.wantFood && tierByName[food.wantFood];
+    if (named) food.tier = named;
+    const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
+    food.x = spot.x;
+    food.y = spot.y;
+    food.vx = 0;
+    food.vy = 0;
+    food.size = 10;
+    food.foods = 0;
+    food.eaten = false;
+    food.zone = "arena";
+    food.run = nextRunId();
+    clampToArena(food);
+    const guest = net.guests.get(food.netId);
+    if (guest) guest.needSpr = true;
+  }
+
+  function sendToLobby(food) {
+    const named = food.wantFood && tierByName[food.wantFood];
+    if (named) food.tier = named;
+    const spot = lobbySpot(1 + Math.floor(Math.random() * 7));
+    food.x = spot.x;
+    food.y = spot.y;
+    food.vx = 0;
+    food.vy = 0;
+    food.size = 10;
+    food.zone = "lobby";
+    food.run = 0;
+    clampToLobby(food);
+  }
+
+  // Host only: the arena is seeded once per room and then keeps going.
+  function ensureWorld() {
+    if (net.role !== "host" || net.worldReady) return;
+    net.worldReady = true;
+    state.rivals = [];
+    state.particles = [];
+    seedSprinkles();
+    state.lastSpawnAt = performance.now();
+    if (cpusActive()) spawnTwinRivals();
   }
 
   function awardRunFood() {
@@ -956,19 +1030,30 @@
     return rival;
   }
 
+  // How far along the arena's players are, so new CPUs scale with them.
+  function rivalScale() {
+    let scale = state.mode === "run" ? state.foodsEarned : 0;
+    if (net.role === "host") {
+      for (const human of net.humans.values()) {
+        if (human.zone === "arena") scale = Math.max(scale, human.foods || 0);
+      }
+    }
+    return scale;
+  }
+
   function spawnRival() {
-    const playerRank = rarityById[rarityForRunIndex(Math.max(0, state.foodsEarned - 1))].rank;
+    const scale = rivalScale();
+    const playerRank = rarityById[rarityForRunIndex(Math.max(0, scale - 1))].rank;
     const rivalRank = Math.max(0, Math.min(RARITIES.length - 1, playerRank + Math.floor(rand(-1, 2))));
     const tier = pickFoodFromRarity(RARITIES[rivalRank].id);
     const spot = randomArenaSpot();
-    spawnRivalAt(tier, spot.x, spot.y, rand(8, 12 + state.foodsEarned * 0.35));
+    spawnRivalAt(tier, spot.x, spot.y, rand(8, 12 + scale * 0.35));
   }
 
-  // Two same-food CPUs, kept far from the player and from each other.
-  function spawnTwinRivals(extra = []) {
-    const used = [...(state.player ? [{ x: state.player.x, y: state.player.y }] : []), ...extra];
-    if (!used.length) return;
-    const tier = state.player ? equippedTier() : extra[0].tier || equippedTier();
+  // Two same-food CPUs, kept far from the players and from each other.
+  function spawnTwinRivals() {
+    const used = arenaHumans().map((food) => ({ x: food.x, y: food.y }));
+    const tier = equippedTier();
     const minAway = ARENA * 0.32;
     for (let i = 0; i < 2; i++) {
       const spot = farArenaSpot(used, minAway);
@@ -1097,12 +1182,12 @@
     burst(sprinkle.x, sprinkle.y, sprinkle.type.color);
     state.sprinkles.splice(index, 1);
     setTimeout(() => {
-      if (state.running) spawnSprinkle();
+      if (arenaLive()) spawnSprinkle();
     }, 1400 + Math.random() * 1800);
   }
 
   function tryEatFood(eater, prey, preyList, preyIndex) {
-    if (!eater || !prey || eater === prey || prey.eaten) return false;
+    if (!eater || !prey || eater === prey || prey.eaten || eater.eaten) return false;
     if (eater.size <= prey.size) return false;
     // Eat when the food models touch. The ring sits outside the model.
     if (dist(eater, prey) > bodyReach(eater) + bodyReach(prey)) return false;
@@ -1117,8 +1202,10 @@
     burst(prey.x, prey.y, prey.tier.color);
     prey.eaten = true;
     if (prey.netId) {
-      net.humans.delete(prey.netId);
-      if (net.role === "host") netSend({ t: "ev", kind: "dead", id: prey.netId });
+      if (net.role === "host") {
+        netSend({ t: "ev", kind: "dead", id: prey.netId });
+        sendToLobby(prey);
+      }
     } else if (prey === state.player) {
       state.player = null;
       if (net.role === "host") netSend({ t: "ev", kind: "dead", id: net.id });
@@ -1179,13 +1266,7 @@
   }
 
   function otherFoods(food) {
-    const others = [];
-    if (state.player && state.player !== food) others.push(state.player);
-    if (net.role === "host") {
-      for (const human of net.humans.values()) {
-        if (human !== food) others.push(human);
-      }
-    }
+    const others = arenaHumans().filter((human) => human !== food);
     for (const rival of state.rivals) {
       if (rival !== food) others.push(rival);
     }
@@ -1318,10 +1399,8 @@
   }
 
   function updateFoods(dt) {
-    const food = state.player;
-    if (food) applyRunSteer(food, dt, null);
-    if (net.role === "host") {
-      for (const human of net.humans.values()) applyRunSteer(human, dt, net.inputs.get(human.netId));
+    for (const human of arenaHumans()) {
+      applyRunSteer(human, dt, human === state.player ? null : net.inputs.get(human.netId));
     }
 
     for (const rival of state.rivals) {
@@ -1360,17 +1439,8 @@
     return 0.5 * food.drawRadius() * FOOD_MODEL_SCALE;
   }
 
-  function livingHumans() {
-    const list = [];
-    if (state.player) list.push(state.player);
-    if (net.role === "host") {
-      for (const human of net.humans.values()) list.push(human);
-    }
-    return list;
-  }
-
   function resolveEats() {
-    const actors = livingHumans();
+    const actors = arenaHumans();
     actors.push(...state.rivals);
 
     for (let i = state.sprinkles.length - 1; i >= 0; i--) {
@@ -1388,7 +1458,7 @@
       if (eater) eatSprinkle(eater, s, i);
     }
 
-    const humans = livingHumans();
+    const humans = arenaHumans();
     for (const human of humans) {
       for (let j = state.rivals.length - 1; j >= 0; j--) {
         tryEatFood(human, state.rivals[j], state.rivals, j);
@@ -1396,9 +1466,8 @@
     }
 
     for (const human of humans) {
-      if (human.netId && !net.humans.has(human.netId)) continue;
-      if (human === state.player && !state.player) continue;
-      for (const other of livingHumans()) {
+      if (human.eaten) continue;
+      for (const other of arenaHumans()) {
         if (human === other) continue;
         tryEatFood(human, other, [other], 0);
       }
@@ -1406,7 +1475,7 @@
 
     for (let i = state.rivals.length - 1; i >= 0; i--) {
       const r = state.rivals[i];
-      for (const human of livingHumans()) tryEatFood(r, human, [human], 0);
+      for (const human of arenaHumans()) tryEatFood(r, human, [human], 0);
       for (let j = state.rivals.length - 1; j >= 0; j--) {
         if (i === j) continue;
         if (tryEatFood(r, state.rivals[j], state.rivals, j) && j < i) i -= 1;
@@ -1681,7 +1750,8 @@
   function syncSprinkles(t) {
     const counts = Object.create(null);
     for (const type of SPRINKLE_TYPES) counts[type.key] = 0;
-    for (const sprinkle of state.sprinkles) {
+    const visible = state.mode === "run" ? state.sprinkles : [];
+    for (const sprinkle of visible) {
       const key = sprinkle.type.key;
       const mesh = view.sprinkles[key];
       const index = counts[key]++;
@@ -1705,7 +1775,8 @@
 
   function syncParticles() {
     const THREE = view.THREE;
-    while (view.particleMeshes.length < state.particles.length) {
+    const particles = state.mode === "run" ? state.particles : [];
+    while (view.particleMeshes.length < particles.length) {
       const mat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false });
       const mesh = new THREE.Mesh(view.particleGeo, mat);
       view.scene.add(mesh);
@@ -1713,7 +1784,7 @@
     }
     for (let i = 0; i < view.particleMeshes.length; i++) {
       const mesh = view.particleMeshes[i];
-      const particle = state.particles[i];
+      const particle = particles[i];
       if (!particle) {
         mesh.visible = false;
         continue;
@@ -1729,10 +1800,13 @@
     if (!view) return;
     const t = performance.now() / 1000;
     const alive = new Set();
-    for (const rival of state.rivals) alive.add(syncFood(view.THREE, rival, t));
+    const zone = localZone();
+    if (zone === "arena") {
+      for (const rival of state.rivals) alive.add(syncFood(view.THREE, rival, t));
+    }
     if (state.player) alive.add(syncFood(view.THREE, state.player, t));
-    if (net.role === "host" || net.role === "guest") {
-      for (const human of net.humans.values()) alive.add(syncFood(view.THREE, human, t));
+    for (const human of net.humans.values()) {
+      if ((human.zone || "lobby") === zone) alive.add(syncFood(view.THREE, human, t));
     }
     for (const [id, entry] of view.foods) {
       if (alive.has(id)) continue;
@@ -2690,13 +2764,28 @@
       netPump(dt);
       return true;
     }
+    stepWorld(dt, now);
+    if (net.role === "host") {
+      stepLobbyGuests(dt);
+      netPump(dt);
+    }
+    if (!state.player) {
+      endRun(true);
+      return false;
+    }
+    return true;
+  }
+
+  function stepWorld(dt, now) {
     updateFoods(dt);
     resolveEats();
     updateParticles(dt);
-    if (net.role === "host") netPump(dt);
+    if (net.role === "host") limitCpuSizes(dt);
 
+    // Rooms always keep the two CPUs around; extra ones join as players progress.
     const rivalDelay = state.rivals.length === 0 ? 10000 : 8000;
-    if (cpusActive() && now - state.lastSpawnAt > rivalDelay && state.foodsEarned >= 2) {
+    const wanted = rivalScale() >= 2 || (net.role === "host" && state.rivals.length < 2);
+    if (cpusActive() && wanted && now - state.lastSpawnAt > rivalDelay) {
       spawnRival();
       state.lastSpawnAt = now;
     }
@@ -2707,22 +2796,20 @@
     if (sprinkleCount("small") < MAX_SMALL_SPRINKLES && Math.random() < 0.14) {
       spawnSprinkle(sprinkleType("small"));
     }
+  }
 
-    if (net.role === "host") {
-      const aliveHumans = (state.player ? 1 : 0) + net.humans.size;
-      if (!aliveHumans) {
-        endRun(true);
-        return false;
-      }
-      if (!state.player && !net.waiting) {
-        net.waiting = true;
-        showWaiting();
-      }
-    } else if (!state.player) {
-      endRun(true);
-      return false;
+  // Room arenas never reset, so CPUs shrink back toward the biggest player in
+  // the arena, or to a fresh size when nobody is in it.
+  function limitCpuSizes(dt) {
+    let biggest = 0;
+    for (const human of arenaHumans()) biggest = Math.max(biggest, human.size);
+    const target = Math.max(CPU_IDLE_SIZE, biggest * CPU_LEAD);
+    // The cap rises at once with the players but eases down when the biggest one leaves.
+    const cap = net.cpuCap || CPU_IDLE_SIZE;
+    net.cpuCap = target >= cap ? target : cap - (cap - target) * Math.min(1, dt * 4);
+    for (const rival of state.rivals) {
+      if (rival.size > net.cpuCap) rival.size = net.cpuCap;
     }
-    return true;
   }
 
   // Background tabs stop animation frames, so a worker timer keeps a room
@@ -2779,14 +2866,20 @@
     state.points = 0;
     state.foodsEarned = 0;
     state.player = null;
-    state.rivals = [];
-    state.particles = [];
-    state.lastSpawnAt = performance.now();
-    seedSprinkles();
-    spawnPlayer();
-    if (net.role && state.player) state.player.netName = net.name;
-    const placed = net.role === "host" ? spawnNetHumansForRun() : [];
-    if (cpusActive()) spawnTwinRivals(placed);
+    if (net.role === "host") {
+      ensureWorld();
+      const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
+      state.player = createFood(equippedTier(), spot.x, spot.y, false);
+      clampToArena(state.player);
+      state.player.netName = net.name;
+    } else {
+      state.rivals = [];
+      state.particles = [];
+      state.lastSpawnAt = performance.now();
+      seedSprinkles();
+      spawnPlayer();
+      if (cpusActive()) spawnTwinRivals();
+    }
     if (view) view.distance = RUN_CAMERA_DISTANCE;
     updateHud();
     overlay.classList.add("hidden");
@@ -2917,24 +3010,6 @@
   renderPotionStatus();
   setInterval(renderPotionStatus, 1000);
 
-  function spawnNetHumansForRun() {
-    const used = [];
-    for (const food of net.humans.values()) {
-      const named = food.wantFood && tierByName[food.wantFood];
-      if (named) food.tier = tierByName[food.wantFood];
-      food.eaten = false;
-      food.size = 10;
-      food.vx = 0;
-      food.vy = 0;
-      const spot = farArenaSpot([{ x: state.player.x, y: state.player.y }, ...used], ARENA * 0.22);
-      food.x = spot.x;
-      food.y = spot.y;
-      clampToArena(food);
-      used.push({ x: food.x, y: food.y });
-    }
-    return used;
-  }
-
   function netReady() {
     if (net.role === "host") return !!net.peer;
     if (net.role === "guest") return !!(net.hostConn && net.hostConn.open);
@@ -2954,11 +3029,12 @@
   function broadcastSnap(forceSpr) {
     if (net.role !== "host") return;
     const players = [];
-    if (state.player) players.push(packActor(state.player, net.id, net.name));
-    for (const food of net.humans.values()) players.push(packActor(food, food.netId, food.netName));
+    if (state.player) players.push(packActor(state.player, net.id, net.name, localZone(), 0));
+    for (const food of net.humans.values()) {
+      players.push(packActor(food, food.netId, food.netName, food.zone, food.run));
+    }
     const msg = {
       t: "snap",
-      mode: state.mode === "run" ? "run" : "lobby",
       players,
       rivals: state.rivals.map((food) => ({
         id: food.id,
@@ -2968,11 +3044,22 @@
         size: Math.round(food.size),
       })),
     };
-    if (forceSpr || net.sendSpr) {
-      msg.spr = packSprinkles(state.sprinkles);
-      net.sendSpr = false;
+    // Lobby guests get sprinkles rarely, so a new host still has the arena if this one leaves.
+    const now = performance.now();
+    let spr = null;
+    for (const [id, guest] of net.guests) {
+      if (!guest.conn.open) continue;
+      const human = net.humans.get(id);
+      const every = human && human.zone === "arena" ? 250 : 2000;
+      if (forceSpr || guest.needSpr || now - (guest.sprAt || 0) >= every) {
+        spr = spr || packSprinkles(state.sprinkles);
+        guest.sprAt = now;
+        guest.needSpr = false;
+        guest.conn.send({ ...msg, spr });
+      } else {
+        guest.conn.send(msg);
+      }
     }
-    netSend(msg);
   }
 
   // PeerJS packs plain arrays recursively and overflows the stack on thousands
@@ -3000,10 +3087,12 @@
     return sprinkles;
   }
 
-  function packActor(food, id, name) {
+  function packActor(food, id, name, zone, run) {
     return {
       id,
       name: name || "Player",
+      zone: zone === "arena" ? "arena" : "lobby",
+      run: run || 0,
       food: food.tier.name,
       x: Math.round(food.x * 10) / 10,
       y: Math.round(food.y * 10) / 10,
@@ -3023,17 +3112,13 @@
         autoFarm: state.autoFarm,
         yaw: view ? view.yaw : 0,
         food: equippedTier().name,
+        foods: state.running ? state.foodsEarned : 0,
         growth: Math.pow(1.25, boostStacks("growth")),
         speed: Math.pow(1.25, boostStacks("speed")),
       });
       return;
     }
     net.snapAcc += dt;
-    net.sprAcc += dt;
-    if (net.sprAcc >= 0.25) {
-      net.sprAcc = 0;
-      net.sendSpr = true;
-    }
     if (net.snapAcc >= 0.1) {
       net.snapAcc = 0;
       broadcastSnap(false);
@@ -3050,6 +3135,9 @@
       food.netName = String(person.name || "Player").slice(0, 12);
       food.growthBoost = 1;
       food.speedBoost = 1;
+      food.zone = "lobby";
+      food.run = 0;
+      food.foods = 0;
       net.humans.set(person.id, food);
     } else {
       food.netName = String(person.name || food.netName || "Player").slice(0, 12);
@@ -3068,7 +3156,7 @@
     for (const person of net.roster) {
       if (person.id === net.id) continue;
       ids.add(person.id);
-      if (state.mode === "lobby") ensureNetHuman(person);
+      ensureNetHuman(person);
     }
     for (const id of [...net.humans.keys()]) {
       if (!ids.has(id)) {
@@ -3084,8 +3172,9 @@
     net.inputs.set(msg.id, msg);
     food.growthBoost = Number(msg.growth) > 0 ? Number(msg.growth) : 1;
     food.speedBoost = Number(msg.speed) > 0 ? Number(msg.speed) : 1;
+    food.foods = Math.max(0, Number(msg.foods) || 0);
     food.wantFood = msg.food;
-    if (state.mode === "lobby" && msg.food && tierByName[msg.food]) food.tier = tierByName[msg.food];
+    if (food.zone === "lobby" && msg.food && tierByName[msg.food]) food.tier = tierByName[msg.food];
   }
 
   function renderRoster() {
@@ -3111,15 +3200,15 @@
   }
 
   // Host only: drop CPUs when they are switched off, and bring the twins back
-  // mid-run when they come back on and the arena has none.
+  // when they come back on and the arena has none.
   function syncCpus() {
-    if (net.role !== "host" || !state.running) return;
+    if (net.role !== "host" || !net.worldReady) return;
     if (!cpusActive()) {
       state.rivals = [];
       return;
     }
     if (state.rivals.length === 0) {
-      spawnTwinRivals(livingHumans().filter((food) => food !== state.player));
+      spawnTwinRivals();
       state.lastSpawnAt = performance.now();
     }
   }
@@ -3161,26 +3250,26 @@
     multiModal.setAttribute("aria-hidden", "true");
   }
 
-  function showWaiting() {
-    overlayTitle.textContent = "Eaten";
-    overlayMsg.textContent = "Waiting for the run to end.";
-    startBtn.textContent = "Waiting";
-    afterRunActionsEl.classList.add("hidden");
-    pullResultsEl.classList.add("hidden");
-    overlay.classList.remove("hidden");
-  }
-
   function playerNetName() {
     const name = (multiNameEl.value || "Player").trim().slice(0, 12);
     return name || "Player";
   }
 
-  function clearNet() {
+  // Closes the connection but keeps the room's game state, for reconnecting.
+  function dropLink() {
     const peer = net.peer;
     net.peer = null;
     net.hostConn = null;
     net.guests.clear();
     clearTimeout(net.joinTimer);
+    clearTimeout(net.retryTimer);
+    if (peer) {
+      try { peer.destroy(); } catch (err) { /* already closed */ }
+    }
+  }
+
+  function clearNet() {
+    dropLink();
     stopHeartbeat();
     net.role = null;
     net.id = null;
@@ -3188,18 +3277,23 @@
     net.humans.clear();
     net.inputs.clear();
     net.roster = [];
-    net.alive = true;
-    net.waiting = false;
     net.cpus = true;
+    net.worldReady = false;
+    net.cpuCap = 0;
+    net.run = 0;
+    net.endedRun = 0;
+    net.migrating = false;
     if (state.player) state.player.netName = null;
+    if (!state.running) {
+      state.rivals = [];
+      state.sprinkles = [];
+      state.particles = [];
+    }
     renderRoster();
     showSetup();
-    if (peer) {
-      try { peer.destroy(); } catch (err) { /* already closed */ }
-    }
   }
 
-  function guestBeginRun() {
+  function guestBeginRun(run) {
     closeInventory();
     closeShop();
     closeCraft();
@@ -3208,8 +3302,7 @@
     pullResultsEl.innerHTML = "";
     state.running = true;
     state.mode = "run";
-    net.alive = true;
-    net.waiting = false;
+    net.run = run;
     state.points = 0;
     state.foodsEarned = 0;
     state.particles = [];
@@ -3229,28 +3322,25 @@
 
   function applySnap(msg) {
     if (net.role !== "guest") return;
-    if (msg.mode === "run" && !state.running) guestBeginRun();
-    if (msg.mode === "lobby" && state.running) endRun(!net.alive);
-    state.mode = msg.mode === "run" ? "run" : "lobby";
     const players = msg.players || [];
     const mine = players.find((person) => person.id === net.id);
     if (mine) {
-      net.alive = true;
-      net.waiting = false;
-      if (!state.player) spawnLobbyPlayer();
-      state.player.tier = tierByName[mine.food] || state.player.tier;
-      state.player.netName = net.name;
-      state.player.x = mine.x;
-      state.player.y = mine.y;
-      state.player.size = Math.max(10, mine.size || 10);
-      state.player.vx = 0;
-      state.player.vy = 0;
-      net.lastFocus = { x: state.player.x, y: state.player.y };
-    } else if (state.running && net.alive) {
-      net.alive = false;
-      if (state.player) net.lastFocus = { x: state.player.x, y: state.player.y };
-      state.player = null;
-      showWaiting();
+      const inArena = mine.zone === "arena";
+      if (inArena && !state.running && mine.run && mine.run !== net.endedRun) guestBeginRun(mine.run);
+      else if (!inArena && state.running) endRun(false);
+      // Skip stale positions from a run this player already ended.
+      const current = state.running ? inArena && mine.run === net.run : !inArena;
+      if (current) {
+        if (!state.player) spawnLobbyPlayer();
+        state.player.tier = tierByName[mine.food] || state.player.tier;
+        state.player.netName = net.name;
+        state.player.x = mine.x;
+        state.player.y = mine.y;
+        state.player.size = Math.max(10, mine.size || 10);
+        state.player.vx = 0;
+        state.player.vy = 0;
+        net.lastFocus = { x: state.player.x, y: state.player.y };
+      }
     }
     const keep = new Set();
     for (const person of players) {
@@ -3265,6 +3355,7 @@
       }
       food.tier = tier;
       food.netName = String(person.name || "Player").slice(0, 12);
+      food.zone = person.zone === "arena" ? "arena" : "lobby";
       food.x = person.x;
       food.y = person.y;
       food.size = Math.max(10, person.size || 10);
@@ -3296,26 +3387,25 @@
       return;
     }
     if (msg.t === "closed") {
-      const running = state.running;
-      const dead = !net.alive;
-      clearNet();
-      if (running) endRun(dead);
-      overlayTitle.textContent = "Multiplayer";
-      overlayMsg.textContent = msg.msg || "The host left. You are back in single player.";
-      startBtn.textContent = "Enter Lobby";
-      overlay.classList.remove("hidden");
-      setNetStatus(msg.msg || "The host left. You are back in single player.");
+      giveUpRoom(msg.msg);
       return;
     }
     if (msg.t === "room") {
+      const rejoined = net.migrating;
+      net.migrating = false;
       net.role = msg.host ? "host" : "guest";
       net.id = msg.id;
       net.code = msg.code;
-      net.alive = true;
       if (state.player) state.player.netName = net.name;
       startHeartbeat();
       applyRoster(msg.players, msg.cpus);
       showRoom(msg.code);
+      if (rejoined) {
+        if (state.running && msg.run) net.run = msg.run;
+        const host = (msg.players || []).find((person) => person.host);
+        setNetStatus(`Reconnected. ${host ? host.name : "A friend"} is the host now.`);
+        return;
+      }
       setNetStatus(msg.host ? "Share this code." : "Joined the room.");
       closeOverlay();
       openMulti();
@@ -3325,25 +3415,109 @@
       applyRoster(msg.players, msg.cpus);
       return;
     }
-    if (msg.t === "in" && net.role === "host") {
-      onGuestInput(msg);
-      return;
-    }
-    if (msg.t === "end" && net.role === "host") {
-      endRun(false);
-      return;
-    }
     if (msg.t === "snap" && net.role === "guest") applySnap(msg);
-    if (msg.t === "ev" && net.role === "guest") {
-      if (msg.kind === "eat" && msg.id === net.id) addEatPoints(Number(msg.preySize) / 10);
-      if (msg.kind === "pts" && msg.id === net.id) addPoints(Number(msg.pts) || 0);
-      if (msg.kind === "dead" && msg.id === net.id) {
-        net.alive = false;
-        if (state.player) net.lastFocus = { x: state.player.x, y: state.player.y };
-        state.player = null;
-        showWaiting();
+    if (msg.t === "ev" && net.role === "guest" && msg.id === net.id && state.running) {
+      if (msg.kind === "eat") addEatPoints(Number(msg.preySize) / 10);
+      if (msg.kind === "pts") addPoints(Number(msg.pts) || 0);
+      if (msg.kind === "dead") {
+        net.endedRun = net.run;
+        endRun(true);
       }
     }
+  }
+
+  function giveUpRoom(text) {
+    const message = text || "The room closed. You are back in single player.";
+    const running = state.running;
+    clearNet();
+    if (running) endRun(false);
+    overlayTitle.textContent = "Multiplayer";
+    overlayMsg.textContent = message;
+    startBtn.textContent = "Enter Lobby";
+    overlay.classList.remove("hidden");
+    setNetStatus(message);
+  }
+
+  // When the host leaves, the first friend in the list takes over the same code
+  // with the arena they last saw, and everyone else reconnects to them.
+  function onHostLost() {
+    if (net.role !== "guest" || net.migrating) return;
+    const guests = net.roster.filter((person) => !person.host);
+    const place = Math.max(0, guests.findIndex((person) => person.id === net.id));
+    const now = Date.now();
+    net.migrating = true;
+    net.rejoinUntil = now + REJOIN_WINDOW_MS;
+    net.claimAt = now + place * 4000;
+    net.lastTry = "";
+    dropLink();
+    net.humans.clear();
+    setNetStatus("The host left. Reconnecting…");
+    net.retryTimer = setTimeout(() => reconnectStep(net.code), place ? 1200 : 300);
+  }
+
+  function reconnectStep(code) {
+    if (!net.migrating) return;
+    if (Date.now() > net.rejoinUntil) {
+      giveUpRoom();
+      return;
+    }
+    const claim = Date.now() >= net.claimAt && net.lastTry !== "claim";
+    net.lastTry = claim ? "claim" : "join";
+    if (claim) claimRoom(code);
+    else joinRoom(code, net.name, resumeInfo());
+  }
+
+  function retryReconnect(code) {
+    dropLink();
+    net.retryTimer = setTimeout(() => reconnectStep(code), 1000);
+  }
+
+  function resumeInfo() {
+    const food = state.player;
+    return {
+      zone: state.running ? "arena" : "lobby",
+      x: food ? food.x : LOBBY_SPAWN.x,
+      y: food ? food.y : LOBBY_SPAWN.y,
+      size: food ? food.size : 10,
+    };
+  }
+
+  function claimRoom(code) {
+    const peer = new window.Peer(ROOM_PREFIX + code);
+    net.peer = peer;
+    peer.on("open", () => {
+      if (net.peer !== peer || !net.migrating) return;
+      promoteToHost(code);
+    });
+    peer.on("connection", hostAccept);
+    peer.on("disconnected", () => {
+      if (net.peer === peer && !peer.destroyed) peer.reconnect();
+    });
+    peer.on("error", () => {
+      if (net.peer !== peer || !net.migrating) return;
+      retryReconnect(code);
+    });
+  }
+
+  function promoteToHost(code) {
+    net.migrating = false;
+    net.role = "host";
+    net.id = "host";
+    net.code = code;
+    net.hostConn = null;
+    net.humans.clear();
+    net.inputs.clear();
+    net.worldReady = true;
+    for (const rival of state.rivals) {
+      rival.vx = 0;
+      rival.vy = 0;
+    }
+    if (!state.sprinkles.length) seedSprinkles();
+    state.lastSpawnAt = performance.now();
+    if (state.player) state.player.netName = net.name;
+    shareRoster();
+    showRoom(code);
+    setNetStatus("The host left, so you are the host now. The code is the same.");
   }
 
   function newRoomCode() {
@@ -3466,12 +3640,23 @@
           return;
         }
         joined = true;
-        net.guests.set(conn.peer, {
-          conn,
+        const person = {
+          id: conn.peer,
           name: String(msg.name || "Player").trim().slice(0, 12) || "Player",
           food: String(msg.food || "").slice(0, 80),
+        };
+        net.guests.set(conn.peer, { conn, name: person.name, food: person.food, needSpr: true });
+        const food = ensureNetHuman(person);
+        if (msg.resume) placeResumed(food, msg.resume);
+        conn.send({
+          t: "room",
+          code: net.code,
+          id: conn.peer,
+          host: false,
+          players: hostRoster(),
+          cpus: net.cpus,
+          run: food.run,
         });
-        conn.send({ t: "room", code: net.code, id: conn.peer, host: false, players: hostRoster(), cpus: net.cpus });
         shareRoster();
         return;
       }
@@ -3485,8 +3670,9 @@
           shareRoster();
         }
         onGuestInput(msg);
-      } else if (msg.t === "end" && state.running) {
-        endRun(false);
+      } else if (msg.t === "end") {
+        const food = net.humans.get(conn.peer);
+        if (food && food.zone === "arena") sendToLobby(food);
       }
     });
     conn.on("close", () => {
@@ -3496,6 +3682,27 @@
       shareRoster();
     });
     conn.on("error", () => {});
+  }
+
+  // A friend reconnecting after a host change keeps their spot, and their run if they had one.
+  function placeResumed(food, resume) {
+    const x = Number(resume.x);
+    const y = Number(resume.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    food.x = x;
+    food.y = y;
+    food.vx = 0;
+    food.vy = 0;
+    if (resume.zone === "arena") {
+      ensureWorld();
+      food.zone = "arena";
+      food.run = nextRunId();
+      food.eaten = false;
+      food.size = Math.max(10, Number(resume.size) || 10);
+      clampToArena(food);
+    } else {
+      clampToLobby(food);
+    }
   }
 
   function createRoom(name, attempt = 0) {
@@ -3511,6 +3718,7 @@
       net.id = "host";
       net.code = code;
       net.role = "host";
+      ensureWorld();
       onNetMessage({ t: "room", host: true, code, id: "host", players: hostRoster() });
       setNetStatus("Share this code. Friends can join from any computer.");
     });
@@ -3529,27 +3737,37 @@
     });
   }
 
-  function joinRoom(code, name) {
-    if (!startNet()) return;
+  // `resume` is set when reconnecting after a host change; failures then retry quietly.
+  function joinRoom(code, name, resume = null) {
+    if (!resume && !startNet()) return;
     const peer = new window.Peer();
     net.peer = peer;
     net.name = name;
-    setNetStatus("Connecting…");
-    net.joinTimer = setTimeout(() => {
-      if (net.peer === peer && !net.role) {
-        onNetMessage({ t: "err", msg: "Could not reach that room. Check the code and try again." });
-      }
-    }, JOIN_TIMEOUT_MS);
+    let joined = false;
+    const fail = (text) => {
+      if (net.peer !== peer || joined) return;
+      if (resume) retryReconnect(code);
+      else onNetMessage({ t: "err", msg: text });
+    };
+    if (!resume) setNetStatus("Connecting…");
+    net.joinTimer = setTimeout(
+      () => fail("Could not reach that room. Check the code and try again."),
+      resume ? 6000 : JOIN_TIMEOUT_MS
+    );
     peer.on("open", () => {
       if (net.peer !== peer) return;
       const conn = peer.connect(ROOM_PREFIX + code, { reliable: true });
       net.hostConn = conn;
       conn.on("open", () => {
-        if (net.hostConn === conn) conn.send({ t: "join", v: GAME_VERSION, name, food: equippedTier().name });
+        if (net.hostConn !== conn) return;
+        conn.send({ t: "join", v: GAME_VERSION, name, food: equippedTier().name, resume });
       });
       conn.on("data", (msg) => {
         if (net.hostConn !== conn || !msg || typeof msg !== "object") return;
-        if (msg.t === "room") clearTimeout(net.joinTimer);
+        if (msg.t === "room") {
+          clearTimeout(net.joinTimer);
+          joined = true;
+        }
         if (msg.t === "err" && msg.update && !net.role) {
           clearNet();
           if (reloadForUpdate(Number(msg.v) || "host", { action: "join", code, name })) return;
@@ -3558,22 +3776,21 @@
       });
       conn.on("close", () => {
         if (net.hostConn !== conn) return;
-        if (net.role) onNetMessage({ t: "closed", msg: "The host left. You are back in single player." });
-        else onNetMessage({ t: "err", msg: "Could not join that room." });
+        if (joined) onHostLost();
+        else fail("Could not join that room.");
       });
       conn.on("error", () => {});
     });
     peer.on("disconnected", () => {
-      if (net.peer === peer && !peer.destroyed && net.role) peer.reconnect();
+      if (net.peer === peer && !peer.destroyed && joined) peer.reconnect();
     });
     peer.on("error", (err) => {
       if (net.peer !== peer) return;
-      if (err.type === "peer-unavailable") {
-        if (net.role) onNetMessage({ t: "closed", msg: "The host left. You are back in single player." });
-        else onNetMessage({ t: "err", msg: "No room with that code." });
+      if (joined) {
+        if (err.type === "peer-unavailable") onHostLost();
         return;
       }
-      if (!net.role) onNetMessage({ t: "err", msg: netErrorText(err) });
+      fail(err.type === "peer-unavailable" ? "No room with that code." : netErrorText(err));
     });
   }
 
@@ -3586,8 +3803,8 @@
   startBtn.addEventListener("click", closeOverlay);
   endBtn.addEventListener("click", () => {
     if (net.role === "guest") {
+      net.endedRun = net.run;
       netSend({ t: "end" });
-      return;
     }
     endRun(false);
   });
@@ -3616,9 +3833,8 @@
   multiCpusBtn.addEventListener("click", () => setRoomCpus(!net.cpus));
   multiLeaveBtn.addEventListener("click", () => {
     const running = state.running;
-    const dead = !net.alive;
     clearNet();
-    if (running) endRun(dead);
+    if (running) endRun(false);
     setNetStatus("Left the room. You are back in single player.");
   });
   multiCodeEl.addEventListener("keydown", (e) => {
