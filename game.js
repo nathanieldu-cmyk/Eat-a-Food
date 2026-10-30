@@ -3825,6 +3825,10 @@
     setNetStatus("Creating room…");
     peer.on("open", () => {
       if (net.peer !== peer) return;
+      if (net.role === "host") {
+        setNetStatus("Room reconnected. The code is the same.");
+        return;
+      }
       net.name = name;
       net.id = "host";
       net.code = code;
@@ -3835,7 +3839,9 @@
     });
     peer.on("connection", hostAccept);
     peer.on("disconnected", () => {
-      if (net.peer === peer && !peer.destroyed) peer.reconnect();
+      if (net.peer !== peer || peer.destroyed) return;
+      if (net.role === "host") setNetStatus("Reconnecting the room…");
+      peer.reconnect();
     });
     peer.on("error", (err) => {
       if (net.peer !== peer) return;
@@ -3848,27 +3854,67 @@
     });
   }
 
+  // The first offer often expires before the host answers, which PeerJS reports as
+  // "could not connect." Try a few times before telling the player the code failed.
   // `resume` is set when reconnecting after a host change; failures then retry quietly.
   function joinRoom(code, name, resume = null) {
     if (!resume && !startNet()) return;
-    const peer = new window.Peer();
-    net.peer = peer;
-    net.name = name;
+    let peer = null;
     let joined = false;
+    let rejected = false;
+    let finishing = false;
+    let onlyMissing = true;
+    let failures = 0;
+    let brokerTimer = 0;
+    let retryWait = 0;
+    const maxAttempts = resume ? 1 : 3;
+    net.name = name;
+
     const fail = (text) => {
-      if (net.peer !== peer || joined) return;
+      if (joined || !peer || net.peer !== peer) return;
+      clearTimeout(brokerTimer);
+      clearTimeout(retryWait);
+      clearTimeout(net.joinTimer);
       if (resume) retryReconnect(code);
       else onNetMessage({ t: "err", msg: text });
     };
-    if (!resume) setNetStatus("Connecting…");
-    net.joinTimer = setTimeout(
-      () => fail("Could not reach that room. Check the code and try again."),
-      resume ? 6000 : JOIN_TIMEOUT_MS
-    );
-    peer.on("open", () => {
-      if (net.peer !== peer) return;
+
+    const nextAttempt = (reason) => {
+      if (finishing || joined || rejected || !peer || net.peer !== peer) return;
+      finishing = true;
+      if (reason !== "missing") onlyMissing = false;
+      failures += 1;
+      clearTimeout(net.joinTimer);
+      clearTimeout(brokerTimer);
+      const conn = net.hostConn;
+      net.hostConn = null;
+      if (conn) {
+        try { conn.close(); } catch (err) { /* already closed */ }
+      }
+      if (failures >= maxAttempts) {
+        fail(onlyMissing
+          ? "No room with that code."
+          : "Could not reach that room. Check the code and try again.");
+        return;
+      }
+      if (!resume) setNetStatus("Still connecting to that room…");
+      retryWait = setTimeout(() => {
+        if (joined || rejected || !peer || net.peer !== peer) return;
+        if (peer.destroyed || peer.disconnected || !peer.open) openPeer();
+        else dial();
+      }, 700);
+    };
+
+    const dial = () => {
+      if (joined || rejected || !peer || net.peer !== peer || !peer.open) return;
+      finishing = false;
       const conn = peer.connect(ROOM_PREFIX + code, { reliable: true });
       net.hostConn = conn;
+      clearTimeout(net.joinTimer);
+      net.joinTimer = setTimeout(() => {
+        if (net.hostConn !== conn || joined) return;
+        nextAttempt("timeout");
+      }, resume ? 6000 : JOIN_TIMEOUT_MS);
       conn.on("open", () => {
         if (net.hostConn !== conn) return;
         conn.send({ t: "join", v: GAME_VERSION, name, food: equippedTier().name, resume });
@@ -3879,6 +3925,7 @@
           clearTimeout(net.joinTimer);
           joined = true;
         }
+        if (msg.t === "err") rejected = true;
         if (msg.t === "err" && msg.update && !net.role) {
           clearNet();
           if (reloadForUpdate(Number(msg.v) || "host", { action: "join", code, name })) return;
@@ -3888,21 +3935,48 @@
       conn.on("close", () => {
         if (net.hostConn !== conn) return;
         if (joined) onHostLost();
-        else fail("Could not join that room.");
+        else nextAttempt("closed");
       });
-      conn.on("error", () => {});
-    });
-    peer.on("disconnected", () => {
-      if (net.peer === peer && !peer.destroyed && joined) peer.reconnect();
-    });
-    peer.on("error", (err) => {
-      if (net.peer !== peer) return;
-      if (joined) {
-        if (err.type === "peer-unavailable") onHostLost();
-        return;
+      conn.on("error", () => {
+        if (net.hostConn !== conn || joined) return;
+        nextAttempt("closed");
+      });
+    };
+
+    const openPeer = () => {
+      if (peer && net.peer === peer && !peer.destroyed) {
+        try { peer.destroy(); } catch (err) { /* already closed */ }
       }
-      fail(err.type === "peer-unavailable" ? "No room with that code." : netErrorText(err));
-    });
+      peer = new window.Peer();
+      net.peer = peer;
+      clearTimeout(brokerTimer);
+      brokerTimer = setTimeout(() => {
+        nextAttempt("error");
+      }, 20000);
+      peer.on("open", () => {
+        if (net.peer !== peer) return;
+        clearTimeout(brokerTimer);
+        dial();
+      });
+      peer.on("disconnected", () => {
+        if (net.peer === peer && !peer.destroyed && joined) peer.reconnect();
+      });
+      peer.on("error", (err) => {
+        if (!peer || net.peer !== peer || joined) {
+          if (joined && err.type === "peer-unavailable") onHostLost();
+          return;
+        }
+        const fatal = err.type === "browser-incompatible" || err.type === "invalid-id" || err.type === "invalid-key" || err.type === "ssl-unavailable";
+        if (fatal) {
+          fail(netErrorText(err));
+          return;
+        }
+        nextAttempt(err.type === "peer-unavailable" ? "missing" : "error");
+      });
+    };
+
+    if (!resume) setNetStatus("Connecting…");
+    openPeer();
   }
 
   window.addEventListener("pagehide", () => {
