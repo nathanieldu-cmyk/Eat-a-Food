@@ -472,6 +472,72 @@ h1 {
   gap: 8px;
 }
 
+#shop-modal .shop-panel {
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.bento-row {
+  background: linear-gradient(135deg, rgba(255, 138, 92, 0.16), rgba(255, 214, 102, 0.1));
+  border: 1px solid rgba(255, 214, 102, 0.25);
+}
+
+.bento-row .bento-luck {
+  color: #ffd166;
+  font-weight: 800;
+}
+
+.bento-row .bento-odds {
+  grid-column: 1 / -1;
+  font-size: 0.82rem;
+  font-weight: 800;
+  opacity: 1;
+}
+
+.bento-slots {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+}
+
+.bento-slot {
+  flex: 1;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 243, 224, 0.2);
+}
+
+.bento-slot.locked {
+  border-style: solid;
+  background: rgba(255, 243, 224, 0.06);
+  opacity: 0.6;
+}
+
+.bento-slot.unlocking {
+  border: 1px solid #ffd166;
+  background: rgba(255, 209, 102, 0.14);
+  animation: bento-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes bento-pulse {
+  50% {
+    box-shadow: 0 0 10px rgba(255, 209, 102, 0.5);
+  }
+}
+
+.bento-row .bento-skip {
+  grid-column: 1 / -1;
+  color: #8ee7ff;
+}
+
+.bento-results-title {
+  font-family: "Fredoka", sans-serif;
+  color: #ffd166;
+}
+
 .craft-panel {
   width: min(1080px, 100%);
   max-height: min(84vh, 760px);

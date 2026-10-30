@@ -35,6 +35,8 @@
   const shopCloseBtn = document.getElementById("shop-close");
   const shopListEl = document.getElementById("shop-list");
   const shopDiamondsEl = document.getElementById("shop-diamonds");
+  const bentoSlotEl = document.getElementById("bento-slot");
+  const bentoResultsEl = document.getElementById("bento-results");
   const invCloseBtn = document.getElementById("inv-close");
   const endBtn = document.getElementById("end-btn");
   const autoFarmBtn = document.getElementById("auto-farm-btn");
@@ -335,6 +337,33 @@
     },
   ];
 
+  const BENTO_COST = 1000;
+  const BENTO_UNLOCK_MS = 2 * 60 * 60 * 1000;
+  const BENTO_MAX_LOCKED = 5;
+  const BENTO_RUN_CHANCE = 1 / 5;
+  const BENTO_FOODS = 3;
+  const BENTO_LUCK_PER_OPEN = 0.01;
+  const BENTO_SKIP_COST_PER_HOUR = 1000;
+  // Percent chance of each rarity for one bento food, before permanent luck. Must add up to 100.
+  // Commons and uncommons are left out, so bento boxes never give them.
+  const BENTO_BASE_CHANCES = { rare: 75, epic: 24.5, legendary: 0, mythic: 0.5 };
+  // Percent added for every +100% permanent luck, taken only from Rare.
+  const BENTO_CHANCE_PER_100_LUCK = { legendary: 0.5, mythic: 0.1 };
+
+  function emptyBento() {
+    return { locked: 0, unlockStartedAt: 0, ready: 0, opened: 0 };
+  }
+
+  function readBento(raw) {
+    const bento = emptyBento();
+    if (!raw || typeof raw !== "object") return bento;
+    bento.locked = Math.min(BENTO_MAX_LOCKED, Math.max(0, Math.floor(Number(raw.locked) || 0)));
+    bento.unlockStartedAt = bento.locked ? Math.max(0, Number(raw.unlockStartedAt) || 0) || Date.now() : 0;
+    bento.ready = Math.max(0, Math.floor(Number(raw.ready) || 0));
+    bento.opened = Math.max(0, Math.floor(Number(raw.opened) || 0));
+    return bento;
+  }
+
   function emptyPotions() {
     return { luck: 0, speed: 0, growth: 0, points: 0 };
   }
@@ -381,6 +410,7 @@
       diamonds: 0,
       potions: starterPotions(),
       activePotions: emptyActivePotions(),
+      bento: emptyBento(),
       discovered: { Peanut: true },
       // Already applied, so a brand-new save is not given the old starter foods.
       grantedGoldenCosmicFeast: true,
@@ -439,6 +469,7 @@
       next.diamonds = Math.max(0, Math.floor(Number(parsed.diamonds) || 0));
       next.potions = readPotionBag(parsed.potions);
       next.activePotions = readActivePotions(parsed.activePotions, parsed.readyPotions);
+      next.bento = readBento(parsed.bento);
       next.version = SAVE_VERSION;
       const hadReady = Object.values(readPotionBag(parsed.readyPotions)).some((count) => count > 0);
       next.grantedGoldenCosmicFeast = !!parsed.grantedGoldenCosmicFeast;
@@ -702,9 +733,20 @@
     };
   }
 
+  function bentoLuckBonus() {
+    return save.bento.opened * BENTO_LUCK_PER_OPEN;
+  }
+
+  function permanentLuckBonus(typeCount = ownedTypeCount()) {
+    return luckSnapshot(typeCount).bonus + bentoLuckBonus();
+  }
+
+  function totalLuckBonus(typeCount = ownedTypeCount()) {
+    return permanentLuckBonus(typeCount) + boostStacks("luck") * LUCK_STEP;
+  }
+
   function displayedLuckPct(typeCount = ownedTypeCount()) {
-    const bonus = luckSnapshot(typeCount).bonus + boostStacks("luck") * LUCK_STEP;
-    return Math.round(bonus * 100);
+    return Math.round(totalLuckBonus(typeCount) * 100);
   }
 
   function luckRewardText(beforeCount, afterCount) {
@@ -732,7 +774,7 @@
     // Base weight is 1/odds. Luck boosts higher rarities more,
     // so the base and every-10 bonuses shift pulls toward rarer foods.
     const rank = rarityById[food.rarity].rank;
-    const bonus = luckSnapshot().bonus + boostStacks("luck") * LUCK_STEP;
+    const bonus = totalLuckBonus();
     return (1 / food.odds) * (1 + bonus * rank);
   }
 
@@ -745,6 +787,42 @@
       if (roll <= 0) return food;
     }
     return FOOD_TIERS[FOOD_TIERS.length - 1];
+  }
+
+  // Percent chance of each rarity for one bento food, using permanent luck (potions don't count).
+  function bentoRarityChances() {
+    const chances = { ...BENTO_BASE_CHANCES };
+    const bonusPerHundred = Object.values(BENTO_CHANCE_PER_100_LUCK).reduce((sum, per) => sum + per, 0);
+    // Stop increasing the bonuses when Rare reaches zero; Epic stays fixed.
+    const hundreds = Math.min(Math.max(0, permanentLuckBonus()), chances.rare / bonusPerHundred);
+    for (const [id, per] of Object.entries(BENTO_CHANCE_PER_100_LUCK)) {
+      const added = per * hundreds;
+      chances[id] = (chances[id] || 0) + added;
+      chances.rare -= added;
+    }
+    chances.rare = Math.max(0, chances.rare);
+    return chances;
+  }
+
+  function pullBentoFood() {
+    const chances = bentoRarityChances();
+    let roll = Math.random() * 100;
+    let rarityId = Object.keys(chances)[0];
+    for (const [id, pct] of Object.entries(chances)) {
+      rarityId = id;
+      roll -= pct;
+      if (roll <= 0) break;
+    }
+    // Inside a rarity, foods keep their normal 1/odds split.
+    const foods = FOOD_TIERS.filter((food) => food.rarity === rarityId);
+    let total = 0;
+    for (const food of foods) total += 1 / food.odds;
+    let pick = Math.random() * total;
+    for (const food of foods) {
+      pick -= 1 / food.odds;
+      if (pick <= 0) return food;
+    }
+    return foods[foods.length - 1];
   }
 
   function equippedTier() {
@@ -2549,7 +2627,10 @@
     `;
     luckEl.textContent = `+${shownPct}%`;
     luckLabelEl.textContent = `Luck · ${luck.into}/${LUCK_EVERY}`;
-    const luckTitle = `+100% base, and +50% every 10 types (${luck.into}/${LUCK_EVERY} toward the next).`;
+    const bentoLuck = Math.round(bentoLuckBonus() * 100);
+    const luckTitle =
+      `+100% base, and +50% every 10 types (${luck.into}/${LUCK_EVERY} toward the next).` +
+      (bentoLuck ? ` Plus +${bentoLuck}% forever from ${save.bento.opened} bento box${save.bento.opened === 1 ? "" : "es"}.` : "");
     luckEl.title = potionLuck
       ? `${luckTitle} Plus +${Math.round(potionLuck * 100)}% from a luck potion.`
       : `${luckTitle} Luck makes rarer foods more likely.`;
@@ -2839,6 +2920,198 @@
       actions.appendChild(useBtn);
       shopListEl.appendChild(row);
     }
+    renderBento();
+  }
+
+  function formatLongRemaining(ms) {
+    const total = Math.max(0, Math.ceil(ms / 1000));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  // Boxes unlock one at a time, so time keeps counting while the game is closed.
+  function advanceBento(now = Date.now()) {
+    const bento = save.bento;
+    let changed = false;
+    while (bento.locked > 0 && now >= bento.unlockStartedAt + BENTO_UNLOCK_MS) {
+      bento.unlockStartedAt += BENTO_UNLOCK_MS;
+      bento.locked -= 1;
+      bento.ready += 1;
+      changed = true;
+    }
+    if (bento.locked === 0 && bento.unlockStartedAt) {
+      bento.unlockStartedAt = 0;
+      changed = true;
+    }
+    return changed;
+  }
+
+  function addBento() {
+    advanceBento();
+    const bento = save.bento;
+    if (bento.locked >= BENTO_MAX_LOCKED) return false;
+    if (bento.locked === 0) bento.unlockStartedAt = Date.now();
+    bento.locked += 1;
+    return true;
+  }
+
+  function bentoTimerText() {
+    const bento = save.bento;
+    if (!bento.locked) return "Nothing unlocking.";
+    const next = bento.unlockStartedAt + BENTO_UNLOCK_MS - Date.now();
+    const all = next + (bento.locked - 1) * BENTO_UNLOCK_MS;
+    return bento.locked > 1
+      ? `Next unlock in ${formatLongRemaining(next)} · all ${bento.locked} in ${formatLongRemaining(all)}.`
+      : `Unlocks in ${formatLongRemaining(next)}.`;
+  }
+
+  function bentoOddsHtml() {
+    const chances = bentoRarityChances();
+    const parts = [];
+    for (let i = RARITIES.length - 1; i >= 0; i--) {
+      const rarity = RARITIES[i];
+      const pct = chances[rarity.id] || 0;
+      if (pct < 0.01) continue;
+      const shown = String(Number(pct.toFixed(1)));
+      parts.push(`<span class="rarity-${rarity.id}">${rarity.label} ${shown}%</span>`);
+    }
+    return `Each food: ${parts.join(" · ")}`;
+  }
+
+  function bentoLuckLine() {
+    const hundreds = permanentLuckBonus();
+    const chances = bentoRarityChances();
+    const extras = Object.entries(BENTO_CHANCE_PER_100_LUCK)
+      .map(([id]) => `+${(chances[id] - BENTO_BASE_CHANCES[id]).toFixed(1)}% ${rarityById[id].label.toLowerCase()}`)
+      .join(" and ");
+    return `Your +${Math.round(hundreds * 100).toLocaleString()}% permanent luck adds ${extras}, taken only from Rare.`;
+  }
+
+  function renderBento() {
+    advanceBento();
+    const bento = save.bento;
+    bentoSlotEl.innerHTML = "";
+
+    const row = document.createElement("div");
+    row.className = "shop-row bento-row";
+    row.innerHTML = `
+      <h3>🍱 Bento Boxes</h3>
+      <div class="shop-actions"></div>
+      <p>${bento.ready} ready to open · ${bento.locked}/${BENTO_MAX_LOCKED} unlocking. <span class="bento-timer">${bentoTimerText()}</span></p>
+      <p class="bento-luck">Opened ${bento.opened.toLocaleString()} · +${Math.round(bentoLuckBonus() * 100)}% luck forever.</p>
+      <p class="bento-luck">${bentoLuckLine()}</p>
+      <p class="bento-odds">${bentoOddsHtml()}</p>
+    `;
+    const actions = row.querySelector(".shop-actions");
+    const full = bento.locked >= BENTO_MAX_LOCKED;
+    const buyBtn = document.createElement("button");
+    buyBtn.type = "button";
+    buyBtn.className = "btn ghost small";
+    buyBtn.textContent = full ? "Full" : `Buy ${BENTO_COST.toLocaleString()}`;
+    buyBtn.disabled = state.running || full || save.diamonds < BENTO_COST;
+    buyBtn.addEventListener("click", buyBento);
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "btn primary small";
+    openBtn.textContent = `Open (${bento.ready})`;
+    openBtn.disabled = state.running || bento.ready <= 0;
+    openBtn.addEventListener("click", openBento);
+    actions.appendChild(buyBtn);
+    actions.appendChild(openBtn);
+    bentoSlotEl.appendChild(row);
+
+    const slots = document.createElement("div");
+    slots.className = "bento-slots";
+    for (let i = 0; i < BENTO_MAX_LOCKED; i++) {
+      const slot = document.createElement("span");
+      slot.className =
+        "bento-slot" + (i < bento.locked ? (i === 0 ? " unlocking" : " locked") : "");
+      slot.textContent = i < bento.locked ? "🍱" : "";
+      slots.appendChild(slot);
+    }
+    row.appendChild(slots);
+
+    if (bento.locked > 0) {
+      const skipBtn = document.createElement("button");
+      skipBtn.type = "button";
+      skipBtn.className = "btn ghost small bento-skip";
+      skipBtn.addEventListener("click", skipBento);
+      row.appendChild(skipBtn);
+      updateSkipButton();
+    }
+  }
+
+  function bentoTimeLeft(now = Date.now()) {
+    if (!save.bento.locked) return 0;
+    return Math.max(0, save.bento.unlockStartedAt + BENTO_UNLOCK_MS - now);
+  }
+
+  function bentoSkipCost(now = Date.now()) {
+    const hoursLeft = bentoTimeLeft(now) / (60 * 60 * 1000);
+    return Math.ceil(hoursLeft * BENTO_SKIP_COST_PER_HOUR);
+  }
+
+  function updateSkipButton() {
+    const skipBtn = bentoSlotEl.querySelector(".bento-skip");
+    if (!skipBtn) return;
+    const cost = bentoSkipCost();
+    skipBtn.textContent = `Unlock now · ${cost.toLocaleString()} diamonds`;
+    skipBtn.disabled = state.running || save.diamonds < cost;
+  }
+
+  function skipBento() {
+    advanceBento();
+    const bento = save.bento;
+    if (state.running || bento.locked <= 0) return;
+    const now = Date.now();
+    const cost = bentoSkipCost(now);
+    if (save.diamonds < cost) return;
+    save.diamonds -= cost;
+    bento.locked -= 1;
+    bento.ready += 1;
+    bento.unlockStartedAt = bento.locked > 0 ? now : 0;
+    persistSave();
+    renderDiamonds();
+    renderShop();
+    renderPotionStatus();
+  }
+
+  function buyBento() {
+    if (state.running || save.diamonds < BENTO_COST) return;
+    if (!addBento()) return;
+    save.diamonds -= BENTO_COST;
+    persistSave();
+    renderDiamonds();
+    renderShop();
+    renderPotionStatus();
+  }
+
+  function openBento() {
+    advanceBento();
+    if (state.running || save.bento.ready <= 0) return;
+    const seenBefore = new Set(Object.keys(save.discovered || {}));
+    const beforeLuck = displayedLuckPct();
+    const boxes = save.bento.ready;
+    const gained = [];
+    for (let box = 0; box < boxes; box++) {
+      for (let i = 0; i < BENTO_FOODS; i++) {
+        const food = pullBentoFood();
+        gained.push(food.name);
+        save.inventory[food.name] = (save.inventory[food.name] || 0) + 1;
+        rememberFood(food.name);
+      }
+      save.bento.ready -= 1;
+      save.bento.opened += 1;
+    }
+    persistSave();
+    renderShop();
+    const title = boxes === 1 ? "Bento box opened!" : `${boxes} bento boxes opened!`;
+    bentoResultsEl.innerHTML = `<p class="bento-results-title">🍱 ${title} Luck +${beforeLuck}% → +${displayedLuckPct()}%</p>`;
+    renderPullResults(gained, seenBefore, bentoResultsEl, { keep: true });
+    renderEquippedUi();
+    renderPotionStatus();
   }
 
   function potionTimerText(id) {
@@ -2862,12 +3135,23 @@
         `${potion.emoji} ${potion.name}${power} · ${formatRemaining(effect.endsAt - Date.now())}`
       );
     }
+    const bentoChanged = advanceBento();
+    if (bentoChanged) persistSave();
+    if (save.bento.ready > 0) {
+      parts.push(`🍱 ${save.bento.ready} bento box${save.bento.ready === 1 ? "" : "es"} ready`);
+    } else if (save.bento.locked > 0) {
+      parts.push(`🍱 Bento · ${formatLongRemaining(save.bento.unlockStartedAt + BENTO_UNLOCK_MS - Date.now())}`);
+    }
     potionStatusEl.textContent = parts.join("   ");
     potionStatusEl.classList.toggle("hidden", parts.length === 0);
     if (!shopModal.classList.contains("hidden")) {
       for (const timer of shopListEl.querySelectorAll(".potion-timer")) {
         timer.textContent = potionTimerText(timer.dataset.potion);
       }
+      if (bentoChanged) renderBento();
+      const bentoTimer = bentoSlotEl.querySelector(".bento-timer");
+      if (bentoTimer) bentoTimer.textContent = bentoTimerText();
+      updateSkipButton();
     }
   }
 
@@ -2897,6 +3181,8 @@
     if (state.running) return;
     closeInventory();
     closeCraft();
+    bentoResultsEl.innerHTML = "";
+    bentoResultsEl.classList.add("hidden");
     renderShop();
     shopModal.classList.remove("hidden");
     shopModal.setAttribute("aria-hidden", "false");
@@ -3092,10 +3378,10 @@
     state.animId = requestAnimationFrame(loop);
   }
 
-  function renderPullResults(banked, seenBefore = new Set()) {
-    pullResultsEl.innerHTML = "";
+  function renderPullResults(banked, seenBefore = new Set(), targetEl = pullResultsEl, { keep = false } = {}) {
+    if (!keep) targetEl.innerHTML = "";
     if (!banked.length) {
-      pullResultsEl.classList.add("hidden");
+      targetEl.classList.add("hidden");
       return;
     }
 
@@ -3126,10 +3412,10 @@
         </span>
         <span class="pull-odds">1 in ${formatOdds(tier.odds)}</span>
       `;
-      pullResultsEl.appendChild(row);
+      targetEl.appendChild(row);
     }
 
-    pullResultsEl.classList.remove("hidden");
+    targetEl.classList.remove("hidden");
   }
 
   function endRun(wipedOut = false) {
@@ -3153,17 +3439,27 @@
       save.bestRun = earned;
       bestRunEl.textContent = `${save.bestRun} foods`;
     }
+    // One flat 1-in-5 roll per ended run, even with no banked foods.
+    // Collection luck, permanent luck, and luck potions never change this chance.
+    let bentoText = "";
+    if (Math.random() < BENTO_RUN_CHANCE) {
+      bentoText = addBento()
+        ? " 🍱 You found a bento box! It's unlocking in the shop."
+        : ` 🍱 You found a bento box, but all ${BENTO_MAX_LOCKED} unlock slots are full.`;
+    }
     persistSave();
     renderDiamonds();
+    renderPotionStatus();
 
     overlayTitle.textContent = wipedOut ? "Wiped Out!" : "Run Ended";
     const diamondText = `${earned.toLocaleString()} diamond${earned === 1 ? "" : "s"}`;
     const bankText = earned
       ? `Banked ${earned} food${earned === 1 ? "" : "s"} and ${diamondText} (rarest first):`
       : `No new foods this run. ${diamondText}.`;
-    overlayMsg.textContent = wipedOut
-      ? `A rival ate you. ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`
-      : `Nice run! ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`;
+    overlayMsg.textContent =
+      (wipedOut
+        ? `A rival ate you. ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`
+        : `Nice run! ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`) + bentoText;
     startBtn.textContent = "Back to Lobby";
     afterRunActionsEl.classList.remove("hidden");
     overlay.classList.remove("hidden");
