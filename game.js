@@ -346,7 +346,7 @@
   const BENTO_SKIP_COST_PER_HOUR = 1000;
   // Percent chance of each rarity for one bento food, before permanent luck. Must add up to 100.
   // Commons and uncommons are left out, so bento boxes never give them.
-  const BENTO_BASE_CHANCES = { rare: 75, epic: 24.5, legendary: 0, mythic: 0.5 };
+  const BENTO_BASE_CHANCES = { rare: 74, epic: 24.5, legendary: 1, mythic: 0.5 };
   // Percent added for every +100% permanent luck, taken only from Rare.
   const BENTO_CHANCE_PER_100_LUCK = { legendary: 0.5, mythic: 0.1 };
 

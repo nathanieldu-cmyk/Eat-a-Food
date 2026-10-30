@@ -22,7 +22,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=173' },
+      currentScript: { src: 'game.js?v=174' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -153,12 +153,12 @@ test('Legendary and Mythic luck bonuses reduce only Rare; Epic remains 24.5%', (
       const g = boot();
       for (const name of Object.keys(g.tierByName).slice(0, types)) g.save.inventory[name] = 1;
       g.save.bento.opened = opened;
-      const luck = Math.min(g.totalLuckBonus(), 125);
+      const luck = Math.min(g.totalLuckBonus(), 74 / 0.6);
       const odds = g.bentoRarityChances();
       near(odds.epic, 24.5);
-      near(odds.legendary, luck * 0.5);
+      near(odds.legendary, 1 + luck * 0.5);
       near(odds.mythic, 0.5 + luck * 0.1);
-      near(odds.rare, 75 - luck * 0.6);
+      near(odds.rare, 74 - luck * 0.6);
       near(Object.values(odds).reduce((sum, n) => sum + n, 0), 100);
       assert.ok(Object.values(odds).every(n => n >= 0 && n <= 100));
       const beforePotion = JSON.stringify(odds);
@@ -166,7 +166,7 @@ test('Legendary and Mythic luck bonuses reduce only Rare; Epic remains 24.5%', (
       assert.equal(JSON.stringify(g.bentoRarityChances()), beforePotion);
       assert.match(g.bentoOddsHtml(), /Epic 24.5%/);
       assert.match(g.bentoLuckLine(), /taken only from Rare/);
-      if (odds.rare === 0) assert.match(g.bentoLuckLine(), /adds \+62.5% legendary and \+12.5% mythic/);
+      if (odds.rare === 0) assert.match(g.bentoLuckLine(), /adds \+61.7% legendary and \+12.3% mythic/);
     }
   }
 });
