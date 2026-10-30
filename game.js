@@ -1095,36 +1095,6 @@
     spawnRivalAt(plusOneTier(food.tier), spot.x, spot.y, 10, true);
   }
 
-  // A 6.9× food respawns at 69,000. Only sprinkle growth counts.
-  function sprinkleRespawnAt(tier) {
-    return Math.round((tier.multiplier || 1) * 10000);
-  }
-
-  function respawnRival(rival) {
-    burst(rival.x, rival.y, rival.tier.color);
-    const used = arenaHumans().map((food) => ({ x: food.x, y: food.y }));
-    for (const other of state.rivals) {
-      if (other !== rival) used.push(other);
-    }
-    const spot = farArenaSpot(used, ARENA * 0.32);
-    rival.x = spot.x;
-    rival.y = spot.y;
-    rival.vx = 0;
-    rival.vy = 0;
-    rival.size = 10;
-    rival.sprinkleSize = 0;
-    rival.eaten = false;
-    clampToArena(rival);
-  }
-
-  function retireBigRivals() {
-    if (!cpusActive()) return;
-    for (const rival of state.rivals) {
-      if ((rival.sprinkleSize || 0) < sprinkleRespawnAt(rival.tier)) continue;
-      respawnRival(rival);
-    }
-  }
-
   function pointInZone(nx, ny, zone) {
     const d = Math.hypot(nx - 0.5, ny - 0.5) / 0.707;
     return d >= zone[0] && d <= zone[1];
@@ -1241,7 +1211,6 @@
     const growthBoost = food === state.player ? Math.pow(1.25, boostStacks("growth")) : food.growthBoost || 1;
     const gain = pts * food.tier.growth * growthBoost;
     food.size += gain;
-    if (food.isRival) food.sprinkleSize = (food.sprinkleSize || 0) + gain;
     if (food === state.player) addPoints(pts);
     else if (net.role === "host" && food.netId) netSend({ t: "ev", kind: "pts", id: food.netId, pts });
     burst(sprinkle.x, sprinkle.y, sprinkle.type.color);
@@ -2949,7 +2918,6 @@
 
     updateFoods(dt);
     resolveEats();
-    retireBigRivals();
     updateParticles(dt);
 
     if (sprinkleCount("xs") < MAX_XS_SPRINKLES && Math.random() < 0.14) {
@@ -3182,7 +3150,6 @@
         x: Math.round(food.x),
         y: Math.round(food.y),
         size: Math.round(food.size),
-        sprinkleSize: Math.round(food.sprinkleSize || 0),
       })),
     };
     // Lobby guests get sprinkles rarely, so a new host still has the arena if this one leaves.
@@ -3518,7 +3485,6 @@
         food.x = rival.x;
         food.y = rival.y;
         food.size = Math.max(1, rival.size || 1);
-        food.sprinkleSize = Math.max(0, rival.sprinkleSize || 0);
         return food;
       });
     }
