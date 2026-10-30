@@ -161,6 +161,60 @@ h1 {
   display: none;
 }
 
+.leaderboard {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-width: 180px;
+  max-width: 46%;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(20, 12, 8, 0.72);
+  border: 1px solid rgba(255, 243, 224, 0.16);
+  color: var(--cream-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.leaderboard.hidden {
+  display: none;
+}
+
+.leaderboard-title {
+  margin: 0 0 4px;
+  font-family: "Fredoka", sans-serif;
+  color: #ffd166;
+}
+
+.leaderboard ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.leaderboard li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.leaderboard li.you {
+  color: #7ec8ff;
+}
+
+.leaderboard .lb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leaderboard .lb-empty {
+  color: rgba(255, 243, 224, 0.6);
+}
+
 .overlay {
   position: absolute;
   inset: 0;

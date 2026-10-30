@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=58" />
+  <link rel="stylesheet" href="style.css?v=59" />
   <script type="importmap">
     {
       "imports": {
@@ -70,6 +70,10 @@
     <main class="stage">
       <canvas id="arena" width="720" height="720"></canvas>
       <div id="lobby-hint" class="lobby-hint">Blue circle: start a run · Gold pad: shop · Purple pad: craft</div>
+      <div id="leaderboard" class="leaderboard hidden">
+        <p class="leaderboard-title">Biggest in the arena</p>
+        <ol id="leaderboard-list"></ol>
+      </div>
       <div id="overlay" class="overlay">
         <div class="panel">
           <h2 id="overlay-title">Eat a Food</h2>
@@ -141,7 +145,7 @@
         <h2 id="shop-title">Shop</h2>
         <button id="shop-close" class="btn ghost small" type="button">Close</button>
       </div>
-      <p class="inv-hint">Potions cost 1000 diamonds. Each one adds 10 minutes. Luck strength stacks up to ×5; other potions keep one strength and only stack time.</p>
+      <p class="inv-hint">Potions cost 500 diamonds. Each one adds 10 minutes. Luck strength stacks up to ×5; other potions keep one strength and only stack time.</p>
       <p id="shop-diamonds" class="shop-diamonds"></p>
       <div id="shop-list" class="shop-list"></div>
     </div>
@@ -162,6 +166,6 @@
 
   <script src="vendor/peerjs.min.js?v=1"></script>
   <script src="foods.js?v=24"></script>
-  <script src="game.js?v=151"></script>
+  <script src="game.js?v=155"></script>
 </body>
 </html>

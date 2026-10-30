@@ -64,6 +64,8 @@
   const luckNoticeEl = document.getElementById("luck-notice");
   const potionStatusEl = document.getElementById("potion-status");
   const lobbyHintEl = document.getElementById("lobby-hint");
+  const leaderboardEl = document.getElementById("leaderboard");
+  const leaderboardListEl = document.getElementById("leaderboard-list");
   const afterRunActionsEl = document.getElementById("after-run-actions");
 
   const ARENA = 2880;
@@ -277,9 +279,6 @@
   const SHADOW_FOODS = SHINY_FOODS.map(makeShadowFood);
   const ALL_FOODS = [...FOOD_TIERS, ...GOLDEN_FOODS, ...SHINY_FOODS, ...SHADOW_FOODS];
   const tierByName = Object.fromEntries(ALL_FOODS.map((t) => [t.name, t]));
-  const foodsByRarity = Object.fromEntries(
-    RARITIES.map((r) => [r.id, FOOD_TIERS.filter((t) => t.rarity === r.id)])
-  );
   const rarityById = Object.fromEntries(RARITIES.map((r) => [r.id, r]));
   const goldenByBase = Object.fromEntries(
     GOLDEN_FOODS.map((g) => [g.baseName, g])
@@ -305,7 +304,7 @@
     return "";
   }
 
-  const POTION_COST = 1000;
+  const POTION_COST = 500;
   const POTION_DURATION_MS = 10 * 60 * 1000;
   const LUCK_POTION_MAX_STACKS = 5;
   const POTIONS = [
@@ -622,8 +621,6 @@
   const MAX_ROOM_PLAYERS = 8;
   const JOIN_TIMEOUT_MS = 15000;
   const REJOIN_WINDOW_MS = 30000;
-  const CPU_IDLE_SIZE = 20;
-  const CPU_LEAD = 1.25;
 
   const net = {
     peer: null,
@@ -641,7 +638,6 @@
     inAcc: 0,
     cpus: true,
     worldReady: false,
-    cpuCap: 0,
     run: 0,
     endedRun: 0,
     migrating: false,
@@ -681,23 +677,15 @@
     return list;
   }
 
+  // CPUs are part of a run. When the last person leaves, they are gone.
+  function clearRivalsIfArenaEmpty() {
+    if (net.role === "guest") return;
+    if (arenaHumans().length > 0) return;
+    state.rivals = [];
+  }
+
   bestRunEl.textContent = `${save.bestRun} foods`;
   renderDiamonds();
-
-  function rarityForRunIndex(index) {
-    // Used for rival scaling with run length.
-    if (index >= 28) return "mythic";
-    if (index >= 20) return "legendary";
-    if (index >= 13) return "epic";
-    if (index >= 7) return "rare";
-    if (index >= 3) return "uncommon";
-    return "common";
-  }
-
-  function pickFoodFromRarity(rarityId) {
-    const pool = foodsByRarity[rarityId] || foodsByRarity.common;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
 
   function luckSnapshot(typeCount = ownedTypeCount()) {
     const steps = Math.floor(typeCount / LUCK_EVERY);
@@ -848,7 +836,7 @@
 
   function enterLobby() {
     state.mode = "lobby";
-    if (!net.role) {
+    if (!net.role && !soloWorldReady) {
       state.rivals = [];
       state.sprinkles = [];
       state.particles = [];
@@ -864,6 +852,7 @@
     }
     if (view) view.distance = LOBBY_CAMERA_DISTANCE;
     lobbyHintEl.classList.remove("hidden");
+    clearRivalsIfArenaEmpty();
   }
 
   function clampToLobby(food) {
@@ -922,8 +911,11 @@
     }
     const food = state.player;
     const blocked = applyLobbySteer(food, dt, null);
-    if (net.role === "host") {
+    // CPUs keep going only while someone is still in the run.
+    if (net.role === "host" && arenaHumans().length > 0) {
       stepWorld(dt, performance.now());
+    }
+    if (net.role === "host") {
       stepLobbyGuests(dt);
       netPump(dt);
     }
@@ -974,6 +966,7 @@
     clampToArena(food);
     const guest = net.guests.get(food.netId);
     if (guest) guest.needSpr = true;
+    spawnBetterRival(food);
   }
 
   function sendToLobby(food) {
@@ -988,17 +981,25 @@
     food.zone = "lobby";
     food.run = 0;
     clampToLobby(food);
+    clearRivalsIfArenaEmpty();
   }
 
-  // Host only: the arena is seeded once per room and then keeps going.
+  // Solo play keeps one arena, the same way a room does. Guests use the host's.
+  let soloWorldReady = false;
+
+  function worldReady() {
+    return net.role === "host" ? net.worldReady : soloWorldReady;
+  }
+
+  // The arena is seeded once, then keeps going while you are in the lobby.
   function ensureWorld() {
-    if (net.role !== "host" || net.worldReady) return;
-    net.worldReady = true;
+    if (net.role === "guest" || worldReady()) return;
+    if (net.role === "host") net.worldReady = true;
+    else soloWorldReady = true;
     state.rivals = [];
     state.particles = [];
     seedSprinkles();
     state.lastSpawnAt = performance.now();
-    if (cpusActive()) spawnTwinRivals();
   }
 
   function awardRunFood() {
@@ -1021,8 +1022,8 @@
     return gained;
   }
 
-  function spawnRivalAt(tier, x, y, size) {
-    if (state.rivals.length >= MAX_RIVALS) return null;
+  function spawnRivalAt(tier, x, y, size, ignoreCap = false) {
+    if (!ignoreCap && state.rivals.length >= MAX_RIVALS) return null;
     const rival = createFood(tier, x, y, true);
     rival.size = size;
     clampToArena(rival);
@@ -1030,35 +1031,97 @@
     return rival;
   }
 
-  // How far along the arena's players are, so new CPUs scale with them.
-  function rivalScale() {
-    let scale = state.mode === "run" ? state.foodsEarned : 0;
-    if (net.role === "host") {
-      for (const human of net.humans.values()) {
-        if (human.zone === "arena") scale = Math.max(scale, human.foods || 0);
+  function variantLevel(tier) {
+    if (tier.isShadow) return 3;
+    if (tier.isShiny) return 2;
+    if (tier.isGolden) return 1;
+    return 0;
+  }
+
+  // 0 for a plain Common food, up to 8 for a Shadow Mythic.
+  function foodPower(tier) {
+    return (rarityById[tier.rarity] ? rarityById[tier.rarity].rank : 0) + variantLevel(tier);
+  }
+
+  // CPUs match the rarest food equipped in the arena, or in the room when the arena is empty.
+  function cpuTier() {
+    const tiers = arenaHumans().map((food) => food.tier);
+    if (!tiers.length) {
+      tiers.push(equippedTier());
+      if (net.role === "host") {
+        for (const human of net.humans.values()) tiers.push(human.tier);
       }
     }
-    return scale;
+    let best = tiers[0];
+    for (const tier of tiers) {
+      if (tier && foodPower(tier) > foodPower(best)) best = tier;
+    }
+    return best;
   }
 
-  function spawnRival() {
-    const scale = rivalScale();
-    const playerRank = rarityById[rarityForRunIndex(Math.max(0, scale - 1))].rank;
-    const rivalRank = Math.max(0, Math.min(RARITIES.length - 1, playerRank + Math.floor(rand(-1, 2))));
-    const tier = pickFoodFromRarity(RARITIES[rivalRank].id);
-    const spot = randomArenaSpot();
-    spawnRivalAt(tier, spot.x, spot.y, rand(8, 12 + scale * 0.35));
+  // The food whose points multiplier is nearest to this one plus 1.
+  // Never a Common, including Golden, Rainbow, or Shadow Commons.
+  // A tie prefers a different food, then the higher multiplier.
+  function plusOneTier(tier) {
+    const target = tier.multiplier + 1;
+    let best = null;
+    let bestDist = Infinity;
+    for (const food of ALL_FOODS) {
+      if (food.rarity === "common") continue;
+      const dist = Math.abs(food.multiplier - target);
+      if (dist > bestDist) continue;
+      if (dist < bestDist) {
+        best = food;
+        bestDist = dist;
+        continue;
+      }
+      const bestIsSelf = best === tier;
+      const foodIsSelf = food === tier;
+      if (bestIsSelf !== foodIsSelf) {
+        if (bestIsSelf) best = food;
+        continue;
+      }
+      if (food.multiplier > best.multiplier) best = food;
+    }
+    return best || tier;
   }
 
-  // Two same-food CPUs, kept far from the players and from each other.
-  function spawnTwinRivals() {
+  // Every entry, in solo or a room, comes in with one CPU a step ahead on
+  // points multiplier, far enough away that it cannot catch you at the start.
+  function spawnBetterRival(food) {
+    if (!cpusActive() || !food) return;
+    const used = [food, ...arenaHumans()].map((other) => ({ x: other.x, y: other.y }));
+    const spot = farArenaSpot(used, ARENA * 0.32);
+    spawnRivalAt(plusOneTier(food.tier), spot.x, spot.y, 10, true);
+  }
+
+  // A 6.9× food respawns at 69,000. Only sprinkle growth counts.
+  function sprinkleRespawnAt(tier) {
+    return Math.round((tier.multiplier || 1) * 10000);
+  }
+
+  function respawnRival(rival) {
+    burst(rival.x, rival.y, rival.tier.color);
     const used = arenaHumans().map((food) => ({ x: food.x, y: food.y }));
-    const tier = equippedTier();
-    const minAway = ARENA * 0.32;
-    for (let i = 0; i < 2; i++) {
-      const spot = farArenaSpot(used, minAway);
-      spawnRivalAt(tier, spot.x, spot.y, 10);
-      used.push(spot);
+    for (const other of state.rivals) {
+      if (other !== rival) used.push(other);
+    }
+    const spot = farArenaSpot(used, ARENA * 0.32);
+    rival.x = spot.x;
+    rival.y = spot.y;
+    rival.vx = 0;
+    rival.vy = 0;
+    rival.size = 10;
+    rival.sprinkleSize = 0;
+    rival.eaten = false;
+    clampToArena(rival);
+  }
+
+  function retireBigRivals() {
+    if (!cpusActive()) return;
+    for (const rival of state.rivals) {
+      if ((rival.sprinkleSize || 0) < sprinkleRespawnAt(rival.tier)) continue;
+      respawnRival(rival);
     }
   }
 
@@ -1176,7 +1239,9 @@
   function eatSprinkle(food, sprinkle, index) {
     const pts = sprinkle.type.points;
     const growthBoost = food === state.player ? Math.pow(1.25, boostStacks("growth")) : food.growthBoost || 1;
-    food.size += pts * food.tier.growth * growthBoost;
+    const gain = pts * food.tier.growth * growthBoost;
+    food.size += gain;
+    if (food.isRival) food.sprinkleSize = (food.sprinkleSize || 0) + gain;
     if (food === state.player) addPoints(pts);
     else if (net.role === "host" && food.netId) netSend({ t: "ev", kind: "pts", id: food.netId, pts });
     burst(sprinkle.x, sprinkle.y, sprinkle.type.color);
@@ -1186,6 +1251,12 @@
     }, 1400 + Math.random() * 1800);
   }
 
+  // Same size gain a player gets from eating a food: prey size × own growth.
+  function growthForEat(eater) {
+    const boost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : eater.growthBoost || 1;
+    return eater.tier.growth * boost;
+  }
+
   function tryEatFood(eater, prey, preyList, preyIndex) {
     if (!eater || !prey || eater === prey || prey.eaten || eater.eaten) return false;
     if (eater.size <= prey.size) return false;
@@ -1193,8 +1264,7 @@
     if (dist(eater, prey) > bodyReach(eater) + bodyReach(prey)) return false;
 
     const preySize = prey.size;
-    const growthBoost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : eater.growthBoost || 1;
-    eater.size += preySize * eater.tier.growth * growthBoost;
+    eater.size += preySize * growthForEat(eater);
     // Every 10 of their size → 1 point; foodGainFactor applies the points multiplier.
     // At most 10 foods from one eat. Guests apply that on their own save.
     if (eater === state.player && (prey.isRival || prey.netId)) addEatPoints(preySize / 10);
@@ -1289,6 +1359,9 @@
 
   // Flee bigger foods, chase smaller ones, otherwise hunt sprinkles with a size bias.
   function steerLikeCpu(food, spd) {
+    // Skilled CPUs notice foods from farther away and chase harder.
+    const skill = food.skill || 0;
+    const sight = 1 + skill * 0.12;
     let threat = null;
     let threatD = Infinity;
     let prey = null;
@@ -1304,13 +1377,13 @@
       }
     }
 
-    if (threat && threatD < 220 && threatD > 0) {
+    if (threat && threatD < 220 * sight && threatD > 0) {
       food.vx += ((food.x - threat.x) / threatD) * 0.55 * spd;
       food.vy += ((food.y - threat.y) / threatD) * 0.55 * spd;
       return;
     }
-    if (prey && preyD < 280) {
-      steerToward(food, prey, 0.48 * spd);
+    if (prey && preyD < 280 * sight) {
+      steerToward(food, prey, 0.48 * (1 + skill * 0.05) * spd);
       return;
     }
     const snack = preferredSprinkle(food);
@@ -1476,11 +1549,31 @@
     for (let i = state.rivals.length - 1; i >= 0; i--) {
       const r = state.rivals[i];
       for (const human of arenaHumans()) tryEatFood(r, human, [human], 0);
-      for (let j = state.rivals.length - 1; j >= 0; j--) {
-        if (i === j) continue;
-        if (tryEatFood(r, state.rivals[j], state.rivals, j) && j < i) i -= 1;
-      }
     }
+    resolveRivalEats();
+  }
+
+  // The larger CPU keeps its place and gains size. Only the smaller one is removed.
+  function resolveRivalEats() {
+    const rivals = state.rivals;
+    const gone = new Set();
+    for (let pass = 0; pass < rivals.length; pass++) {
+      let ate = false;
+      for (const eater of rivals) {
+        if (gone.has(eater)) continue;
+        for (const prey of rivals) {
+          if (prey === eater || gone.has(prey)) continue;
+          if (eater.size <= prey.size) continue;
+          if (dist(eater, prey) > bodyReach(eater) + bodyReach(prey)) continue;
+          eater.size += prey.size * growthForEat(eater);
+          gone.add(prey);
+          burst(prey.x, prey.y, prey.tier.color);
+          ate = true;
+        }
+      }
+      if (!ate) break;
+    }
+    if (gone.size) state.rivals = rivals.filter((rival) => !gone.has(rival));
   }
 
   function updateParticles(dt) {
@@ -1818,6 +1911,77 @@
     syncLobbyScene(t);
     updateCamera();
     view.renderer.render(view.scene, view.camera);
+    renderLeaderboard();
+  }
+
+  function cpuBoardName(tier) {
+    if (tier.isShadow) return "Shadow CPU";
+    if (tier.isShiny) return "Rainbow CPU";
+    if (tier.isGolden) return "Golden CPU";
+    return "CPU";
+  }
+
+  // Top five foods in a multiplayer arena, players and CPUs together.
+  function leaderboardEntries() {
+    const list = [];
+    if (state.player && state.mode === "run") {
+      list.push({
+        name: net.role ? net.name || "You" : "You",
+        tier: state.player.tier,
+        size: state.player.size,
+        you: true,
+      });
+    }
+    for (const human of net.humans.values()) {
+      if (human.zone !== "arena" || human.eaten) continue;
+      list.push({ name: human.netName || "Player", tier: human.tier, size: human.size });
+    }
+    for (const rival of state.rivals) {
+      list.push({ name: cpuBoardName(rival.tier), tier: rival.tier, size: rival.size });
+    }
+    list.sort((a, b) => b.size - a.size);
+    return list.slice(0, 5);
+  }
+
+  let leaderboardAt = 0;
+  let leaderboardKey = null;
+  function renderLeaderboard() {
+    if (!net.role) {
+      leaderboardEl.classList.add("hidden");
+      leaderboardKey = null;
+      return;
+    }
+    leaderboardEl.classList.remove("hidden");
+    const now = performance.now();
+    if (now - leaderboardAt < 250) return;
+    leaderboardAt = now;
+    const entries = leaderboardEntries().map((entry, i) => ({
+      ...entry,
+      label: `${i + 1}. ${entry.tier.emoji} ${entry.name}`,
+      sizeText: formatCount(Math.round(entry.size)),
+    }));
+    const key = entries.map((entry) => `${entry.label}|${entry.sizeText}|${entry.you ? 1 : 0}`).join("\n");
+    if (key === leaderboardKey) return;
+    leaderboardKey = key;
+    leaderboardListEl.replaceChildren();
+    if (!entries.length) {
+      const empty = document.createElement("li");
+      empty.className = "lb-empty";
+      empty.textContent = "Nobody yet";
+      leaderboardListEl.appendChild(empty);
+      return;
+    }
+    for (const entry of entries) {
+      const item = document.createElement("li");
+      if (entry.you) item.classList.add("you");
+      const name = document.createElement("span");
+      name.className = "lb-name";
+      name.textContent = entry.label;
+      const size = document.createElement("span");
+      size.textContent = entry.sizeText;
+      item.append(name, size);
+      leaderboardListEl.appendChild(item);
+    }
   }
 
   function syncLobbyScene(t) {
@@ -2777,38 +2941,22 @@
   }
 
   function stepWorld(dt, now) {
+    const power = foodPower(cpuTier());
+    for (const rival of state.rivals) {
+      rival.skill = power;
+      rival.speedBoost = 1 + power * 0.025;
+    }
+
     updateFoods(dt);
     resolveEats();
+    retireBigRivals();
     updateParticles(dt);
-    if (net.role === "host") limitCpuSizes(dt);
-
-    // Rooms always keep the two CPUs around; extra ones join as players progress.
-    const rivalDelay = state.rivals.length === 0 ? 10000 : 8000;
-    const wanted = rivalScale() >= 2 || (net.role === "host" && state.rivals.length < 2);
-    if (cpusActive() && wanted && now - state.lastSpawnAt > rivalDelay) {
-      spawnRival();
-      state.lastSpawnAt = now;
-    }
 
     if (sprinkleCount("xs") < MAX_XS_SPRINKLES && Math.random() < 0.14) {
       spawnSprinkle(sprinkleType("xs"));
     }
     if (sprinkleCount("small") < MAX_SMALL_SPRINKLES && Math.random() < 0.14) {
       spawnSprinkle(sprinkleType("small"));
-    }
-  }
-
-  // Room arenas never reset, so CPUs shrink back toward the biggest player in
-  // the arena, or to a fresh size when nobody is in it.
-  function limitCpuSizes(dt) {
-    let biggest = 0;
-    for (const human of arenaHumans()) biggest = Math.max(biggest, human.size);
-    const target = Math.max(CPU_IDLE_SIZE, biggest * CPU_LEAD);
-    // The cap rises at once with the players but eases down when the biggest one leaves.
-    const cap = net.cpuCap || CPU_IDLE_SIZE;
-    net.cpuCap = target >= cap ? target : cap - (cap - target) * Math.min(1, dt * 4);
-    for (const rival of state.rivals) {
-      if (rival.size > net.cpuCap) rival.size = net.cpuCap;
     }
   }
 
@@ -2866,20 +3014,12 @@
     state.points = 0;
     state.foodsEarned = 0;
     state.player = null;
-    if (net.role === "host") {
-      ensureWorld();
-      const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
-      state.player = createFood(equippedTier(), spot.x, spot.y, false);
-      clampToArena(state.player);
-      state.player.netName = net.name;
-    } else {
-      state.rivals = [];
-      state.particles = [];
-      state.lastSpawnAt = performance.now();
-      seedSprinkles();
-      spawnPlayer();
-      if (cpusActive()) spawnTwinRivals();
-    }
+    ensureWorld();
+    const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
+    state.player = createFood(equippedTier(), spot.x, spot.y, false);
+    clampToArena(state.player);
+    if (net.role) state.player.netName = net.name;
+    spawnBetterRival(state.player);
     if (view) view.distance = RUN_CAMERA_DISTANCE;
     updateHud();
     overlay.classList.add("hidden");
@@ -3042,6 +3182,7 @@
         x: Math.round(food.x),
         y: Math.round(food.y),
         size: Math.round(food.size),
+        sprinkleSize: Math.round(food.sprinkleSize || 0),
       })),
     };
     // Lobby guests get sprinkles rarely, so a new host still has the arena if this one leaves.
@@ -3164,6 +3305,7 @@
         net.inputs.delete(id);
       }
     }
+    clearRivalsIfArenaEmpty();
   }
 
   function onGuestInput(msg) {
@@ -3199,8 +3341,8 @@
     else multiCpuNoteEl.textContent = "The host chooses whether CPUs play.";
   }
 
-  // Host only: drop CPUs when they are switched off, and bring the twins back
-  // when they come back on and the arena has none.
+  // Host only: drop CPUs when they are switched off. If they come back on
+  // and the arena has none, one starting CPU returns.
   function syncCpus() {
     if (net.role !== "host" || !net.worldReady) return;
     if (!cpusActive()) {
@@ -3208,7 +3350,8 @@
       return;
     }
     if (state.rivals.length === 0) {
-      spawnTwinRivals();
+      const foods = arenaHumans();
+      if (foods.length) spawnBetterRival(foods[0]);
       state.lastSpawnAt = performance.now();
     }
   }
@@ -3279,7 +3422,7 @@
     net.roster = [];
     net.cpus = true;
     net.worldReady = false;
-    net.cpuCap = 0;
+    soloWorldReady = false;
     net.run = 0;
     net.endedRun = 0;
     net.migrating = false;
@@ -3291,6 +3434,7 @@
     }
     renderRoster();
     showSetup();
+    renderLeaderboard();
   }
 
   function guestBeginRun(run) {
@@ -3374,6 +3518,7 @@
         food.x = rival.x;
         food.y = rival.y;
         food.size = Math.max(1, rival.size || 1);
+        food.sprinkleSize = Math.max(0, rival.sprinkleSize || 0);
         return food;
       });
     }
