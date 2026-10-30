@@ -340,7 +340,7 @@
   const BENTO_COST = 1000;
   const BENTO_UNLOCK_MS = 2 * 60 * 60 * 1000;
   const BENTO_MAX_LOCKED = 5;
-  const BENTO_RUN_CHANCE = 1 / 5;
+  const BENTO_RUN_BASE_CHANCE = 1 / 4;
   const BENTO_FOODS = 3;
   const BENTO_LUCK_PER_OPEN = 0.01;
   const BENTO_SKIP_COST_PER_HOUR = 1000;
@@ -357,7 +357,8 @@
   function readBento(raw) {
     const bento = emptyBento();
     if (!raw || typeof raw !== "object") return bento;
-    bento.locked = Math.min(BENTO_MAX_LOCKED, Math.max(0, Math.floor(Number(raw.locked) || 0)));
+    // Run rewards may overflow the five visible slots; retain the whole queue.
+    bento.locked = Math.max(0, Math.floor(Number(raw.locked) || 0));
     bento.unlockStartedAt = bento.locked ? Math.max(0, Number(raw.unlockStartedAt) || 0) || Date.now() : 0;
     bento.ready = Math.max(0, Math.floor(Number(raw.ready) || 0));
     bento.opened = Math.max(0, Math.floor(Number(raw.opened) || 0));
@@ -2948,13 +2949,24 @@
     return changed;
   }
 
-  function addBento() {
+  function addBento({ allowOverflow = false } = {}) {
     advanceBento();
     const bento = save.bento;
-    if (bento.locked >= BENTO_MAX_LOCKED) return false;
+    if (!allowOverflow && bento.locked >= BENTO_MAX_LOCKED) return false;
     if (bento.locked === 0) bento.unlockStartedAt = Date.now();
     bento.locked += 1;
     return true;
+  }
+
+  function rollRunBentoCount(earned) {
+    // One shared roll makes these chances cumulative: 50% for at least one
+    // bonus box and 25% for both. Luck never changes run rewards.
+    const roll = Math.random();
+    if (earned < 10) return roll < BENTO_RUN_BASE_CHANCE ? 1 : 0;
+    const guaranteed = earned >= 100
+      ? Math.floor(earned / 100) + 1
+      : earned >= 50 ? 1 : 0;
+    return guaranteed + (roll < 1 / 4 ? 2 : roll < 1 / 2 ? 1 : 0);
   }
 
   function bentoTimerText() {
@@ -2999,7 +3011,7 @@
     row.innerHTML = `
       <h3>🍱 Bento Boxes</h3>
       <div class="shop-actions"></div>
-      <p>${bento.ready} ready to open · ${bento.locked}/${BENTO_MAX_LOCKED} unlocking. <span class="bento-timer">${bentoTimerText()}</span></p>
+      <p>${bento.ready} ready to open · ${Math.min(bento.locked, BENTO_MAX_LOCKED)}/${BENTO_MAX_LOCKED} unlocking${bento.locked > BENTO_MAX_LOCKED ? ` · ${bento.locked - BENTO_MAX_LOCKED} queued` : ""}. <span class="bento-timer">${bentoTimerText()}</span></p>
       <p class="bento-luck">Opened ${bento.opened.toLocaleString()} · +${Math.round(bentoLuckBonus() * 100)}% luck forever.</p>
       <p class="bento-luck">${bentoLuckLine()}</p>
       <p class="bento-odds">${bentoOddsHtml()}</p>
@@ -3439,14 +3451,11 @@
       save.bestRun = earned;
       bestRunEl.textContent = `${save.bestRun} foods`;
     }
-    // One flat 1-in-5 roll per ended run, even with no banked foods.
-    // Collection luck, permanent luck, and luck potions never change this chance.
-    let bentoText = "";
-    if (Math.random() < BENTO_RUN_CHANCE) {
-      bentoText = addBento()
-        ? " 🍱 You found a bento box! It's unlocking in the shop."
-        : ` 🍱 You found a bento box, but all ${BENTO_MAX_LOCKED} unlock slots are full.`;
-    }
+    const bentoCount = rollRunBentoCount(earned);
+    for (let i = 0; i < bentoCount; i++) addBento({ allowOverflow: true });
+    const bentoText = bentoCount
+      ? ` 🍱 You earned ${bentoCount} bento box${bentoCount === 1 ? "" : "es"}! Check the shop to unlock them.`
+      : "";
     persistSave();
     renderDiamonds();
     renderPotionStatus();
