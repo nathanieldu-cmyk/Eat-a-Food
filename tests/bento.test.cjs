@@ -22,7 +22,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=174' },
+      currentScript: { src: 'game.js?v=175' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -49,8 +49,9 @@ function boot(saved) {
     draw = () => {};
     startLobbyLoop = () => {};
     renderPotionStatus = () => {};
+    renderShop = () => {};
     globalThis.api = { save, state, net, bankPendingFoods, pullFood,
-      loadSave, endRun, tierByName, rollRunBentoCount, addBento, advanceBento, BENTO_UNLOCK_MS, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
+      loadSave, endRun, tierByName, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
     return;
     ${marker}
   `), context);
@@ -107,7 +108,7 @@ test('one reward total per run regardless of luck, role or wipeout; counts and s
             let calls = 0;
             g.math.random = () => { calls += 1; return roll; };
             g.endRun(wipedOut);
-            const expected = expectedCount(earned, minimum, maximum, roll);
+            const expected = Math.min(5, expectedCount(earned, minimum, maximum, roll));
             assert.equal(g.save.bento.locked, expected);
             assert.equal(calls, 1);
             assert.equal(g.save.diamonds, earned);
@@ -123,26 +124,68 @@ test('one reward total per run regardless of luck, role or wipeout; counts and s
   }
 });
 
-test('all run rewards are retained beyond five slots and unlock sequentially after reload', () => {
+test('full and partially full inventories reject extra run boxes and show Inventory is full', () => {
+  for (const [locked, ready] of [[5, 0], [0, 5], [3, 2], [4, 0], [1, 3], [0, 0]]) {
+    const g = boot();
+    g.save.bento.locked = locked;
+    g.save.bento.ready = ready;
+    g.save.bento.unlockStartedAt = locked ? Date.now() : 0;
+    g.state.running = true;
+    g.state.foodsEarned = 100;
+    g.math.random = () => 0.1; // Four boxes rolled at this milestone.
+    g.endRun();
+    const accepted = Math.min(4, 5 - locked - ready);
+    assert.equal(g.bentoInventoryCount(), locked + ready + accepted);
+    assert.equal(g.save.bento.ready, ready);
+    const message = g.elements.get('overlay-msg').textContent;
+    assert.equal(message.includes('Inventory is full.'), accepted < 4);
+    if (accepted) assert.ok(message.includes(`You earned ${accepted} bento box`));
+    else assert.ok(!message.includes('You earned'), 'rejected boxes are not reported as received');
+    const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
+    assert.equal(reloaded.bentoInventoryCount(), locked + ready + accepted);
+  }
+});
+
+test('unlocking and skipping do not free inventory space; opening does', () => {
   const g = boot();
   const start = Date.now();
   g.save.bento.locked = 5;
   g.save.bento.unlockStartedAt = start;
-  g.state.running = true;
-  g.state.foodsEarned = 500;
-  g.math.random = () => 0.1;
-  g.endRun();
-  assert.equal(g.save.bento.locked, 13, 'five existing boxes plus all eight rewarded boxes');
-  assert.equal(g.addBento(), false, 'shop purchases still respect the five-slot limit');
-  const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
-  assert.equal(reloaded.save.bento.locked, 13);
-  reloaded.advanceBento(start + 6 * reloaded.BENTO_UNLOCK_MS);
-  assert.equal(reloaded.save.bento.locked, 7);
-  assert.equal(reloaded.save.bento.ready, 6);
-  reloaded.advanceBento(start + 13 * reloaded.BENTO_UNLOCK_MS);
-  assert.equal(reloaded.save.bento.locked, 0);
-  assert.equal(reloaded.save.bento.ready, 13);
-  assert.equal(reloaded.save.bento.unlockStartedAt, 0);
+  g.save.diamonds = 10000;
+  assert.equal(g.addBento(), false);
+  g.buyBento();
+  assert.equal(g.save.diamonds, 10000, 'no diamonds charged for a rejected purchase');
+  g.advanceBento(start + 2 * g.BENTO_UNLOCK_MS);
+  assert.equal(g.save.bento.locked, 3);
+  assert.equal(g.save.bento.ready, 2);
+  assert.equal(g.addBento(), false, 'ready boxes still occupy capacity');
+  g.skipBento();
+  assert.equal(g.bentoInventoryCount(), 5, 'skipping only changes locked into ready');
+  assert.equal(g.addBento(), false);
+  const ready = g.save.bento.ready;
+  g.openBento();
+  assert.equal(g.save.bento.ready, 0);
+  assert.equal(g.bentoInventoryCount(), 5 - ready);
+  for (let i = 0; i < ready; i++) assert.equal(g.addBento(), true);
+  assert.equal(g.bentoInventoryCount(), 5);
+  assert.equal(g.addBento(), false);
+});
+
+test('older saves above capacity are capped to five, preserving ready boxes first', () => {
+  for (const [locked, ready, expectedLocked, expectedReady] of [
+    [13, 0, 5, 0], [13, 3, 2, 3], [2, 13, 0, 5], [5, 5, 0, 5], [4, 1, 4, 1],
+  ]) {
+    const original = boot();
+    const saved = JSON.parse(JSON.stringify(original.save));
+    saved.bento = {locked, ready, unlockStartedAt: Date.now(), opened: 123};
+    const g = boot(saved);
+    assert.equal(g.save.bento.locked, expectedLocked);
+    assert.equal(g.save.bento.ready, expectedReady);
+    assert.equal(g.save.bento.opened, 123);
+    assert.equal(g.save.bento.locked === 0, g.save.bento.unlockStartedAt === 0);
+    const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
+    assert.equal(reloaded.bentoInventoryCount(), 5);
+  }
 });
 
 function near(actual, expected) { assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`); }
