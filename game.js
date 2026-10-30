@@ -83,6 +83,7 @@
   const MAX_CAMERA_DISTANCE = 1650 * MAP_SCALE;
   const POINTS_PER_FOOD = 1000;
   const MAX_RIVALS = 5;
+  const RANDOM_CPU_EVERY_MS = 8000;
   const MAX_SPRINKLES = Math.round(250 * AREA_SCALE);
   const MAX_XS_SPRINKLES = Math.round(140 * AREA_SCALE);
   const MAX_SMALL_SPRINKLES = Math.round(84 * AREA_SCALE);
@@ -1091,16 +1092,23 @@
     return best;
   }
 
-  // The food whose points multiplier is nearest to this one plus 1.
+  // A food within 0.2 speed of this one, with the growth multiplier nearest to
+  // this one plus 1. If no food is that close in speed, the closest speeds are used.
   // Never a Common, including Golden, Rainbow, or Shadow Commons.
-  // A tie prefers a different food, then the higher multiplier.
-  function plusOneTier(tier) {
-    const target = tier.multiplier + 1;
+  // A tie prefers a different food, then the higher growth.
+  function companionTier(tier) {
+    const foods = ALL_FOODS.filter((food) => food.rarity !== "common");
+    const gap = (food) => Math.abs(food.speed - tier.speed);
+    let pool = foods.filter((food) => gap(food) <= 0.2 + 1e-9);
+    if (!pool.length && foods.length) {
+      const nearest = Math.min(...foods.map(gap));
+      pool = foods.filter((food) => gap(food) <= nearest + 1e-9);
+    }
+    const target = tier.growth + 1;
     let best = null;
     let bestDist = Infinity;
-    for (const food of ALL_FOODS) {
-      if (food.rarity === "common") continue;
-      const dist = Math.abs(food.multiplier - target);
+    for (const food of pool) {
+      const dist = Math.abs(food.growth - target);
       if (dist > bestDist) continue;
       if (dist < bestDist) {
         best = food;
@@ -1113,18 +1121,42 @@
         if (bestIsSelf) best = food;
         continue;
       }
-      if (food.multiplier > best.multiplier) best = food;
+      if (food.growth > best.growth) best = food;
     }
     return best || tier;
   }
 
-  // Every entry, in solo or a room, comes in with one CPU a step ahead on
-  // points multiplier, far enough away that it cannot catch you at the start.
+  // Every entry, in solo or a room, comes in with one CPU about as fast as you
+  // that grows a step faster, far enough away that it cannot catch you at the start.
   function spawnBetterRival(food) {
     if (!cpusActive() || !food) return;
     const used = [food, ...arenaHumans()].map((other) => ({ x: other.x, y: other.y }));
     const spot = farArenaSpot(used, ARENA * 0.32);
-    spawnRivalAt(plusOneTier(food.tier), spot.x, spot.y, 10, true);
+    spawnRivalAt(companionTier(food.tier), spot.x, spot.y, 10, true);
+    state.lastSpawnAt = performance.now();
+  }
+
+  // Extra CPUs are random foods near the best food in the arena: usually the
+  // same level, sometimes one or two below, sometimes one above. Level is
+  // rarity plus crafting (Golden, Rainbow, Shadow), so better foods bring
+  // better CPUs.
+  const RANDOM_CPU_OFFSETS = [-2, -1, -1, 0, 0, 0, 1, 1];
+
+  function randomRivalTier() {
+    const top = foodPower(cpuTier());
+    const maxPower = Math.max(...ALL_FOODS.map(foodPower));
+    const offset = RANDOM_CPU_OFFSETS[Math.floor(Math.random() * RANDOM_CPU_OFFSETS.length)];
+    const want = Math.max(0, Math.min(maxPower, top + offset));
+    let gap = Infinity;
+    for (const food of ALL_FOODS) gap = Math.min(gap, Math.abs(foodPower(food) - want));
+    const pool = ALL_FOODS.filter((food) => Math.abs(foodPower(food) - want) === gap);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function spawnRandomRival() {
+    const used = [...arenaHumans(), ...state.rivals].map((other) => ({ x: other.x, y: other.y }));
+    const spot = farArenaSpot(used, ARENA * 0.32);
+    spawnRivalAt(randomRivalTier(), spot.x, spot.y, 10);
   }
 
   function pointInZone(nx, ny, zone) {
@@ -2967,6 +2999,16 @@
     updateFoods(dt);
     resolveEats();
     updateParticles(dt);
+
+    if (
+      cpusActive() &&
+      arenaHumans().length > 0 &&
+      state.rivals.length < MAX_RIVALS &&
+      now - state.lastSpawnAt > RANDOM_CPU_EVERY_MS
+    ) {
+      spawnRandomRival();
+      state.lastSpawnAt = now;
+    }
 
     if (sprinkleCount("xs") < MAX_XS_SPRINKLES && Math.random() < 0.14) {
       spawnSprinkle(sprinkleType("xs"));
