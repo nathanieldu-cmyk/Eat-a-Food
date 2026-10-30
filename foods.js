@@ -3,6 +3,7 @@
 // growth: growth multiplier
 // speed: speed stat, shown as-is in the inventory.
 // odds: pull rate, shown in the game as "1 in {odds}"
+// runReward: a separate 1-in-odds bonus roll per ended run; luck never affects it.
 // Golden, Rainbow, and Shadow are not listed. Each craft step adds +2 points, 1.5× growth, and 1.5× speed.
 // model: 3D file in the models folder. Crafted variants use the same model as the normal food.
 // name, emoji, rarity, color, and rim can stay as they are.
@@ -20,6 +21,9 @@ window.FOOD_LIST = [
     { name: "Eggplant", emoji: "🍆", rarity: "common", points: 1.06, growth: 1.12, speed: 0.48, odds: 7, model: "eggplant-cartoon3.glb", color: "#6a3a86", rim: "#3e204e" },
     { name: "Popcorn", emoji: "🍿", rarity: "common", points: 1.03, growth: 0.98, speed: 0.88, odds: 6, model: "popcorn-cartoon3.glb", color: "#f4e27a", rim: "#d23b3b" },
     { name: "Peanut", emoji: "🥜", rarity: "common", points: 1.0, growth: 1.05, speed: 0.78, odds: 4, model: "peanut-cartoon3.glb", color: "#ff6b9a", rim: "#f2f2f2" },
+
+    // Run-only bonus food; excluded from normal food pulls.
+    { name: "Bento Box", emoji: "🍱", rarity: "common", points: 1.0, growth: 1.05, speed: 0.78, odds: 5, runReward: true, model: "rice-bowl.glb", color: "#e8c07a", rim: "#6a2820" },
 
     // Uncommon — avg speed ~1.07
     { name: "Lemon", emoji: "🍋", rarity: "uncommon", points: 2.3, growth: 2.08, speed: 1.35, odds: 200, model: "lemon-cartoon3.glb", color: "#f2e14a", rim: "#c9b420" },
