@@ -614,13 +614,12 @@
   };
 
   let lastFrameAt = 0;
-  const ROOM_PREFIX = "eat-a-food-room-";
   const PENDING_NET_KEY = "eatAFoodPendingRoom";
   const UPDATE_TRIED_KEY = "eatAFoodUpdateTried";
   const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const MAX_ROOM_PLAYERS = 8;
-  const JOIN_TIMEOUT_MS = 15000;
   const REJOIN_WINDOW_MS = 30000;
+  const RELAY_URL = "wss://broker.hivemq.com:8884/mqtt";
 
   const net = {
     peer: null,
@@ -3170,8 +3169,8 @@
     }
   }
 
-  // PeerJS packs plain arrays recursively and overflows the stack on thousands
-  // of numbers, so sprinkles travel as binary: x | type << 12, then y.
+  // Sprinkles travel as binary (x | type << 12, then y) so thousands of them
+  // stay one small message instead of a giant list of numbers.
   function packSprinkles(sprinkles) {
     const words = new Uint16Array(sprinkles.length * 2);
     sprinkles.forEach((sprinkle, i) => {
@@ -3593,19 +3592,336 @@
     };
   }
 
+  // Rooms go through a public message relay so two devices can play together
+  // when a direct connection between them never opens.
+  function relayFrame(type, body) {
+    const length = [];
+    let n = body.length;
+    do {
+      let byte = n % 128;
+      n = Math.floor(n / 128);
+      if (n > 0) byte |= 128;
+      length.push(byte);
+    } while (n > 0);
+    const out = new Uint8Array(1 + length.length + body.length);
+    out[0] = type;
+    out.set(length, 1);
+    out.set(body, 1 + length.length);
+    return out;
+  }
+
+  function relayConnect(clientId) {
+    const id = new TextEncoder().encode(clientId);
+    const body = new Uint8Array(12 + id.length);
+    body.set([0, 4, 77, 81, 84, 84, 4, 2, 0, 60], 0);
+    body[10] = id.length >> 8;
+    body[11] = id.length & 255;
+    body.set(id, 12);
+    return relayFrame(0x10, body);
+  }
+
+  function relaySubscribe(topic) {
+    const name = new TextEncoder().encode(topic);
+    const body = new Uint8Array(5 + name.length);
+    body[0] = 0;
+    body[1] = 1;
+    body[2] = name.length >> 8;
+    body[3] = name.length & 255;
+    body.set(name, 4);
+    return relayFrame(0x82, body);
+  }
+
+  function relayPublish(topic, text) {
+    const name = new TextEncoder().encode(topic);
+    const payload = new TextEncoder().encode(text);
+    const body = new Uint8Array(2 + name.length + payload.length);
+    body[0] = name.length >> 8;
+    body[1] = name.length & 255;
+    body.set(name, 2);
+    body.set(payload, 2 + name.length);
+    return relayFrame(0x30, body);
+  }
+
+  function relayTake(state) {
+    if (state.buf.length < 2) return null;
+    let multiplier = 1;
+    let value = 0;
+    let bytes = 1;
+    let encoded = 0;
+    do {
+      if (bytes > 4) {
+        state.buf = new Uint8Array(0);
+        return null;
+      }
+      if (bytes >= state.buf.length) return null;
+      encoded = state.buf[bytes];
+      value += (encoded & 127) * multiplier;
+      multiplier *= 128;
+      bytes += 1;
+    } while ((encoded & 128) !== 0);
+    const total = bytes + value;
+    if (state.buf.length < total) return null;
+    const packet = state.buf.slice(0, total);
+    state.buf = state.buf.slice(total);
+    return { type: packet[0] >> 4, body: packet.slice(bytes) };
+  }
+
+  function encodeRelay(obj) {
+    return JSON.stringify(obj, (key, value) => {
+      if (!(value instanceof ArrayBuffer)) return value;
+      const bytes = new Uint8Array(value);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 8192) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + 8192, bytes.length)));
+      }
+      return { __buf: btoa(bin) };
+    });
+  }
+
+  function decodeRelay(text) {
+    return JSON.parse(text, (key, value) => {
+      if (!value || typeof value !== "object" || typeof value.__buf !== "string") return value;
+      if (Object.keys(value).length !== 1) return value;
+      const bin = atob(value.__buf);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes.buffer;
+    });
+  }
+
+  function decodePublish(body) {
+    try {
+      if (body.length < 2) return null;
+      const len = (body[0] << 8) | body[1];
+      const start = 2 + len;
+      if (start > body.length) return null;
+      const env = decodeRelay(new TextDecoder().decode(body.subarray(start)));
+      return env && typeof env === "object" ? env : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function makeLink(peerId, send, open = true) {
+    const handlers = { data: [], close: [], open: [], error: [] };
+    let closed = false;
+    const conn = {
+      peer: peerId,
+      open,
+      lastHeard: performance.now(),
+      armed: false,
+      on(ev, fn) { handlers[ev].push(fn); },
+      send(obj) { if (!closed) send(obj); },
+      close() {
+        if (closed) return;
+        closed = true;
+        conn.open = false;
+        handlers.close.forEach((fn) => fn());
+      },
+      deliver(msg) {
+        if (closed) return;
+        conn.lastHeard = performance.now();
+        handlers.data.forEach((fn) => fn(msg));
+      },
+    };
+    return conn;
+  }
+
+  function openRelay(code, role, onMessage) {
+    const room = String(code || "").replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    const topicIn = `eaf1/${room}/${role === "host" ? "up" : "down"}`;
+    const topicOut = `eaf1/${room}/${role === "host" ? "down" : "up"}`;
+    const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const newClientId = () => {
+      let id = "eaf";
+      for (let i = 0; i < 8; i++) id += alphabet[Math.floor(Math.random() * alphabet.length)];
+      return id;
+    };
+    let ws = null;
+    let reconnects = 0;
+    let settled = false;
+    const state = { buf: new Uint8Array(0) };
+    let resolveReady;
+    let rejectReady;
+    const ready = new Promise((resolve, reject) => {
+      resolveReady = resolve;
+      rejectReady = reject;
+    });
+    const relay = {
+      destroyed: false,
+      live: false,
+      links: null,
+      guestConn: null,
+      guestId: "",
+      onLost: null,
+      ready,
+      publish(envelope) {
+        if (relay.destroyed || !ws || ws.readyState !== 1) return;
+        ws.send(relayPublish(topicOut, encodeRelay(envelope)));
+      },
+      destroy() {
+        if (relay.destroyed) return;
+        const wasLive = relay.live;
+        relay.destroyed = true;
+        clearInterval(ping);
+        clearInterval(watch);
+        if (wasLive && ws && ws.readyState === 1) {
+          try {
+            const leave = role === "host"
+              ? { from: "host", to: "*", msg: { t: "hostleft" } }
+              : { from: relay.guestId, msg: { t: "bye" } };
+            if (role === "host" || relay.guestId) ws.send(relayPublish(topicOut, encodeRelay(leave)));
+          } catch (err) { /* socket already closing */ }
+        }
+        if (ws) {
+          try { ws.close(); } catch (err) { /* already closed */ }
+        }
+        if (!settled) {
+          settled = true;
+          rejectReady(new Error("closed"));
+        }
+      },
+    };
+
+    const fail = (err) => {
+      if (settled || relay.live) return;
+      settled = true;
+      relay.destroyed = true;
+      clearInterval(ping);
+      clearInterval(watch);
+      if (ws) {
+        try { ws.close(); } catch (closeErr) { /* already closed */ }
+      }
+      rejectReady(err);
+    };
+
+    const connect = () => {
+      if (relay.destroyed) return;
+      state.buf = new Uint8Array(0);
+      const socket = new WebSocket(RELAY_URL);
+      ws = socket;
+      socket.binaryType = "arraybuffer";
+      const giveUp = setTimeout(() => {
+        if (socket === ws && socket.readyState !== 1) {
+          try { socket.close(); } catch (err) { /* already closed */ }
+        }
+      }, 8000);
+      socket.onopen = () => {
+        clearTimeout(giveUp);
+        reconnects = 0;
+        socket.send(relayConnect(newClientId()));
+      };
+      socket.onerror = () => {};
+      socket.onclose = () => {
+        clearTimeout(giveUp);
+        if (relay.destroyed || socket !== ws) return;
+        if (!relay.live) {
+          fail(new Error("relay"));
+          return;
+        }
+        reconnects += 1;
+        if (reconnects > 4) {
+          relay.destroyed = true;
+          clearInterval(ping);
+          clearInterval(watch);
+          if (relay.onLost) relay.onLost();
+          return;
+        }
+        setTimeout(connect, 400);
+      };
+      socket.onmessage = (ev) => {
+        if (socket !== ws || relay.destroyed) return;
+        const chunk = new Uint8Array(ev.data);
+        const next = new Uint8Array(state.buf.length + chunk.length);
+        next.set(state.buf, 0);
+        next.set(chunk, state.buf.length);
+        state.buf = next;
+        for (;;) {
+          const packet = relayTake(state);
+          if (!packet) break;
+          if (packet.type === 2) {
+            if (packet.body[1] !== 0) {
+              fail(new Error("connack"));
+              return;
+            }
+            socket.send(relaySubscribe(topicIn));
+          } else if (packet.type === 9) {
+            const now = performance.now();
+            if (relay.links) {
+              for (const conn of relay.links.values()) conn.lastHeard = now;
+            }
+            if (relay.guestConn) relay.guestConn.lastHeard = now;
+            if (!relay.live) {
+              relay.live = true;
+              settled = true;
+              resolveReady(relay);
+            }
+          } else if (packet.type === 3) {
+            const env = decodePublish(packet.body);
+            if (env) onMessage(env);
+          }
+        }
+      };
+    };
+
+    const ping = setInterval(() => {
+      if (ws && ws.readyState === 1) ws.send(new Uint8Array([0xc0, 0x00]));
+    }, 20000);
+    const watch = setInterval(() => {
+      if (relay.destroyed || !ws || ws.readyState !== 1) return;
+      const now = performance.now();
+      if (relay.links) {
+        for (const conn of [...relay.links.values()]) {
+          if (conn.open && now - conn.lastHeard > 10000) conn.close();
+        }
+      }
+      const guest = relay.guestConn;
+      if (guest && guest.open && guest.armed && now - guest.lastHeard > 10000) guest.close();
+    }, 2000);
+    setTimeout(() => fail(new Error("timeout")), 12000);
+    connect();
+    return relay;
+  }
+
+  function beginHost(code) {
+    const links = new Map();
+    const relay = openRelay(code, "host", (env) => {
+      if (!env || !env.from || env.from === "host" || !env.msg) return;
+      if (env.msg.t === "bye") {
+        const existing = links.get(env.from);
+        if (existing) existing.close();
+        links.delete(env.from);
+        return;
+      }
+      let conn = links.get(env.from);
+      if (!conn || !conn.open) {
+        conn = makeLink(env.from, (obj) => {
+          relay.publish({ from: "host", to: env.from, msg: obj });
+        });
+        links.set(env.from, conn);
+        conn.on("close", () => {
+          if (links.get(env.from) === conn) links.delete(env.from);
+        });
+        hostAccept(conn);
+      }
+      conn.deliver(env.msg);
+    });
+    relay.links = links;
+    return relay;
+  }
+
   function claimRoom(code) {
-    const peer = new window.Peer(ROOM_PREFIX + code);
-    net.peer = peer;
-    peer.on("open", () => {
-      if (net.peer !== peer || !net.migrating) return;
+    const relay = beginHost(code);
+    net.peer = relay;
+    relay.onLost = () => {
+      if (net.peer !== relay || net.role !== "host") return;
+      giveUpRoom("Lost the connection. Join the code again if a friend is still hosting.");
+    };
+    relay.ready.then(() => {
+      if (net.peer !== relay || !net.migrating) return;
       promoteToHost(code);
-    });
-    peer.on("connection", hostAccept);
-    peer.on("disconnected", () => {
-      if (net.peer === peer && !peer.destroyed) peer.reconnect();
-    });
-    peer.on("error", () => {
-      if (net.peer !== peer || !net.migrating) return;
+    }).catch(() => {
+      if (net.peer !== relay || !net.migrating) return;
       retryReconnect(code);
     });
   }
@@ -3643,23 +3959,14 @@
     return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
   }
 
-  function netErrorText(err) {
-    const type = err && err.type;
-    if (type === "browser-incompatible") return "This browser does not support multiplayer.";
-    if (type === "network" || type === "server-error" || type === "socket-error" || type === "socket-closed") {
-      return "Could not reach the multiplayer service. Check your internet and try again.";
-    }
-    return `Could not connect (${type || "unknown error"}). Try again.`;
-  }
-
   function startNet() {
     if (net.role) {
       setNetStatus("Leave the current room first.");
       return false;
     }
-    if (net.peer) clearNet();
-    if (!window.Peer) {
-      setNetStatus("Multiplayer could not load. Refresh the page and try again.");
+    if (net.peer) return false;
+    if (typeof WebSocket !== "function") {
+      setNetStatus("This browser does not support multiplayer.");
       return false;
     }
     return true;
@@ -3819,16 +4126,16 @@
   function createRoom(name, attempt = 0) {
     if (!startNet()) return;
     const code = newRoomCode();
-    const peer = new window.Peer(ROOM_PREFIX + code);
-    net.peer = peer;
     net.name = name;
     setNetStatus("Creating room…");
-    peer.on("open", () => {
-      if (net.peer !== peer) return;
-      if (net.role === "host") {
-        setNetStatus("Room reconnected. The code is the same.");
-        return;
-      }
+    const relay = beginHost(code);
+    net.peer = relay;
+    relay.onLost = () => {
+      if (net.peer !== relay || net.role !== "host") return;
+      giveUpRoom("Lost the connection. Create a room again.");
+    };
+    relay.ready.then(() => {
+      if (net.peer !== relay) return;
       net.name = name;
       net.id = "host";
       net.code = code;
@@ -3836,147 +4143,105 @@
       ensureWorld();
       onNetMessage({ t: "room", host: true, code, id: "host", players: hostRoster() });
       setNetStatus("Share this code. Friends can join from any computer.");
-    });
-    peer.on("connection", hostAccept);
-    peer.on("disconnected", () => {
-      if (net.peer !== peer || peer.destroyed) return;
-      if (net.role === "host") setNetStatus("Reconnecting the room…");
-      peer.reconnect();
-    });
-    peer.on("error", (err) => {
-      if (net.peer !== peer) return;
-      if (!net.role && err.type === "unavailable-id" && attempt < 5) {
+    }).catch(() => {
+      if (net.peer !== relay) return;
+      if (attempt < 2) {
         clearNet();
         createRoom(name, attempt + 1);
         return;
       }
-      if (!net.role) onNetMessage({ t: "err", msg: netErrorText(err) });
+      onNetMessage({ t: "err", msg: "Could not reach the multiplayer service. Check your internet and try again." });
     });
   }
 
-  // The first offer often expires before the host answers, which PeerJS reports as
-  // "could not connect." Try a few times before telling the player the code failed.
   // `resume` is set when reconnecting after a host change; failures then retry quietly.
   function joinRoom(code, name, resume = null) {
     if (!resume && !startNet()) return;
-    let peer = null;
+    net.name = name;
+    if (!resume) setNetStatus("Connecting…");
+    const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let myId = "g";
+    for (let i = 0; i < 8; i++) myId += alphabet[Math.floor(Math.random() * alphabet.length)];
+    let relay = null;
     let joined = false;
     let rejected = false;
-    let finishing = false;
-    let onlyMissing = true;
-    let failures = 0;
-    let brokerTimer = 0;
-    let retryWait = 0;
-    const maxAttempts = resume ? 1 : 3;
-    net.name = name;
-
-    const fail = (text) => {
-      if (joined || !peer || net.peer !== peer) return;
-      clearTimeout(brokerTimer);
-      clearTimeout(retryWait);
+    let done = false;
+    let joinPulse = 0;
+    const conn = makeLink(myId, (obj) => {
+      if (relay) relay.publish({ from: myId, to: "host", msg: obj });
+    }, false);
+    const stopJoin = () => {
+      clearInterval(joinPulse);
       clearTimeout(net.joinTimer);
+    };
+    const fail = (text) => {
+      if (done || joined || !relay || net.peer !== relay) return;
+      done = true;
+      stopJoin();
       if (resume) retryReconnect(code);
       else onNetMessage({ t: "err", msg: text });
     };
-
-    const nextAttempt = (reason) => {
-      if (finishing || joined || rejected || !peer || net.peer !== peer) return;
-      finishing = true;
-      if (reason !== "missing") onlyMissing = false;
-      failures += 1;
-      clearTimeout(net.joinTimer);
-      clearTimeout(brokerTimer);
-      const conn = net.hostConn;
-      net.hostConn = null;
-      if (conn) {
-        try { conn.close(); } catch (err) { /* already closed */ }
-      }
-      if (failures >= maxAttempts) {
-        fail(onlyMissing
-          ? "No room with that code."
-          : "Could not reach that room. Check the code and try again.");
+    relay = openRelay(code, "guest", (env) => {
+      if (!env || !env.msg) return;
+      if (env.to && env.to !== myId && env.to !== "*") return;
+      if (env.from === myId) return;
+      if (env.msg.t === "hostleft") {
+        conn.close();
         return;
       }
-      if (!resume) setNetStatus("Still connecting to that room…");
-      retryWait = setTimeout(() => {
-        if (joined || rejected || !peer || net.peer !== peer) return;
-        if (peer.destroyed || peer.disconnected || !peer.open) openPeer();
-        else dial();
-      }, 700);
+      conn.deliver(env.msg);
+    });
+    relay.guestConn = conn;
+    relay.guestId = myId;
+    net.peer = relay;
+    net.hostConn = conn;
+    relay.onLost = () => {
+      if (net.hostConn === conn) conn.close();
     };
-
-    const dial = () => {
-      if (joined || rejected || !peer || net.peer !== peer || !peer.open) return;
-      finishing = false;
-      const conn = peer.connect(ROOM_PREFIX + code, { reliable: true });
-      net.hostConn = conn;
-      clearTimeout(net.joinTimer);
-      net.joinTimer = setTimeout(() => {
-        if (net.hostConn !== conn || joined) return;
-        nextAttempt("timeout");
-      }, resume ? 6000 : JOIN_TIMEOUT_MS);
-      conn.on("open", () => {
-        if (net.hostConn !== conn) return;
-        conn.send({ t: "join", v: GAME_VERSION, name, food: equippedTier().name, resume });
-      });
-      conn.on("data", (msg) => {
-        if (net.hostConn !== conn || !msg || typeof msg !== "object") return;
-        if (msg.t === "room") {
-          clearTimeout(net.joinTimer);
-          joined = true;
-        }
-        if (msg.t === "err") rejected = true;
-        if (msg.t === "err" && msg.update && !net.role) {
-          clearNet();
-          if (reloadForUpdate(Number(msg.v) || "host", { action: "join", code, name })) return;
-        }
-        onNetMessage(msg);
-      });
-      conn.on("close", () => {
-        if (net.hostConn !== conn) return;
-        if (joined) onHostLost();
-        else nextAttempt("closed");
-      });
-      conn.on("error", () => {
-        if (net.hostConn !== conn || joined) return;
-        nextAttempt("closed");
-      });
-    };
-
-    const openPeer = () => {
-      if (peer && net.peer === peer && !peer.destroyed) {
-        try { peer.destroy(); } catch (err) { /* already closed */ }
+    conn.on("data", (msg) => {
+      if (net.hostConn !== conn || !msg || typeof msg !== "object") return;
+      if (msg.t === "room") {
+        joined = true;
+        conn.armed = true;
+        stopJoin();
       }
-      peer = new window.Peer();
-      net.peer = peer;
-      clearTimeout(brokerTimer);
-      brokerTimer = setTimeout(() => {
-        nextAttempt("error");
-      }, 20000);
-      peer.on("open", () => {
-        if (net.peer !== peer) return;
-        clearTimeout(brokerTimer);
-        dial();
-      });
-      peer.on("disconnected", () => {
-        if (net.peer === peer && !peer.destroyed && joined) peer.reconnect();
-      });
-      peer.on("error", (err) => {
-        if (!peer || net.peer !== peer || joined) {
-          if (joined && err.type === "peer-unavailable") onHostLost();
-          return;
-        }
-        const fatal = err.type === "browser-incompatible" || err.type === "invalid-id" || err.type === "invalid-key" || err.type === "ssl-unavailable";
-        if (fatal) {
-          fail(netErrorText(err));
-          return;
-        }
-        nextAttempt(err.type === "peer-unavailable" ? "missing" : "error");
-      });
+      if (msg.t === "err") {
+        rejected = true;
+        done = true;
+        stopJoin();
+      }
+      if (msg.t === "err" && msg.update && !net.role) {
+        clearNet();
+        if (reloadForUpdate(Number(msg.v) || "host", { action: "join", code, name })) return;
+      }
+      onNetMessage(msg);
+    });
+    conn.on("close", () => {
+      if (net.hostConn !== conn) return;
+      if (joined) {
+        if (done) return;
+        done = true;
+        stopJoin();
+        onHostLost();
+        return;
+      }
+      if (rejected || done) return;
+      fail("Could not reach that room. Check the code and try again.");
+    });
+    const sendJoin = () => {
+      if (done || joined || rejected || net.hostConn !== conn) return;
+      conn.send({ t: "join", v: GAME_VERSION, name, food: equippedTier().name, resume });
     };
-
-    if (!resume) setNetStatus("Connecting…");
-    openPeer();
+    relay.ready.then(() => {
+      if (done || net.peer !== relay) return;
+      conn.lastHeard = performance.now();
+      sendJoin();
+      conn.open = true;
+      joinPulse = setInterval(sendJoin, 1500);
+      net.joinTimer = setTimeout(() => fail("No room with that code."), 8000);
+    }).catch(() => {
+      fail("Could not reach the multiplayer service. Check your internet and try again.");
+    });
   }
 
   window.addEventListener("pagehide", () => {
