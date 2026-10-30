@@ -124,10 +124,13 @@
     growth: food.growth,
     speed: food.speed,
     odds: food.odds,
+    runReward: !!food.runReward,
     model: food.model,
     color: food.color,
     rim: food.rim,
   }));
+  const PULL_FOODS = FOOD_TIERS.filter((food) => !food.runReward);
+  const RUN_REWARD_FOODS = FOOD_TIERS.filter((food) => food.runReward);
 
   // One-time renames for saves from before mythic Sundae/Donut short names.
   function migrateFoodName(name, fromVersion) {
@@ -167,7 +170,6 @@
     Feast: "Mooncake",
     "Crown Cake": "Sushi",
     "Wedding Cake": "Ramen",
-    "Bento Box": "Ramen",
     Takeout: "Ramen",
     Lobster: "Hotdog",
     "Firework Cake": "Pizza",
@@ -738,13 +740,13 @@
 
   function pullFood() {
     let total = 0;
-    for (const food of FOOD_TIERS) total += pullWeight(food);
+    for (const food of PULL_FOODS) total += pullWeight(food);
     let roll = Math.random() * total;
-    for (const food of FOOD_TIERS) {
+    for (const food of PULL_FOODS) {
       roll -= pullWeight(food);
       if (roll <= 0) return food;
     }
-    return FOOD_TIERS[FOOD_TIERS.length - 1];
+    return PULL_FOODS[PULL_FOODS.length - 1];
   }
 
   function equippedTier() {
@@ -1045,6 +1047,13 @@
     const gained = [];
     for (let i = 0; i < state.foodsEarned; i++) {
       const food = pullFood();
+      gained.push(food.name);
+      save.inventory[food.name] = (save.inventory[food.name] || 0) + 1;
+    }
+    // Exactly one independent bonus roll per ended run, even on a wipeout.
+    // Do this after normal pulls so earning a new type cannot change their luck.
+    for (const food of RUN_REWARD_FOODS) {
+      if (Math.random() >= 1 / food.odds) continue;
       gained.push(food.name);
       save.inventory[food.name] = (save.inventory[food.name] || 0) + 1;
     }
@@ -2445,9 +2454,15 @@
     return Number(odds).toLocaleString();
   }
 
+  function foodOddsLabel(tier) {
+    if (tier.runReward) return `1 in ${formatOdds(tier.odds)} per run (no luck bonuses)`;
+    if (tier.baseName && tierByName[tier.baseName].runReward) return "Craft only";
+    return `1 in ${formatOdds(tier.odds)}`;
+  }
+
   function tierStatsLabel(tier) {
     const rarity = rarityById[tier.rarity];
-    const oddsText = ` · 1 in ${formatOdds(tier.odds)}`;
+    const oddsText = ` · ${foodOddsLabel(tier)}`;
     return `${tier.emoji} ${tier.name} · ${rarity.label}${variantLabel(tier)}${oddsText} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
   }
 
@@ -2559,7 +2574,9 @@
     const rarity = rarityById[tier.rarity];
     const count = ownedCount(tier.name);
     const detailParts = [
-      `1/${formatOdds(tier.odds)}`,
+      tier.runReward || (tier.baseName && tierByName[tier.baseName].runReward)
+        ? foodOddsLabel(tier)
+        : `1/${formatOdds(tier.odds)}`,
       `pts ${tier.multiplier}x`,
       `grw ${tier.growth}x`,
       `spd ${displaySpeed(tier).toFixed(2)}`,
@@ -2570,7 +2587,7 @@
       "inv-item " +
       variantClass(tier) +
       (save.equipped === tier.name ? " equipped" : "");
-    tile.title = `${tier.name} · ${rarity.label}${variantLabel(tier)} · 1 in ${formatOdds(tier.odds)} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
+    tile.title = `${tier.name} · ${rarity.label}${variantLabel(tier)} · ${foodOddsLabel(tier)} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
 
     tile.innerHTML = `
       <span class="count">×${count}</span>
@@ -3124,7 +3141,7 @@
           <span class="pull-rarity rarity-${tier.rarity}">${rarity.label}</span>
           ${isNew ? `<span class="pull-new">New</span>` : ""}
         </span>
-        <span class="pull-odds">1 in ${formatOdds(tier.odds)}</span>
+        <span class="pull-odds">${foodOddsLabel(tier)}</span>
       `;
       pullResultsEl.appendChild(row);
     }
@@ -3158,8 +3175,8 @@
 
     overlayTitle.textContent = wipedOut ? "Wiped Out!" : "Run Ended";
     const diamondText = `${earned.toLocaleString()} diamond${earned === 1 ? "" : "s"}`;
-    const bankText = earned
-      ? `Banked ${earned} food${earned === 1 ? "" : "s"} and ${diamondText} (rarest first):`
+    const bankText = banked.length
+      ? `Banked ${banked.length} food${banked.length === 1 ? "" : "s"} and ${diamondText} (rarest first):`
       : `No new foods this run. ${diamondText}.`;
     overlayMsg.textContent = wipedOut
       ? `A rival ate you. ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`
