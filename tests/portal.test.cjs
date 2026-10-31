@@ -105,7 +105,7 @@ test('multiplayer guests enter on their reported contact before smoothing catche
   assert.equal(guest.zone, 'arena');
 });
 
-test('portal uses full, flat rings with a visible rotating highlight and no 3D glow', async () => {
+test('portal has a marked spinning O, a raised 3D rim, and a flat glow', async () => {
   const THREE = await import(pathToFileURL(path.join(root, 'vendor/three.module.js')).href);
   const g = boot();
   Object.assign(g.ctx, {
@@ -116,15 +116,21 @@ test('portal uses full, flat rings with a visible rotating highlight and no 3D g
   const lobby = g.buildLobby(THREE);
   const portal = lobby.portalRing.parent;
   for (const mesh of portal.children.filter(child => child.isMesh)) {
+    if (mesh === lobby.portalRing) continue;
     assert.ok(['RingGeometry', 'CircleGeometry'].includes(mesh.geometry.type));
-    assert.ok(mesh.position.y < 2, 'portal surfaces stay on the floor');
+    assert.ok(mesh.position.y < 2, 'inner ring and glow stay on the floor');
   }
   assert.equal(lobby.portalSwirl.geometry.parameters.thetaLength, Math.PI * 2);
   assert.equal(lobby.portalGlow.geometry.type, 'RingGeometry');
-  assert.equal(lobby.portalRing.geometry.parameters.outerRadius, g.PORTAL_RADIUS);
+  assert.equal(lobby.portalRing.geometry.type, 'TorusGeometry');
+  assert.ok(lobby.portalRing.position.y > 8, 'outer rim is raised above the floor');
+  const rim = lobby.portalRing.geometry.parameters;
+  assert.equal(rim.radius + rim.tube, g.PORTAL_RADIUS, 'collision radius matches the rim outer edge');
+  assert.ok(lobby.portalRing.material.isMeshStandardMaterial);
   const colors = lobby.portalSwirl.geometry.getAttribute('color');
   const shades = Array.from({length: colors.count}, (_, i) => colors.getX(i));
-  assert.ok(Math.max(...shades) - Math.min(...shades) > 0.4, 'full ring has a moving highlight');
+  assert.ok(Math.max(...shades) - Math.min(...shades) > 0.8, 'blue markings make the spin obvious');
+  assert.ok(Array.from({length: colors.count}, (_, i) => colors.getZ(i) - colors.getX(i)).some(delta => delta > 0.7), 'markings are blue');
   g.ctx.view = {arenaGroup: {}, lobby};
   g.syncLobbyScene(0);
   const initial = lobby.portalSwirl.rotation.z;

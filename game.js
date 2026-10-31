@@ -2136,8 +2136,8 @@
     const lobby = view.lobby;
     lobby.group.visible = inLobby;
     if (!inLobby) return;
-    lobby.portalSwirl.rotation.z = t * 1.6;
-    lobby.portalRing.material.opacity = 0.75 + Math.sin(t * 3) * 0.25;
+    lobby.portalSwirl.rotation.z = t * 2.2;
+    lobby.portalRing.material.emissiveIntensity = 0.75 + Math.sin(t * 3) * 0.25;
     lobby.portalGlow.material.opacity = 0.12 + (Math.sin(t * 2) + 1) * 0.05;
     lobby.padRing.material.opacity = state.onShopPad ? 0.95 : 0.55 + Math.sin(t * 2.4) * 0.2;
     lobby.craftPadRing.material.opacity = state.onCraftPad ? 0.95 : 0.55 + Math.sin(t * 2.2) * 0.2;
@@ -2191,26 +2191,24 @@
     portalDisc.rotation.x = -Math.PI / 2;
     portalDisc.position.y = 0.8;
     const portalRing = new THREE.Mesh(
-      new THREE.RingGeometry(PORTAL_RADIUS - 8, PORTAL_RADIUS, 96),
-      new THREE.MeshBasicMaterial({
+      new THREE.TorusGeometry(PORTAL_RADIUS - 8, 8, 16, 96),
+      new THREE.MeshStandardMaterial({
         color: 0xbfe6ff,
-        transparent: true,
-        opacity: 0.9,
-        side: THREE.DoubleSide,
-        depthWrite: false,
+        emissive: 0x4aa8ff,
+        emissiveIntensity: 0.9,
+        roughness: 0.3,
       })
     );
     portalRing.rotation.x = -Math.PI / 2;
-    portalRing.position.y = 1;
+    portalRing.position.y = 8.5;
     const swirlGeometry = new THREE.RingGeometry(PORTAL_RADIUS * 0.35, PORTAL_RADIUS * 0.62, 96);
-    // A gentle highlight makes a complete circle's rotation visible, without
-    // cutting a gap into it or tilting it off the ground.
+    // Blue markings make the O's spin visible while keeping a complete ring.
     const positions = swirlGeometry.getAttribute("position");
     const colors = new Float32Array(positions.count * 3);
     for (let i = 0; i < positions.count; i++) {
       const angle = Math.atan2(positions.getY(i), positions.getX(i));
-      const brightness = 0.55 + 0.45 * (Math.cos(angle) + 1) / 2;
-      colors.set([brightness, brightness, brightness], i * 3);
+      const stripe = Math.pow(Math.max(0, Math.cos(angle * 3)), 12);
+      colors.set([1 - stripe * 0.85, 1 - stripe * 0.55, 1 - stripe * 0.1], i * 3);
     }
     swirlGeometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     const portalSwirl = new THREE.Mesh(
@@ -2219,7 +2217,7 @@
         color: 0xffffff,
         vertexColors: true,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.95,
         side: THREE.DoubleSide,
         depthWrite: false,
       })
