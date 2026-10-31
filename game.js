@@ -3004,7 +3004,7 @@
     const extras = Object.entries(BENTO_CHANCE_PER_100_LUCK)
       .map(([id]) => `+${(chances[id] - BENTO_BASE_CHANCES[id]).toFixed(1)}% ${rarityById[id].label.toLowerCase()}`)
       .join(" and ");
-    return `Your +${Math.round(hundreds * 100).toLocaleString()}% permanent luck adds ${extras}, taken only from Rare.`;
+    return `Your +${Math.round(hundreds * 100).toLocaleString()}% permanent luck adds ${extras}.`;
   }
 
   function renderBento() {

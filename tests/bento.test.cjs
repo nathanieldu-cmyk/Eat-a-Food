@@ -22,7 +22,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=176' },
+      currentScript: { src: 'game.js?v=177' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -208,7 +208,7 @@ test('Legendary and Mythic luck bonuses reduce only Rare; Epic remains 24.5%', (
       g.save.activePotions.luck = { endsAt: Date.now() + 60000, stacks: 5 };
       assert.equal(JSON.stringify(g.bentoRarityChances()), beforePotion);
       assert.match(g.bentoOddsHtml(), /Epic 24.5%/);
-      assert.match(g.bentoLuckLine(), /taken only from Rare/);
+      assert.match(g.bentoLuckLine(), /% mythic\.$/);
       if (odds.rare === 0) assert.match(g.bentoLuckLine(), /adds \+61.7% legendary and \+12.3% mythic/);
     }
   }
