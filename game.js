@@ -3465,11 +3465,11 @@
       if (!addBento()) break;
       addedBentos += 1;
     }
-    const bentoText =
-      (addedBentos
-        ? ` 🍱 You earned ${addedBentos} bento box${addedBentos === 1 ? "" : "es"}! Check the shop to unlock them.`
-        : "") +
-      (addedBentos < bentoCount ? " 🍱 Inventory is full." : "");
+    const bentoText = bentoCount
+      ? addedBentos < bentoCount
+        ? ` 🍱 You earned ${bentoCount} bento box${bentoCount === 1 ? "" : "es"}, inventory is full.`
+        : ` 🍱 You earned ${bentoCount} bento box${bentoCount === 1 ? "" : "es"}! Check the shop to unlock them.`
+      : "";
     persistSave();
     renderDiamonds();
     renderPotionStatus();

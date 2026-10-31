@@ -22,7 +22,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=175' },
+      currentScript: { src: 'game.js?v=176' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -112,7 +112,7 @@ test('one reward total per run regardless of luck, role or wipeout; counts and s
             assert.equal(g.save.bento.locked, expected);
             assert.equal(calls, 1);
             assert.equal(g.save.diamonds, earned);
-            if (expected) assert.ok(g.elements.get('overlay-msg').textContent.includes(`You earned ${expected} bento box`));
+            if (expected) assert.ok(g.elements.get('overlay-msg').textContent.includes(`You earned ${expectedCount(earned, minimum, maximum, roll)} bento box`));
             g.endRun(wipedOut);
             assert.equal(calls, 1, 'ending twice must not roll twice');
             const saved = JSON.parse(g.storage.get('sprinkleFeastSave'));
@@ -138,9 +138,9 @@ test('full and partially full inventories reject extra run boxes and show Invent
     assert.equal(g.bentoInventoryCount(), locked + ready + accepted);
     assert.equal(g.save.bento.ready, ready);
     const message = g.elements.get('overlay-msg').textContent;
-    assert.equal(message.includes('Inventory is full.'), accepted < 4);
-    if (accepted) assert.ok(message.includes(`You earned ${accepted} bento box`));
-    else assert.ok(!message.includes('You earned'), 'rejected boxes are not reported as received');
+    assert.equal(message.includes('inventory is full.'), accepted < 4);
+    if (accepted < 4) assert.ok(message.endsWith('You earned 4 bento boxes, inventory is full.'));
+    else assert.ok(message.includes('You earned 4 bento boxes!'));
     const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
     assert.equal(reloaded.bentoInventoryCount(), locked + ready + accepted);
   }
@@ -211,5 +211,26 @@ test('Legendary and Mythic luck bonuses reduce only Rare; Epic remains 24.5%', (
       assert.match(g.bentoLuckLine(), /taken only from Rare/);
       if (odds.rare === 0) assert.match(g.bentoLuckLine(), /adds \+61.7% legendary and \+12.3% mythic/);
     }
+  }
+});
+
+
+test('full inventory message shows the rolled reward count and correct singular or plural', () => {
+  for (const [foods, roll, expected] of [
+    [0, 0.1, 'You earned 1 bento box, inventory is full.'],
+    [50, 0.1, 'You earned 3 bento boxes, inventory is full.'],
+    [1000, 0.1, 'You earned 13 bento boxes, inventory is full.'],
+    [0, 0.9, null],
+  ]) {
+    const g = boot();
+    g.save.bento.ready = 5;
+    g.state.running = true;
+    g.state.foodsEarned = foods;
+    g.math.random = () => roll;
+    g.endRun();
+    const message = g.elements.get('overlay-msg').textContent;
+    if (expected) assert.ok(message.endsWith(expected), message);
+    else assert.ok(!message.includes('inventory is full'));
+    assert.equal(g.bentoInventoryCount(), 5);
   }
 });
