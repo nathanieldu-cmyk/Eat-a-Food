@@ -982,6 +982,21 @@
     };
   }
 
+  function touchesPortal(food, from = food, to = food) {
+    // Test the food's outer ring against the portal's visible edge, including
+    // the movement between frames so fast foods cannot skip over it.
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const along = lengthSquared
+      ? Math.max(0, Math.min(1, ((PORTAL_SPOT.x - from.x) * dx + (PORTAL_SPOT.y - from.y) * dy) / lengthSquared))
+      : 0;
+    const nearestX = from.x + dx * along;
+    const nearestY = from.y + dy * along;
+    return Math.hypot(nearestX - PORTAL_SPOT.x, nearestY - PORTAL_SPOT.y)
+      <= PORTAL_RADIUS + ringReach(food) + 0.000001;
+  }
+
   // Returns true when the player walked into the portal and a run started.
   function updateLobby(dt) {
     if (net.role === "guest") {
@@ -996,6 +1011,7 @@
       if (net.role && state.player) state.player.netName = net.name;
     }
     const food = state.player;
+    const previous = { x: food.x, y: food.y };
     const blocked = applyLobbySteer(food, dt, null);
     // CPUs keep going only while someone is still in the run.
     if (net.role === "host" && arenaHumans().length > 0) {
@@ -1007,7 +1023,7 @@
     }
     if (blocked) return false;
 
-    if (dist(food, PORTAL_SPOT) < PORTAL_RADIUS * 0.8) {
+    if (touchesPortal(food, previous)) {
       startRun();
       if (state.running) return true;
       spawnLobbyPlayer();
@@ -1030,9 +1046,15 @@
   function stepLobbyGuests(dt) {
     for (const human of net.humans.values()) {
       if (human.zone !== "lobby") continue;
+      const previous = { x: human.x, y: human.y };
       followTarget(human, dt);
       clampToLobby(human);
-      if (dist(human, PORTAL_SPOT) < PORTAL_RADIUS * 0.8) enterArena(human);
+      // Use the guest's reported position rather than waiting for visual
+      // smoothing to catch up after they have already touched the portal.
+      const reported = Number.isFinite(human.tx) && Number.isFinite(human.ty)
+        ? { x: human.tx, y: human.ty }
+        : human;
+      if (touchesPortal(human, previous, reported)) enterArena(human);
     }
   }
 
@@ -2115,8 +2137,8 @@
     lobby.group.visible = inLobby;
     if (!inLobby) return;
     lobby.portalSwirl.rotation.z = t * 1.6;
-    lobby.portalRing.material.emissiveIntensity = 0.75 + Math.sin(t * 3) * 0.25;
-    lobby.beam.material.opacity = 0.12 + (Math.sin(t * 2) + 1) * 0.05;
+    lobby.portalRing.material.opacity = 0.75 + Math.sin(t * 3) * 0.25;
+    lobby.portalGlow.material.opacity = 0.12 + (Math.sin(t * 2) + 1) * 0.05;
     lobby.padRing.material.opacity = state.onShopPad ? 0.95 : 0.55 + Math.sin(t * 2.4) * 0.2;
     lobby.craftPadRing.material.opacity = state.onCraftPad ? 0.95 : 0.55 + Math.sin(t * 2.2) * 0.2;
     lobby.craftGem.rotation.y = t * 1.4;
@@ -2169,30 +2191,43 @@
     portalDisc.rotation.x = -Math.PI / 2;
     portalDisc.position.y = 0.8;
     const portalRing = new THREE.Mesh(
-      new THREE.TorusGeometry(PORTAL_RADIUS, 8, 12, 96),
-      new THREE.MeshStandardMaterial({
+      new THREE.RingGeometry(PORTAL_RADIUS - 8, PORTAL_RADIUS, 96),
+      new THREE.MeshBasicMaterial({
         color: 0xbfe6ff,
-        emissive: 0x4aa8ff,
-        emissiveIntensity: 0.9,
-        roughness: 0.3,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+        depthWrite: false,
       })
     );
-    portalRing.rotation.x = Math.PI / 2;
-    portalRing.position.y = 5;
+    portalRing.rotation.x = -Math.PI / 2;
+    portalRing.position.y = 1;
+    const swirlGeometry = new THREE.RingGeometry(PORTAL_RADIUS * 0.35, PORTAL_RADIUS * 0.62, 96);
+    // A gentle highlight makes a complete circle's rotation visible, without
+    // cutting a gap into it or tilting it off the ground.
+    const positions = swirlGeometry.getAttribute("position");
+    const colors = new Float32Array(positions.count * 3);
+    for (let i = 0; i < positions.count; i++) {
+      const angle = Math.atan2(positions.getY(i), positions.getX(i));
+      const brightness = 0.55 + 0.45 * (Math.cos(angle) + 1) / 2;
+      colors.set([brightness, brightness, brightness], i * 3);
+    }
+    swirlGeometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     const portalSwirl = new THREE.Mesh(
-      new THREE.RingGeometry(PORTAL_RADIUS * 0.35, PORTAL_RADIUS * 0.62, 48, 1, 0, Math.PI * 1.4),
+      swirlGeometry,
       new THREE.MeshBasicMaterial({
         color: 0xffffff,
+        vertexColors: true,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.75,
         side: THREE.DoubleSide,
         depthWrite: false,
       })
     );
     portalSwirl.rotation.x = -Math.PI / 2;
     portalSwirl.position.y = 1.2;
-    const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(PORTAL_RADIUS * 0.92, PORTAL_RADIUS, 150, 48, 1, true),
+    const portalGlow = new THREE.Mesh(
+      new THREE.RingGeometry(PORTAL_RADIUS * 0.82, PORTAL_RADIUS, 96),
       new THREE.MeshBasicMaterial({
         color: 0x7ec8ff,
         transparent: true,
@@ -2202,12 +2237,13 @@
         blending: THREE.AdditiveBlending,
       })
     );
-    beam.position.y = 75;
+    portalGlow.rotation.x = -Math.PI / 2;
+    portalGlow.position.y = 0.9;
     const portalLabel = makeLabelSprite(THREE);
     writeLabel(portalLabel, "Start Run");
     portalLabel.scale.multiplyScalar(2);
     portalLabel.position.y = 190;
-    portal.add(portalDisc, portalRing, portalSwirl, beam, portalLabel);
+    portal.add(portalDisc, portalRing, portalSwirl, portalGlow, portalLabel);
     group.add(portal);
 
     const padRing = new THREE.Mesh(
@@ -2349,7 +2385,7 @@
     bench.add(craftLabel);
     group.add(bench);
 
-    return { group, portalRing, portalSwirl, beam, padRing, craftPadRing, craftGem };
+    return { group, portalRing, portalSwirl, portalGlow, padRing, craftPadRing, craftGem };
   }
 
   function updateCamera() {
