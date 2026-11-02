@@ -3002,10 +3002,15 @@
     // One shared roll makes these chances cumulative: 50% for at least one
     // bonus box and 25% for both. Luck never changes run rewards.
     const roll = Math.random();
-    if (earned < 10) return roll < BENTO_RUN_BASE_CHANCE ? 1 : 0;
-    const guaranteed = earned >= 100
-      ? Math.floor(earned / 100) + 1
-      : earned >= 50 ? 1 : 0;
+    if (earned < 1) return 0;
+    if (earned < 5) return roll < BENTO_RUN_BASE_CHANCE ? 1 : 0;
+    if (earned < 10) return roll < 1 / 2 ? 1 : 0;
+    const guaranteed = earned >= 200
+      ? 5 + Math.floor((earned - 200) / 100)
+      : earned >= 150 ? 4
+      : earned >= 100 ? 3
+      : earned >= 50 ? 2
+      : earned >= 25 ? 1 : 0;
     return guaranteed + (roll < 1 / 4 ? 2 : roll < 1 / 2 ? 1 : 0);
   }
 

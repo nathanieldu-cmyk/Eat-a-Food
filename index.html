@@ -151,11 +151,16 @@
         <summary>Bento Box run rewards</summary>
         <p>Each run uses its highest reached food tier. Chances below mean at least that many boxes.</p>
         <ul>
-          <li>0–9 foods: 1 in 4 chance of 1 box.</li>
-          <li>10–49 foods: 1 in 2 chance of at least 1 box; 1 in 4 chance of 2 boxes.</li>
-          <li>50–99 foods: 1 guaranteed; 1 in 2 chance of at least 2; 1 in 4 chance of 3.</li>
-          <li>100–199 foods: 2 guaranteed; 1 in 2 chance of at least 3; 1 in 4 chance of 4.</li>
-          <li>Every additional 100 foods adds 1 guaranteed box: at 200 foods, 3 guaranteed with chances for 4 or 5; at 300, 4 guaranteed with chances for 5 or 6.</li>
+          <li>0 foods: no boxes.</li>
+          <li>1–4 foods: 1 in 4 chance of 1 box.</li>
+          <li>5–9 foods: 1 in 2 chance of 1 box.</li>
+          <li>10–24 foods: 1 in 2 chance of at least 1 box; 1 in 4 chance of 2 boxes.</li>
+          <li>25–49 foods: 1 guaranteed; 1 in 2 chance of at least 2; 1 in 4 chance of 3.</li>
+          <li>50–99 foods: 2 guaranteed; 1 in 2 chance of at least 3; 1 in 4 chance of 4.</li>
+          <li>100–149 foods: 3 guaranteed; 1 in 2 chance of at least 4; 1 in 4 chance of 5.</li>
+          <li>150–199 foods: 4 guaranteed; 1 in 2 chance of at least 5; 1 in 4 chance of 6.</li>
+          <li>200–299 foods: 5 guaranteed; 1 in 2 chance of at least 6; 1 in 4 chance of 7.</li>
+          <li>Every additional 100 foods after 200 adds 1 guaranteed box. At 300 foods, 6 guaranteed with chances for 7 or 8. At 400 foods, 7 guaranteed with chances for 8 or 9.</li>
         </ul>
       </details>
       <div id="bento-slot" class="shop-list"></div>
@@ -179,6 +184,6 @@
   </div>
 
   <script src="foods.js?v=32783f4f1709"></script>
-  <script src="game.js?v=182"></script>
+  <script src="game.js?v=183"></script>
 </body>
 </html>

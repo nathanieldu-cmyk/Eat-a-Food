@@ -22,7 +22,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=181' },
+      currentScript: { src: 'game.js?v=183' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -61,14 +61,17 @@ function boot(saved) {
 
 
 const thresholds = [
-  [0, 0, 1], [9, 0, 1], [10, 0, 2], [49, 0, 2],
-  [50, 1, 3], [99, 1, 3], [100, 2, 4], [199, 2, 4],
-  [200, 3, 5], [299, 3, 5], [300, 4, 6], [399, 4, 6],
-  [400, 5, 7], [999, 10, 12], [1000, 11, 13],
+  [0, 0, 0], [1, 0, 1], [4, 0, 1], [5, 0, 1], [9, 0, 1],
+  [10, 0, 2], [24, 0, 2], [25, 1, 3], [49, 1, 3],
+  [50, 2, 4], [99, 2, 4], [100, 3, 5], [149, 3, 5],
+  [150, 4, 6], [199, 4, 6], [200, 5, 7], [299, 5, 7],
+  [300, 6, 8], [399, 6, 8], [400, 7, 9], [999, 12, 14], [1000, 13, 15],
 ];
 
 function expectedCount(earned, minimum, maximum, roll) {
-  if (earned < 10) return roll < 0.25 ? 1 : 0;
+  if (earned < 1) return 0;
+  if (earned < 5) return roll < 0.25 ? 1 : 0;
+  if (earned < 10) return roll < 0.5 ? 1 : 0;
   return roll < 0.25 ? maximum : roll < 0.5 ? minimum + 1 : minimum;
 }
 
@@ -84,7 +87,7 @@ test('all food milestones and exact 25%/50% probability boundaries', () => {
       g.math.random = () => n / 1000;
       outcomes.push(g.rollRunBentoCount(earned));
     }
-    assert.equal(outcomes.filter(n => n >= maximum).length, 250);
+    assert.equal(outcomes.filter(n => n >= maximum).length, earned < 1 ? 1000 : earned < 10 && earned >= 5 ? 500 : 250);
     if (earned >= 10) assert.equal(outcomes.filter(n => n >= minimum + 1).length, 500);
     assert.equal(outcomes.filter(n => n >= minimum).length, 1000);
   }
@@ -132,15 +135,15 @@ test('full and partially full inventories reject extra run boxes and show Invent
     g.save.bento.unlockStartedAt = locked ? Date.now() : 0;
     g.state.running = true;
     g.state.foodsEarned = 100;
-    g.math.random = () => 0.1; // Four boxes rolled at this milestone.
+    g.math.random = () => 0.1; // Five boxes rolled at this milestone.
     g.endRun();
-    const accepted = Math.min(4, 5 - locked - ready);
+    const accepted = Math.min(5, 5 - locked - ready);
     assert.equal(g.bentoInventoryCount(), locked + ready + accepted);
     assert.equal(g.save.bento.ready, ready);
     const message = g.elements.get('overlay-msg').textContent;
-    assert.equal(message.includes('inventory is full.'), accepted < 4);
-    if (accepted < 4) assert.ok(message.endsWith('You earned 4 bento boxes, inventory is full.'));
-    else assert.ok(message.includes('You earned 4 bento boxes!'));
+    assert.equal(message.includes('inventory is full.'), accepted < 5);
+    if (accepted < 5) assert.ok(message.endsWith('You earned 5 bento boxes, inventory is full.'));
+    else assert.ok(message.includes('You earned 5 bento boxes!'));
     const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
     assert.equal(reloaded.bentoInventoryCount(), locked + ready + accepted);
   }
@@ -217,9 +220,9 @@ test('Legendary and Mythic luck bonuses reduce only Rare; Epic remains 24.5%', (
 
 test('full inventory message shows the rolled reward count and correct singular or plural', () => {
   for (const [foods, roll, expected] of [
-    [0, 0.1, 'You earned 1 bento box, inventory is full.'],
-    [50, 0.1, 'You earned 3 bento boxes, inventory is full.'],
-    [1000, 0.1, 'You earned 13 bento boxes, inventory is full.'],
+    [1, 0.1, 'You earned 1 bento box, inventory is full.'],
+    [25, 0.1, 'You earned 3 bento boxes, inventory is full.'],
+    [1000, 0.1, 'You earned 15 bento boxes, inventory is full.'],
     [0, 0.9, null],
   ]) {
     const g = boot();
