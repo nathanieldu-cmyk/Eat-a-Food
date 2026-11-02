@@ -931,6 +931,17 @@ h1 {
 
 .peanut-meter-hint.active {
   display: flex;
+  animation: peanut-hint-flicker 2.1s infinite;
+}
+
+@keyframes peanut-hint-flicker {
+  0%, 25%, 38%, 50%, 100% { opacity: 1; text-shadow: 0 0 8px rgba(255, 209, 102, 0.55); }
+  30%, 43% { opacity: 0.35; text-shadow: none; }
+  55%, 60% { opacity: 0.65; text-shadow: 0 0 3px rgba(255, 209, 102, 0.3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peanut-meter-hint.active { animation: none; }
 }
 
 .peanut-meter-arrow {
