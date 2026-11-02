@@ -31,7 +31,7 @@ window.FOOD_LIST = [
     { name: "Corn", emoji: "🌽", rarity: "uncommon", points: 1.65, growth: 1.62, speed: 0.92, odds: 50, model: "corn-cartoon3.glb", color: "#f2d04a", rim: "#6aaa32" },
 
     // Rare — avg speed ~1.46
-    { name: "Cheese", emoji: "🧀", rarity: "rare", points: 3.6, growth: 3.35, speed: 1.7, odds:54000, model: "cheese-cartoon3.glb", color: "#ffe08a", rim: "#e0b040" },
+    { name: "Cheese", emoji: "🧀", rarity: "rare", points: 3.6, growth: 3.35, speed: 1.7, odds: 5000, model: "cheese-cartoon3.glb", color: "#ffe08a", rim: "#e0b040" },
     { name: "Potato", emoji: "🥔", rarity: "rare", points: 3.5, growth: 3.1, speed: 1.18, odds: 4000, model: "potato-cartoon3.glb", color: "#d4a05a", rim: "#a87838" },
     { name: "Coffee", emoji: "☕️", rarity: "rare", points: 3.4, growth: 3.2, speed: 1.05, odds: 3500, model: "coffee-cartoon3.glb", color: "#6b3e2e", rim: "#f4efe6" },
     { name: "Pancakes", emoji: "🥞", rarity: "rare", points: 3.25, growth: 2.95, speed: 1.88, odds:3000, model: "pancakes-cartoon3.glb", color: "#f0c87a", rim: "#e8a04a" },
