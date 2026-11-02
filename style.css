@@ -917,6 +917,27 @@ h1 {
   transition: width 0.25s ease;
 }
 
+.peanut-meter-hint {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: -4px 0 0;
+  color: #ffd166;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.peanut-meter-hint.active {
+  display: flex;
+}
+
+.peanut-meter-arrow {
+  font-size: 1.45rem;
+  line-height: 0.8;
+}
+
 .food-types {
   display: flex;
   flex-wrap: wrap;

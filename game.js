@@ -17,6 +17,7 @@
   const foodCountEl = document.getElementById("food-count");
   const foodFillEl = document.getElementById("food-fill");
   const foodNextEl = document.getElementById("food-next");
+  const peanutMeterHintEl = document.getElementById("peanut-meter-hint");
   const equippedLineEl = document.getElementById("equipped-line");
   const inventoryGridEl = document.getElementById("inventory-grid");
   const inventoryScrollEl = document.getElementById("inventory-scroll");
@@ -409,6 +410,7 @@
       inventory: { Peanut: 1 },
       equipped: "Peanut",
       bestRun: 0,
+      carryPoints: 0,
       diamonds: 0,
       potions: starterPotions(),
       activePotions: emptyActivePotions(),
@@ -468,6 +470,9 @@
         next.equipped = pickBestFromInventory(next.inventory).name;
       }
       next.bestRun = Math.max(0, Number(parsed.bestRun || 0));
+      const carried = Number(parsed.carryPoints);
+      next.carryPoints = Number.isFinite(carried) && carried >= 0
+        ? carried % POINTS_PER_FOOD : 0;
       next.diamonds = Math.max(0, Math.floor(Number(parsed.diamonds) || 0));
       next.potions = readPotionBag(parsed.potions);
       next.activePotions = readActivePotions(parsed.activePotions, parsed.readyPotions);
@@ -1333,6 +1338,10 @@
 
   function foodsFromPoints(pts) {
     return Math.floor((pts * foodGainFactor()) / POINTS_PER_FOOD);
+  }
+
+  function restoreCarriedPoints() {
+    state.points = save.carryPoints / foodGainFactor();
   }
 
   function addPoints(amount) {
@@ -3294,6 +3303,10 @@
     foodCountEl.textContent = String(state.foodsEarned);
     foodFillEl.style.width = `${(into / POINTS_PER_FOOD) * 100}%`;
     foodNextEl.textContent = `${remaining.toLocaleString()} pts`;
+    const tier = state.player?.tier || equippedTier();
+    const isPeanut = (tier.baseName || tier.name) === "Peanut";
+    peanutMeterHintEl.classList.toggle("active", state.running && isPeanut);
+    peanutMeterHintEl.setAttribute("aria-hidden", String(!(state.running && isPeanut)));
     renderEquippedUi();
   }
 
@@ -3414,12 +3427,12 @@
     state.onShopPad = false;
     state.onCraftPad = false;
     lobbyHintEl.classList.add("hidden");
-    state.points = 0;
     state.foodsEarned = 0;
     state.player = null;
     ensureWorld();
     const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
     state.player = createFood(equippedTier(), spot.x, spot.y, false);
+    restoreCarriedPoints();
     clampToArena(state.player);
     if (net.role) state.player.netName = net.name;
     spawnBetterRival(state.player);
@@ -3486,6 +3499,10 @@
     inventoryBtn.disabled = false;
     shopBtn.disabled = false;
     craftBtn.disabled = false;
+    peanutMeterHintEl.classList.remove("active");
+    peanutMeterHintEl.setAttribute("aria-hidden", "true");
+
+    save.carryPoints = (state.points * foodGainFactor()) % POINTS_PER_FOOD;
 
     const earned = state.foodsEarned;
     const seenBefore = new Set(Object.keys(save.discovered || {}));
@@ -3902,7 +3919,7 @@
     state.mode = "run";
     net.run = run;
     net.place = -1;
-    state.points = 0;
+    restoreCarriedPoints();
     state.foodsEarned = 0;
     state.particles = [];
     lobbyHintEl.classList.add("hidden");

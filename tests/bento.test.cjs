@@ -13,8 +13,9 @@ function boot(saved) {
   if (saved) storage.set('sprinkleFeastSave', JSON.stringify(saved));
   const elements = new Map();
   const element = () => ({
-    textContent: '', innerHTML: '', children: [],
-    classList: { add() {}, remove() {} },
+    textContent: '', innerHTML: '', children: [], style: {},
+    classList: { classes: new Set(), add(name) { this.classes.add(name); }, remove(name) { this.classes.delete(name); }, toggle(name, on) { if (on) this.classes.add(name); else this.classes.delete(name); }, contains(name) { return this.classes.has(name); } },
+    setAttribute() {},
     appendChild(child) { this.children.push(child); },
   });
   const math = Object.create(Math);
@@ -22,7 +23,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=183' },
+      currentScript: { src: 'game.js?v=184' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -51,7 +52,7 @@ function boot(saved) {
     renderPotionStatus = () => {};
     renderShop = () => {};
     globalThis.api = { save, state, net, bankPendingFoods, pullFood,
-      loadSave, endRun, tierByName, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
+      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
     return;
     ${marker}
   `), context);
@@ -125,6 +126,44 @@ test('one reward total per run regardless of luck, role or wipeout; counts and s
       }
     }
   }
+});
+
+test('unfinished food progress survives a run and a reload', () => {
+  const first = boot();
+  first.state.running = true;
+  first.state.player = { tier: first.tierByName.Peanut };
+  first.addPoints(1350);
+  assert.equal(first.state.foodsEarned, 1);
+  assert.equal(first.elements.get('food-fill').style.width, '35%');
+  assert.equal(first.elements.get('peanut-meter-hint').classList.contains('active'), true);
+  first.endRun();
+  assert.equal(first.save.carryPoints, 350);
+  assert.equal(first.elements.get('peanut-meter-hint').classList.contains('active'), false);
+
+  const second = boot(JSON.parse(first.storage.get('sprinkleFeastSave')));
+  second.state.running = true;
+  second.state.player = { tier: second.tierByName.Peanut };
+  second.restoreCarriedPoints();
+  second.updateHud();
+  assert.equal(second.state.points, 350);
+  assert.equal(second.elements.get('food-fill').style.width, '35%');
+  second.addPoints(650);
+  assert.equal(second.state.foodsEarned, 1);
+  second.endRun();
+  assert.equal(second.save.carryPoints, 0);
+});
+
+test('carried bar progress remains the same after switching foods', () => {
+  const g = boot();
+  g.save.carryPoints = 750;
+  g.state.running = true;
+  g.state.player = { tier: g.tierByName.Cheese };
+  g.restoreCarriedPoints();
+  g.updateHud();
+  assert.equal(g.elements.get('food-fill').style.width, '75%');
+  assert.equal(g.elements.get('peanut-meter-hint').classList.contains('active'), false);
+  g.addPoints(250 / ((1 + g.tierByName.Cheese.multiplier) / 2));
+  assert.equal(g.state.foodsEarned, 1);
 });
 
 test('full and partially full inventories reject extra run boxes and show Inventory is full', () => {
