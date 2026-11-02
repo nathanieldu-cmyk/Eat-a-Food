@@ -82,6 +82,7 @@
   const CRAFT_PAD_RADIUS = 58;
   const CRAFT_STALL_RADIUS = 62;
   const RUN_CAMERA_DISTANCE = 480;
+  const BASE_FOOD_DRAW_RADIUS = 10 + Math.sqrt(10) * 2.2;
   const MIN_CAMERA_DISTANCE = 240;
   const MAX_CAMERA_DISTANCE = 1650 * MAP_SCALE;
   const POINTS_PER_FOOD = 1000;
@@ -2395,13 +2396,19 @@
     return { group, portalRing, portalSwirl, portalGlow, padRing, craftPadRing, craftGem };
   }
 
+  function cameraDistanceForFood(food, zoomFactor = 1) {
+    const proportional = RUN_CAMERA_DISTANCE * food.drawRadius() / BASE_FOOD_DRAW_RADIUS * zoomFactor;
+    return Math.min(MAX_CAMERA_DISTANCE, Math.max(MIN_CAMERA_DISTANCE, proportional));
+  }
+
   function updateCamera() {
     if (!view) return;
     if (state.player) {
       net.lastFocus = { x: state.player.x, y: state.player.y };
-      const reach = ringReach(state.player);
-      const needed = Math.max(RUN_CAMERA_DISTANCE, reach * 2.6);
-      if (view.distance < needed) view.distance = Math.min(MAX_CAMERA_DISTANCE, needed);
+      if (state.running) {
+        const target = cameraDistanceForFood(state.player, view.zoomFactor);
+        view.distance += (target - view.distance) * 0.12;
+      }
     }
     const focus = state.player
       ? { x: worldX(state.player.x), z: worldZ(state.player.y) }
@@ -2556,6 +2563,7 @@
       yaw: 0.55,
       pitch: 0.86,
       distance: state.running ? RUN_CAMERA_DISTANCE : LOBBY_CAMERA_DISTANCE,
+      zoomFactor: 1,
       dummy: new THREE.Object3D(),
       particleGeo: new THREE.SphereGeometry(3.2, 10, 8),
       particleMeshes: [],
@@ -3437,7 +3445,10 @@
     clampToArena(state.player);
     if (net.role) state.player.netName = net.name;
     spawnBetterRival(state.player);
-    if (view) view.distance = RUN_CAMERA_DISTANCE;
+    if (view) {
+      view.distance = RUN_CAMERA_DISTANCE;
+      view.zoomFactor = 1;
+    }
     updateHud();
     overlay.classList.add("hidden");
     endBtn.disabled = false;
@@ -3578,6 +3589,7 @@
       e.preventDefault();
       const zoom = Math.exp(e.deltaY * 0.0011);
       view.distance = Math.min(MAX_CAMERA_DISTANCE, Math.max(MIN_CAMERA_DISTANCE, view.distance * zoom));
+      if (state.running && state.player) view.zoomFactor = view.distance / cameraDistanceForFood(state.player);
     },
     { passive: false }
   );
@@ -3929,7 +3941,10 @@
     inventoryBtn.disabled = true;
     shopBtn.disabled = true;
     craftBtn.disabled = true;
-    if (view) view.distance = RUN_CAMERA_DISTANCE;
+    if (view) {
+      view.distance = RUN_CAMERA_DISTANCE;
+      view.zoomFactor = 1;
+    }
     updateHud();
     cancelAnimationFrame(previewId);
     cancelAnimationFrame(state.animId);
