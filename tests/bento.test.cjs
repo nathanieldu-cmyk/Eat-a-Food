@@ -23,7 +23,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=184' },
+      currentScript: { src: 'game.js?v=185' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -138,9 +138,14 @@ test('unfinished food progress survives a run and a reload', () => {
   assert.equal(first.elements.get('peanut-meter-hint').classList.contains('active'), true);
   first.endRun();
   assert.equal(first.save.carryPoints, 350);
+  assert.equal(first.elements.get('next-food').textContent, '350 / 1000');
+  assert.equal(first.elements.get('food-fill').style.width, '35%');
   assert.equal(first.elements.get('peanut-meter-hint').classList.contains('active'), false);
 
   const second = boot(JSON.parse(first.storage.get('sprinkleFeastSave')));
+  second.updateHud();
+  assert.equal(second.elements.get('next-food').textContent, '350 / 1000');
+  assert.equal(second.elements.get('food-fill').style.width, '35%');
   second.state.running = true;
   second.state.player = { tier: second.tierByName.Peanut };
   second.restoreCarriedPoints();
@@ -156,6 +161,9 @@ test('unfinished food progress survives a run and a reload', () => {
 test('carried bar progress remains the same after switching foods', () => {
   const g = boot();
   g.save.carryPoints = 750;
+  g.save.equipped = 'Cheese';
+  g.updateHud();
+  assert.equal(g.elements.get('food-fill').style.width, '75%');
   g.state.running = true;
   g.state.player = { tier: g.tierByName.Cheese };
   g.restoreCarriedPoints();

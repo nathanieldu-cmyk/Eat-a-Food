@@ -1331,8 +1331,8 @@
 
   // Half the multiplier affects food pulls: (1 + mult) / 2
   // e.g. mult 2 → 1.5x foods, mult 13 → 7x foods.
-  function foodGainFactor() {
-    const mult = state.player?.tier?.multiplier ?? equippedTier().multiplier;
+  function foodGainFactor(tier = state.player?.tier || equippedTier()) {
+    const mult = tier.multiplier;
     return ((1 + mult) / 2) * Math.pow(1.25, boostStacks("points"));
   }
 
@@ -2797,7 +2797,7 @@
     if (state.running || !tier || ownedCount(tier.name) <= 0) return;
     save.equipped = tier.name;
     persistSave();
-    renderEquippedUi();
+    updateHud();
     renderInventory();
   }
 
@@ -3295,8 +3295,9 @@
   }
 
   function updateHud() {
-    pointsEl.textContent = Math.floor(state.points).toLocaleString();
-    const effective = state.points * foodGainFactor();
+    const effective = state.running ? state.points * foodGainFactor() : save.carryPoints;
+    const shownPoints = state.running ? state.points : save.carryPoints / foodGainFactor(equippedTier());
+    pointsEl.textContent = Math.floor(shownPoints).toLocaleString();
     const into = effective % POINTS_PER_FOOD;
     const remaining = Math.max(0, Math.ceil(POINTS_PER_FOOD - into));
     nextFoodEl.textContent = `${Math.floor(into)} / ${POINTS_PER_FOOD}`;
@@ -3543,7 +3544,7 @@
     afterRunActionsEl.classList.remove("hidden");
     overlay.classList.remove("hidden");
     enterLobby();
-    renderEquippedUi();
+    updateHud();
     if (net.role === "host") broadcastSnap(true);
     draw();
     startLobbyLoop();
