@@ -3592,26 +3592,24 @@
     }
     const bentoCount = rollRunBentoCount(earned);
     const goldRewardCount = Math.min(bentoCount, rollRunGoldBentoCount(earned));
+    const normalBentoCount = bentoCount - goldRewardCount;
     const bentoRewards = Array.from({ length: bentoCount }, (_, i) => i < goldRewardCount ? "gold" : "normal");
     let addedBentos = 0;
     let goldBentos = 0;
-    let replacedBentos = 0;
     for (const type of bentoRewards) {
       const result = storeBento(type);
       if (result === "added") addedBentos += 1;
-      if (result === "replaced") replacedBentos += 1;
       if (result && type === "gold") goldBentos += 1;
     }
     advanceBento();
     for (const types of [save.bento.readyTypes, save.bento.lockedTypes]) {
       types.sort((a, b) => Number(b === "gold") - Number(a === "gold"));
     }
-    const replacedText = replacedBentos ? ` ${replacedBentos} normal Bento Box${replacedBentos === 1 ? " was" : "es were"} replaced with gold.` : "";
-    const goldText = (goldBentos ? ` 🌟 ${goldBentos} Bento Box${goldBentos === 1 ? "" : "es"} turned gold!` : "") + replacedText;
+    const goldText = goldBentos ? ` 🌟 ${goldBentos} Bento Box${goldBentos === 1 ? "" : "es"} turned gold!` : "";
     const bentoText = bentoCount
       ? addedBentos < bentoCount
-        ? ` 🍱 You earned ${bentoCount} bento box${bentoCount === 1 ? "" : "es"}, inventory is full.`
-        : ` 🍱 You earned ${bentoCount} bento box${bentoCount === 1 ? "" : "es"}! Check the shop to unlock them.`
+        ? ` 🍱 You earned ${normalBentoCount} normal bento box${normalBentoCount === 1 ? "" : "es"}, inventory is full.`
+        : ` 🍱 You earned ${normalBentoCount} normal bento box${normalBentoCount === 1 ? "" : "es"}! Check the shop to unlock them.`
       : "";
     persistSave();
     renderDiamonds();

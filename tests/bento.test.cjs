@@ -23,7 +23,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=193' },
+      currentScript: { src: 'game.js?v=194' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -270,8 +270,8 @@ test('two gold rewards replace normal boxes and get priority in every ready/lock
     const expected = [...Array(readyGold).fill('gold'), ...Array(ready - readyGold).fill('normal'),
       ...Array(2 - readyGold).fill('gold'), ...Array(3 - ready + readyGold).fill('normal')];
     assert.deepEqual(Array.from([...g.save.bento.readyTypes, ...g.save.bento.lockedTypes]), expected);
-    assert.match(g.elements.get('overlay-msg').textContent, /2 normal Bento Boxes were replaced with gold\./);
-    assert.ok(g.elements.get('overlay-msg').textContent.endsWith('You earned 8 bento boxes, inventory is full.'));
+    assert.ok(!g.elements.get('overlay-msg').textContent.includes('replaced'));
+    assert.ok(g.elements.get('overlay-msg').textContent.endsWith('You earned 6 normal bento boxes, inventory is full.'));
     const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
     assert.deepEqual(Array.from([...reloaded.save.bento.readyTypes, ...reloaded.save.bento.lockedTypes]), expected);
   }
@@ -289,7 +289,8 @@ test('gold rewards skip existing gold boxes and replace earlier normal slots', (
   g.endRun();
   assert.equal(g.bentoInventoryCount(), 5);
   assert.deepEqual(Array.from([...g.save.bento.readyTypes, ...g.save.bento.lockedTypes]), Array(5).fill('gold'));
-  assert.match(g.elements.get('overlay-msg').textContent, /3 normal Bento Boxes were replaced with gold\./);
+  assert.ok(!g.elements.get('overlay-msg').textContent.includes('replaced'));
+  assert.ok(g.elements.get('overlay-msg').textContent.endsWith('You earned 9 normal bento boxes, inventory is full.'));
 });
 
 test('food-based gold rewards fill spare slots and replace normal overflow boxes first', () => {
@@ -429,7 +430,8 @@ test('one reward-count roll plus at most one gold-quota roll regardless of luck,
             assert.equal(g.save.bento.locked, expected);
             assert.equal(calls, earned >= 25 ? 2 : 1);
             assert.equal(g.save.diamonds, earned);
-            if (expected) assert.ok(g.elements.get('overlay-msg').textContent.includes(`You earned ${expectedCount(earned, minimum, maximum, roll)} bento box`));
+            const [, guaranteedGold] = goldThresholds.findLast(([foods]) => foods <= earned);
+            if (expected) assert.ok(g.elements.get('overlay-msg').textContent.includes(`You earned ${rolled - guaranteedGold} normal bento box`));
             g.endRun(wipedOut);
             assert.equal(calls, earned >= 25 ? 2 : 1, 'ending twice must not roll twice');
             const saved = JSON.parse(g.storage.get('sprinkleFeastSave'));
@@ -502,8 +504,8 @@ test('full and partially full inventories reject extra run boxes and show Invent
     assert.equal(g.save.bento.ready, ready);
     const message = g.elements.get('overlay-msg').textContent;
     assert.equal(message.includes('inventory is full.'), accepted < 5);
-    if (accepted < 5) assert.ok(message.endsWith('You earned 5 bento boxes, inventory is full.'));
-    else assert.ok(message.includes('You earned 5 bento boxes!'));
+    if (accepted < 5) assert.ok(message.endsWith('You earned 5 normal bento boxes, inventory is full.'));
+    else assert.ok(message.includes('You earned 5 normal bento boxes!'));
     const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
     assert.equal(reloaded.bentoInventoryCount(), locked + ready + accepted);
   }
@@ -578,20 +580,24 @@ test('Legendary and Mythic luck bonuses reduce only Rare; Epic remains 24.5%', (
 });
 
 
-test('full inventory message shows the rolled reward count and correct singular or plural', () => {
+test('full inventory message shows only normal rewards with correct singular or plural and no replacement text', () => {
   for (const [foods, roll, expected] of [
-    [1, 0.1, 'You earned 1 bento box, inventory is full.'],
-    [25, 0.1, 'You earned 3 bento boxes, inventory is full.'],
-    [1000, 0.1, 'You earned 10 bento boxes, inventory is full.'],
+    [1, 0.1, 'You earned 1 normal bento box, inventory is full.'],
+    [25, 0.1, 'You earned 3 normal bento boxes, inventory is full.'],
+    [1000, 0.1, 'You earned 9 normal bento boxes, inventory is full.'],
+    [25, [0.9, 0], 'You earned 0 normal bento boxes, inventory is full.'],
+    [25, [0.3, 0], 'You earned 1 normal bento box, inventory is full.'],
     [0, 0.9, null],
   ]) {
     const g = boot();
     g.save.bento.ready = 5;
     g.state.running = true;
     g.state.foodsEarned = foods;
-    g.math.random = () => roll;
+    let calls = 0;
+    g.math.random = () => Array.isArray(roll) ? roll[calls++] : roll;
     g.endRun();
     const message = g.elements.get('overlay-msg').textContent;
+    assert.ok(!message.includes('replaced'));
     if (expected) assert.ok(message.endsWith(expected), message);
     else assert.ok(!message.includes('inventory is full'));
     assert.equal(g.bentoInventoryCount(), 5);
