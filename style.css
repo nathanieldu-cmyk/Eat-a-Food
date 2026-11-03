@@ -845,6 +845,94 @@ h1 {
   line-height: 1;
 }
 
+.food-icon {
+  position: relative;
+  isolation: isolate;
+  display: inline-block;
+  width: 1.45em;
+  height: 1.25em;
+  margin: 0 0.08em;
+  vertical-align: -0.16em;
+  line-height: 1;
+}
+
+.food-icon-emoji {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.food-icon-golden { --sparkle-color: #ffe36a; --sparkle-glow: #ffb800; }
+.food-icon-rainbow { --sparkle-color: #ff79d7; --sparkle-glow: #cc9eff; }
+.food-icon-shadow { --sparkle-color: #d1a0ff; --sparkle-glow: #8f3fff; }
+
+.food-icon-sparkles {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+}
+
+.food-icon-sparkle {
+  position: absolute;
+  font-size: 0.4em;
+  line-height: 1;
+  color: var(--sparkle-color);
+  text-shadow: 0 0 0.5em var(--sparkle-glow);
+  animation: food-icon-twinkle 2.8s ease-in-out infinite;
+}
+
+.food-icon-sparkle:nth-child(1) { left: 3%; top: -3%; animation-delay: -0.2s; }
+.food-icon-sparkle:nth-child(2) { right: -2%; top: 22%; animation-delay: -1.3s; }
+.food-icon-sparkle:nth-child(3) { right: 9%; bottom: -4%; animation-delay: -0.7s; }
+.food-icon-sparkle:nth-child(4) { left: 27%; bottom: -13%; animation-delay: -2.1s; }
+.food-icon-sparkle:nth-child(5) { left: -2%; top: 52%; animation-delay: -1.7s; }
+.food-icon-sparkle:nth-child(6) { left: 48%; top: -12%; animation-delay: -2.5s; }
+
+.food-icon-golden .food-icon-sparkle:nth-child(even) { --sparkle-color: #fff3bb; }
+.food-icon-rainbow .food-icon-sparkle:nth-child(1) { --sparkle-color: #ff7296; }
+.food-icon-rainbow .food-icon-sparkle:nth-child(2) { --sparkle-color: #ffb45d; }
+.food-icon-rainbow .food-icon-sparkle:nth-child(3) { --sparkle-color: #fff36a; }
+.food-icon-rainbow .food-icon-sparkle:nth-child(4) { --sparkle-color: #83ffb2; }
+.food-icon-rainbow .food-icon-sparkle:nth-child(5) { --sparkle-color: #70dfff; }
+.food-icon-rainbow .food-icon-sparkle:nth-child(6) { --sparkle-color: #ce94ff; }
+
+.food-icon-shadow::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -0.12em;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(10, 0, 20, 0.95) 12%, rgba(100, 37, 167, 0.65) 48%, transparent 73%);
+  animation: food-icon-void-halo 3.6s ease-in-out infinite;
+}
+
+.food-icon-shadow .food-icon-sparkle {
+  text-shadow: 0 0 0.15em #180025, 0 0 0.6em #a05aff;
+  animation-duration: 3.6s;
+}
+
+.food-icon-shadow .food-icon-sparkle:nth-child(even) { --sparkle-color: #8d51d1; }
+
+@keyframes food-icon-twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.6) rotate(-15deg); }
+  45% { opacity: 1; transform: translateY(-0.12em) scale(1.2) rotate(15deg); }
+  70% { opacity: 0.65; transform: scale(0.85) rotate(0); }
+}
+
+@keyframes food-icon-void-halo {
+  0%, 100% { opacity: 0.6; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .food-icon-sparkle,
+  .food-icon-shadow::before { animation: none; opacity: 0.85; transform: none; }
+}
+
 .inv-item .name {
   font-family: "Fredoka", sans-serif;
   font-weight: 700;

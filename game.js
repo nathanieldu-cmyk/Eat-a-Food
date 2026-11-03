@@ -309,6 +309,14 @@
     return "";
   }
 
+  function foodIconHtml(tier) {
+    const variant = tier.isShadow ? "shadow" : tier.isShiny ? "rainbow" : tier.isGolden ? "golden" : "";
+    const sparkles = variant
+      ? `<span class="food-icon-sparkles">${'<span class="food-icon-sparkle">✦</span>'.repeat(6)}</span>`
+      : "";
+    return `<span class="food-icon${variant ? ` food-icon-${variant}` : ""}" aria-hidden="true"><span class="food-icon-emoji">${tier.emoji}</span>${sparkles}</span>`;
+  }
+
   const POTION_COST = 500;
   const POTION_DURATION_MS = 10 * 60 * 1000;
   const LUCK_POTION_MAX_STACKS = 5;
@@ -2119,10 +2127,11 @@
     leaderboardAt = now;
     const entries = leaderboardEntries().map((entry, i) => ({
       ...entry,
+      rank: i + 1,
       label: `${i + 1}. ${entry.tier.emoji} ${entry.name}`,
       sizeText: formatCount(Math.round(entry.size)),
     }));
-    const key = entries.map((entry) => `${entry.label}|${entry.sizeText}|${entry.you ? 1 : 0}`).join("\n");
+    const key = entries.map((entry) => `${entry.label}|${entry.tier.name}|${entry.sizeText}|${entry.you ? 1 : 0}`).join("\n");
     if (key === leaderboardKey) return;
     leaderboardKey = key;
     leaderboardListEl.replaceChildren();
@@ -2138,7 +2147,8 @@
       if (entry.you) item.classList.add("you");
       const name = document.createElement("span");
       name.className = "lb-name";
-      name.textContent = entry.label;
+      name.innerHTML = `${entry.rank}. ${foodIconHtml(entry.tier)} `;
+      name.append(document.createTextNode(entry.name));
       const size = document.createElement("span");
       size.textContent = entry.sizeText;
       item.append(name, size);
@@ -2584,10 +2594,10 @@
     return Number(odds).toLocaleString();
   }
 
-  function tierStatsLabel(tier) {
+  function tierStatsLabel(tier, decorated = false) {
     const rarity = rarityById[tier.rarity];
     const oddsText = ` · 1 in ${formatOdds(tier.odds)}`;
-    return `${tier.emoji} ${tier.name} · ${rarity.label}${variantLabel(tier)}${oddsText} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
+    return `${decorated ? foodIconHtml(tier) : tier.emoji} ${tier.name} · ${rarity.label}${variantLabel(tier)}${oddsText} · pts ${tier.multiplier}x · grw ${tier.growth}x · spd ${displaySpeed(tier).toFixed(2)}`;
   }
 
   function spendCraft(fromName, toName) {
@@ -2677,7 +2687,7 @@
 
   function renderEquippedUi() {
     const tier = equippedTier();
-    const pill = tierStatsLabel(tier);
+    const pill = tierStatsLabel(tier, true);
     const rarityClass = variantClass(tier);
     const luck = luckSnapshot();
     const potionLuck = boostStacks("luck") * LUCK_STEP;
@@ -2716,7 +2726,7 @@
 
     tile.innerHTML = `
       <span class="count">×${count}</span>
-      <span class="emoji">${tier.emoji}</span>
+      <span class="emoji">${foodIconHtml(tier)}</span>
       <span class="name">${tier.name}</span>
       <span class="detail">${detailParts.join(" · ")}</span>
       <span class="inv-actions"></span>
@@ -2921,9 +2931,9 @@
       const row = document.createElement("div");
       row.className = "shop-row";
       row.innerHTML = `
-        <h3 class="${variantClass(tier)}">${tier.emoji} ${tier.name}</h3>
+        <h3 class="${variantClass(tier)}">${foodIconHtml(tier)} ${tier.name}</h3>
         <div class="shop-actions"></div>
-        <p>×${count} · ${count}/${CRAFT_COST} → ${craftTarget.emoji} ${craftTarget.name}</p>
+        <p>×${count} · ${count}/${CRAFT_COST} → ${foodIconHtml(craftTarget)} ${craftTarget.name}</p>
       `;
       const actions = row.querySelector(".shop-actions");
       const button = document.createElement("button");
@@ -3553,7 +3563,7 @@
       row.className = "pull-row" + (isNew ? " is-new" : "");
       row.innerHTML = `
         <span class="pull-name">
-          <span>${tier.emoji} ${tier.name}${count > 1 ? ` ×${count}` : ""}</span>
+          <span>${foodIconHtml(tier)} ${tier.name}${count > 1 ? ` ×${count}` : ""}</span>
           <span class="pull-rarity rarity-${tier.rarity}">${rarity.label}</span>
           ${isNew ? `<span class="pull-new">New</span>` : ""}
         </span>
