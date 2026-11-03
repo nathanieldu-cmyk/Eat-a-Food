@@ -353,7 +353,11 @@
   const BENTO_CHANCE_PER_100_LUCK = { legendary: 0.5, mythic: 0.1 };
 
   function emptyBento() {
-    return { locked: 0, unlockStartedAt: 0, ready: 0, opened: 0 };
+    return { locked: 0, lockedTypes: [], unlockStartedAt: 0, ready: 0, readyTypes: [], opened: 0 };
+  }
+
+  function readBentoTypes(raw, count) {
+    return Array.from({ length: count }, (_, i) => Array.isArray(raw) && raw[i] === "gold" ? "gold" : "normal");
   }
 
   function readBento(raw) {
@@ -363,6 +367,8 @@
     // an older save that had more than five boxes.
     bento.ready = Math.min(BENTO_MAX_BOXES, Math.max(0, Math.floor(Number(raw.ready) || 0)));
     bento.locked = Math.min(BENTO_MAX_BOXES - bento.ready, Math.max(0, Math.floor(Number(raw.locked) || 0)));
+    bento.readyTypes = readBentoTypes(raw.readyTypes, bento.ready);
+    bento.lockedTypes = readBentoTypes(raw.lockedTypes, bento.locked);
     bento.unlockStartedAt = bento.locked ? Math.max(0, Number(raw.unlockStartedAt) || 0) || Date.now() : 0;
     bento.opened = Math.max(0, Math.floor(Number(raw.opened) || 0));
     return bento;
@@ -2989,11 +2995,14 @@
   // Boxes unlock one at a time, so time keeps counting while the game is closed.
   function advanceBento(now = Date.now()) {
     const bento = save.bento;
+    bento.lockedTypes = readBentoTypes(bento.lockedTypes, bento.locked);
+    bento.readyTypes = readBentoTypes(bento.readyTypes, bento.ready);
     let changed = false;
     while (bento.locked > 0 && now >= bento.unlockStartedAt + BENTO_UNLOCK_MS) {
       bento.unlockStartedAt += BENTO_UNLOCK_MS;
       bento.locked -= 1;
       bento.ready += 1;
+      bento.readyTypes.push(bento.lockedTypes.shift());
       changed = true;
     }
     if (bento.locked === 0 && bento.unlockStartedAt) {
@@ -3007,11 +3016,16 @@
     return save.bento.locked + save.bento.ready;
   }
 
-  function addBento() {
+  function goldBentoDenominator(runBoxes = 1) {
+    return Math.max(1, 50 - 5 * (Math.max(1, Math.floor(runBoxes)) - 1));
+  }
+
+  function addBento(runBoxes = 1) {
     advanceBento();
     const bento = save.bento;
     if (bentoInventoryCount() >= BENTO_MAX_BOXES) return false;
     if (bento.locked === 0) bento.unlockStartedAt = Date.now();
+    bento.lockedTypes.push(Math.random() < 1 / goldBentoDenominator(runBoxes) ? "gold" : "normal");
     bento.locked += 1;
     return true;
   }
@@ -3068,6 +3082,8 @@
   function renderBento() {
     advanceBento();
     const bento = save.bento;
+    const types = [...bento.readyTypes, ...bento.lockedTypes];
+    const goldCount = types.filter((type) => type === "gold").length;
     bentoSlotEl.innerHTML = "";
 
     const row = document.createElement("div");
@@ -3075,7 +3091,7 @@
     row.innerHTML = `
       <h3>🍱 Bento Boxes</h3>
       <div class="shop-actions"></div>
-      <p>${bentoInventoryCount()}/${BENTO_MAX_BOXES} boxes · ${bento.ready} ready to open · ${bento.locked} unlocking. <span class="bento-timer">${bentoTimerText()}</span></p>
+      <p>${bentoInventoryCount()}/${BENTO_MAX_BOXES} boxes${goldCount ? ` · ${goldCount} gold` : ""} · ${bento.ready} ready to open · ${bento.locked} unlocking. <span class="bento-timer">${bentoTimerText()}</span></p>
       <p class="bento-luck">Opened ${bento.opened.toLocaleString()} · +${Math.round(bentoLuckBonus() * 100)}% luck forever.</p>
       <p class="bento-luck">${bentoLuckLine()}</p>
       <p class="bento-odds">${bentoOddsHtml()}</p>
@@ -3104,9 +3120,11 @@
       const slot = document.createElement("span");
       const ready = i < bento.ready;
       const locked = i >= bento.ready && i < bentoInventoryCount();
-      slot.className = "bento-slot" + (locked ? (i === bento.ready ? " unlocking" : " locked") : "");
-      slot.textContent = ready || locked ? "🍱" : "";
-      slot.title = ready ? "Ready to open" : locked ? "Unlocking" : "Empty slot";
+      const gold = types[i] === "gold";
+      slot.className = "bento-slot" + (locked ? (i === bento.ready ? " unlocking" : " locked") : "") + (gold ? " gold" : "");
+      slot.innerHTML = ready || locked ? `<span class="bento-box-icon" aria-hidden="true">🍱</span>${gold ? '<span class="bento-gold-label">Gold</span>' : ""}` : "";
+      slot.title = ready ? `${gold ? "Gold Bento Box" : "Bento Box"} · Ready to open` : locked ? `${gold ? "Gold Bento Box" : "Bento Box"} · Unlocking` : "Empty slot";
+      slot.setAttribute("aria-label", slot.title);
       slots.appendChild(slot);
     }
     row.appendChild(slots);
@@ -3149,6 +3167,7 @@
     save.diamonds -= cost;
     bento.locked -= 1;
     bento.ready += 1;
+    bento.readyTypes.push(bento.lockedTypes.shift());
     bento.unlockStartedAt = bento.locked > 0 ? now : 0;
     persistSave();
     renderDiamonds();
@@ -3159,11 +3178,16 @@
   function buyBento() {
     if (state.running || save.diamonds < BENTO_COST) return;
     if (!addBento()) return;
+    const gold = save.bento.lockedTypes[save.bento.lockedTypes.length - 1] === "gold";
     save.diamonds -= BENTO_COST;
     persistSave();
     renderDiamonds();
     renderShop();
     renderPotionStatus();
+    if (gold) {
+      bentoResultsEl.innerHTML = '<p class="bento-results-title">🌟 Your Bento Box turned gold!</p>';
+      bentoResultsEl.classList.remove("hidden");
+    }
   }
 
   function openBento() {
@@ -3172,10 +3196,13 @@
     const seenBefore = new Set(Object.keys(save.discovered || {}));
     const beforeLuck = displayedLuckPct();
     const boxes = save.bento.ready;
+    const goldBoxes = save.bento.readyTypes.filter((type) => type === "gold").length;
     const gained = [];
     for (let box = 0; box < boxes; box++) {
+      const gold = save.bento.readyTypes.shift() === "gold";
       for (let i = 0; i < BENTO_FOODS; i++) {
-        const food = pullBentoFood();
+        const base = pullBentoFood();
+        const food = gold ? goldenByBase[base.name] : base;
         gained.push(food.name);
         save.inventory[food.name] = (save.inventory[food.name] || 0) + 1;
         rememberFood(food.name);
@@ -3185,7 +3212,7 @@
     }
     persistSave();
     renderShop();
-    const title = boxes === 1 ? "Bento box opened!" : `${boxes} bento boxes opened!`;
+    const title = boxes === 1 ? `${goldBoxes ? "Gold Bento Box" : "Bento Box"} opened!` : `${boxes} Bento Boxes opened${goldBoxes ? ` (${goldBoxes} gold)` : ""}!`;
     bentoResultsEl.innerHTML = `<p class="bento-results-title">🍱 ${title} Luck +${beforeLuck}% → +${displayedLuckPct()}%</p>`;
     renderPullResults(gained, seenBefore, bentoResultsEl, { keep: true });
     renderEquippedUi();
@@ -3531,10 +3558,13 @@
     }
     const bentoCount = rollRunBentoCount(earned);
     let addedBentos = 0;
+    let goldBentos = 0;
     for (let i = 0; i < bentoCount; i++) {
-      if (!addBento()) break;
+      if (!addBento(bentoCount)) break;
       addedBentos += 1;
+      if (save.bento.lockedTypes[save.bento.lockedTypes.length - 1] === "gold") goldBentos += 1;
     }
+    const goldText = goldBentos ? ` 🌟 ${goldBentos} Bento Box${goldBentos === 1 ? "" : "es"} turned gold!` : "";
     const bentoText = bentoCount
       ? addedBentos < bentoCount
         ? ` 🍱 You earned ${bentoCount} bento box${bentoCount === 1 ? "" : "es"}, inventory is full.`
@@ -3552,7 +3582,7 @@
     overlayMsg.textContent =
       (wipedOut
         ? `A rival ate you. ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`
-        : `Nice run! ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`) + bentoText;
+        : `Nice run! ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`) + goldText + bentoText;
     startBtn.textContent = "Back to Lobby";
     afterRunActionsEl.classList.remove("hidden");
     overlay.classList.remove("hidden");
