@@ -23,7 +23,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=194' },
+      currentScript: { src: 'game.js?v=198' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -52,7 +52,7 @@ function boot(saved) {
     renderPotionStatus = () => {};
     renderShop = () => {};
     globalThis.api = { save, state, net, bankPendingFoods, pullFood,
-      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
+      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, BENTO_BASE_CHANCES, permanentLuckBonus, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
     return;
     ${marker}
   `), context);
@@ -555,27 +555,61 @@ test('older saves above capacity are capped to five, preserving ready boxes firs
 
 function near(actual, expected) { assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`); }
 
-test('Legendary and Mythic luck bonuses reduce only Rare; Epic remains 24.5%', () => {
+test('Epic, Legendary and Mythic bonuses come only from Rare, respect caps, and ignore potions', () => {
   for (const opened of [0, 100, 1000, 10000, 20000, 1000000]) {
     for (const types of [1, 50, 264]) {
       const g = boot();
       for (const name of Object.keys(g.tierByName).slice(0, types)) g.save.inventory[name] = 1;
       g.save.bento.opened = opened;
-      const luck = Math.min(g.totalLuckBonus(), 74 / 0.6);
+      const luck = g.permanentLuckBonus();
+      const epicBonus = Math.min(10.5, luck * 1.5);
+      const legendaryBonus = Math.min(9, luck * 0.5);
+      const mythicBonus = Math.min(69 - epicBonus - legendaryBonus, luck * 0.1);
       const odds = g.bentoRarityChances();
-      near(odds.epic, 24.5);
-      near(odds.legendary, 1 + luck * 0.5);
-      near(odds.mythic, 0.5 + luck * 0.1);
-      near(odds.rare, 74 - luck * 0.6);
+      near(odds.epic, 29.5 + epicBonus);
+      near(odds.legendary, 1 + legendaryBonus);
+      near(odds.mythic, 0.5 + mythicBonus);
+      near(odds.rare, 69 - epicBonus - legendaryBonus - mythicBonus);
       near(Object.values(odds).reduce((sum, n) => sum + n, 0), 100);
       assert.ok(Object.values(odds).every(n => n >= 0 && n <= 100));
+      assert.ok(odds.epic <= 40 && odds.legendary <= 10);
       const beforePotion = JSON.stringify(odds);
       g.save.activePotions.luck = { endsAt: Date.now() + 60000, stacks: 5 };
       assert.equal(JSON.stringify(g.bentoRarityChances()), beforePotion);
-      assert.match(g.bentoOddsHtml(), /Epic 24.5%/);
+      assert.ok(g.bentoOddsHtml().includes(`Epic ${Number(odds.epic.toFixed(1))}%`));
       assert.match(g.bentoLuckLine(), /% mythic\.$/);
-      if (odds.rare === 0) assert.match(g.bentoLuckLine(), /adds \+61.7% legendary and \+12.3% mythic/);
+      if (odds.rare === 0) assert.match(g.bentoLuckLine(), /adds \+10.5% epic and \+9.0% legendary and \+49.5% mythic/);
     }
+  }
+});
+
+test('approved base rates sum to 100 and capped chances never decrease as luck grows', () => {
+  const g = boot();
+  assert.deepEqual({ ...g.BENTO_BASE_CHANCES }, { rare: 69, epic: 29.5, legendary: 1, mythic: 0.5 });
+  near(Object.values(g.BENTO_BASE_CHANCES).reduce((sum, chance) => sum + chance, 0), 100);
+  let previous = null;
+  for (const [opened, rare, epic, legendary, mythic] of [
+    [0, 66.9, 31, 1.5, 0.6],
+    [599, 54.321, 39.985, 4.495, 1.199],
+    [600, 54.3, 40, 4.5, 1.2],
+    [601, 54.294, 40, 4.505, 1.201],
+    [1699, 47.706, 40, 9.995, 2.299],
+    [1700, 47.7, 40, 10, 2.3],
+    [1701, 47.699, 40, 10, 2.301],
+    [49399, 0.001, 40, 10, 49.999],
+    [49400, 0, 40, 10, 50],
+    [49401, 0, 40, 10, 50],
+    [1000000, 0, 40, 10, 50],
+  ]) {
+    g.save.bento.opened = opened;
+    const odds = g.bentoRarityChances();
+    for (const [rarity, expected] of Object.entries({ rare, epic, legendary, mythic })) near(odds[rarity], expected);
+    near(Object.values(odds).reduce((sum, chance) => sum + chance, 0), 100);
+    if (previous) {
+      assert.ok(odds.rare <= previous.rare);
+      for (const rarity of ['epic', 'legendary', 'mythic']) assert.ok(odds[rarity] >= previous[rarity]);
+    }
+    previous = odds;
   }
 });
 

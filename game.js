@@ -356,9 +356,10 @@
   const BENTO_SKIP_COST_PER_HOUR = 1000;
   // Percent chance of each rarity for one bento food, before permanent luck. Must add up to 100.
   // Commons and uncommons are left out, so bento boxes never give them.
-  const BENTO_BASE_CHANCES = { rare: 74, epic: 24.5, legendary: 1, mythic: 0.5 };
+  const BENTO_BASE_CHANCES = { rare: 69, epic: 29.5, legendary: 1, mythic: 0.5 };
   // Percent added for every +100% permanent luck, taken only from Rare.
-  const BENTO_CHANCE_PER_100_LUCK = { legendary: 0.5, mythic: 0.1 };
+  const BENTO_CHANCE_PER_100_LUCK = { epic: 1.5, legendary: 0.5, mythic: 0.1 };
+  const BENTO_CHANCE_CAPS = { epic: 40, legendary: 10 };
 
   function emptyBento() {
     return { locked: 0, lockedTypes: [], unlockStartedAt: 0, ready: 0, readyTypes: [], opened: 0 };
@@ -815,11 +816,11 @@
   // Percent chance of each rarity for one bento food, using permanent luck (potions don't count).
   function bentoRarityChances() {
     const chances = { ...BENTO_BASE_CHANCES };
-    const bonusPerHundred = Object.values(BENTO_CHANCE_PER_100_LUCK).reduce((sum, per) => sum + per, 0);
-    // Stop increasing the bonuses when Rare reaches zero; Epic stays fixed.
-    const hundreds = Math.min(Math.max(0, permanentLuckBonus()), chances.rare / bonusPerHundred);
+    const hundreds = Math.max(0, permanentLuckBonus());
+    // Apply each cap before taking its bonus from the remaining Rare chance.
     for (const [id, per] of Object.entries(BENTO_CHANCE_PER_100_LUCK)) {
-      const added = per * hundreds;
+      const room = Math.max(0, (BENTO_CHANCE_CAPS[id] ?? Infinity) - chances[id]);
+      const added = Math.min(per * hundreds, room, chances.rare);
       chances[id] = (chances[id] || 0) + added;
       chances.rare -= added;
     }
