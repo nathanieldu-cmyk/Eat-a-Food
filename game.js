@@ -3576,15 +3576,20 @@
       bestRunEl.textContent = `${save.bestRun} foods`;
     }
     const bentoCount = rollRunBentoCount(earned);
+    const bentoRewards = Array.from({ length: bentoCount }, () => rollBentoType(bentoCount))
+      .sort((a, b) => Number(b === "gold") - Number(a === "gold"));
     let addedBentos = 0;
     let goldBentos = 0;
     let replacedBentos = 0;
-    for (let i = 0; i < bentoCount; i++) {
-      const type = rollBentoType(bentoCount);
+    for (const type of bentoRewards) {
       const result = storeBento(type);
       if (result === "added") addedBentos += 1;
       if (result === "replaced") replacedBentos += 1;
       if (result && type === "gold") goldBentos += 1;
+    }
+    advanceBento();
+    for (const types of [save.bento.readyTypes, save.bento.lockedTypes]) {
+      types.sort((a, b) => Number(b === "gold") - Number(a === "gold"));
     }
     const replacedText = replacedBentos ? ` ${replacedBentos} normal Bento Box${replacedBentos === 1 ? " was" : "es were"} replaced with gold.` : "";
     const goldText = (goldBentos ? ` 🌟 ${goldBentos} Bento Box${goldBentos === 1 ? "" : "es"} turned gold!` : "") + replacedText;
