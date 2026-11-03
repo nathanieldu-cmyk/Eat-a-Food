@@ -3016,12 +3016,8 @@
     return save.bento.locked + save.bento.ready;
   }
 
-  function goldBentoDenominator(runBoxes = 1) {
-    return Math.max(1, 50 - 5 * (Math.max(1, Math.floor(runBoxes)) - 1));
-  }
-
-  function rollBentoType(runBoxes = 1) {
-    return Math.random() < 1 / goldBentoDenominator(runBoxes) ? "gold" : "normal";
+  function rollBentoType() {
+    return Math.random() < 1 / 50 ? "gold" : "normal";
   }
 
   function storeBento(type) {
@@ -3045,8 +3041,27 @@
     return "added";
   }
 
-  function addBento(runBoxes = 1) {
-    return !!storeBento(rollBentoType(runBoxes));
+  function addBento() {
+    return !!storeBento(rollBentoType());
+  }
+
+  function rollRunGoldBentoCount(earned) {
+    if (earned < 25) return 0;
+    let guaranteed = 0;
+    let denominator;
+    if (earned >= 1500) {
+      // Every five 250-food steps guarantee another gold, then the extra
+      // gold chance starts over at 1/25 and improves through 1/5.
+      const step = Math.floor((earned - 1500) / 250);
+      guaranteed = 2 + Math.floor(step / 5);
+      denominator = 25 - 5 * (step % 5);
+    } else if (earned >= 500) {
+      guaranteed = 1;
+      denominator = 25 - 5 * Math.floor((earned - 500) / 200);
+    } else {
+      denominator = earned >= 400 ? 5 : earned >= 200 ? 10 : earned >= 100 ? 15 : earned >= 50 ? 20 : 25;
+    }
+    return guaranteed + (Math.random() < 1 / denominator ? 1 : 0);
   }
 
   function rollRunBentoCount(earned) {
@@ -3576,8 +3591,8 @@
       bestRunEl.textContent = `${save.bestRun} foods`;
     }
     const bentoCount = rollRunBentoCount(earned);
-    const bentoRewards = Array.from({ length: bentoCount }, () => rollBentoType(bentoCount))
-      .sort((a, b) => Number(b === "gold") - Number(a === "gold"));
+    const goldRewardCount = Math.min(bentoCount, rollRunGoldBentoCount(earned));
+    const bentoRewards = Array.from({ length: bentoCount }, (_, i) => i < goldRewardCount ? "gold" : "normal");
     let addedBentos = 0;
     let goldBentos = 0;
     let replacedBentos = 0;
