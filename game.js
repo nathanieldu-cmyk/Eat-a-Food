@@ -2398,7 +2398,7 @@
 
   function cameraDistanceForFood(food, zoomFactor = 1) {
     const sizeRatio = food.drawRadius() / BASE_FOOD_DRAW_RADIUS;
-    const proportional = RUN_CAMERA_DISTANCE * (1 + (sizeRatio - 1) * 0.5) * zoomFactor;
+    const proportional = RUN_CAMERA_DISTANCE * (1 + (sizeRatio - 1) * 0.4) * zoomFactor;
     return Math.min(MAX_CAMERA_DISTANCE, Math.max(MIN_CAMERA_DISTANCE, proportional));
   }
 

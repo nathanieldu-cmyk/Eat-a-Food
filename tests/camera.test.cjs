@@ -31,7 +31,7 @@ function boot() {
   return { state, net, view, ...context.api };
 }
 
-test('run camera pulls back at half the visible food growth rate', () => {
+test('run camera pulls back at 40% of the visible food growth rate', () => {
   const g = boot();
   const startRadius = g.BASE_FOOD_DRAW_RADIUS;
   g.state.player.drawRadius = () => startRadius;
@@ -40,7 +40,7 @@ test('run camera pulls back at half the visible food growth rate', () => {
 
   g.state.player.drawRadius = () => startRadius * 2;
   const grownDistance = g.cameraDistanceForFood(g.state.player);
-  assert.equal(grownDistance, startDistance * 1.5);
+  assert.equal(grownDistance, startDistance * 1.4);
   assert.ok((startRadius * 2) / grownDistance > startRadius / startDistance, 'growing food stays larger on screen');
   for (let i = 0; i < 40; i++) g.updateCamera();
   assert.ok(Math.abs(g.view.distance - grownDistance) < 7, 'camera eases toward the larger size');
