@@ -1861,6 +1861,87 @@
     return wrapper;
   }
 
+  function makeFoodSparkleTexture(THREE) {
+    const surface = document.createElement("canvas");
+    surface.width = surface.height = 128;
+    const ctx = surface.getContext("2d");
+    const glow = ctx.createRadialGradient(64, 64, 0, 64, 64, 60);
+    glow.addColorStop(0, "rgba(255,255,255,0.85)");
+    glow.addColorStop(0.25, "rgba(255,255,255,0.3)");
+    glow.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.moveTo(64, 3);
+    for (const [x, y] of [[70, 57], [125, 64], [70, 71], [64, 125], [58, 71], [3, 64], [58, 57]]) ctx.lineTo(x, y);
+    ctx.closePath();
+    ctx.fill();
+    const texture = new THREE.CanvasTexture(surface);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.generateMipmaps = false;
+    texture.minFilter = texture.magFilter = THREE.LinearFilter;
+    return texture;
+  }
+
+  function makeFoodSparkles(THREE, texture) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+    geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    geometry.attributes.color.setUsage(THREE.DynamicDrawUsage);
+    const material = new THREE.PointsMaterial({
+      map: texture, vertexColors: true, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    });
+    const points = new THREE.Points(geometry, material);
+    points.frustumCulled = false;
+    points.renderOrder = 1;
+    return points;
+  }
+
+  function syncFoodSparkles(entry, food, t, scale) {
+    const tier = food.tier;
+    if (!tier.isGolden && !tier.isShiny && !tier.isShadow) {
+      if (entry.sparkles) entry.sparkles.visible = false;
+      return;
+    }
+    if (!entry.sparkles) {
+      entry.sparkles = makeFoodSparkles(view.THREE, view.foodSparkleTexture);
+      entry.sparkleColor = new view.THREE.Color();
+      entry.group.add(entry.sparkles);
+    }
+    const points = entry.sparkles;
+    points.visible = true;
+    points.scale.setScalar(scale);
+    points.material.size = scale * (tier.isShadow ? 0.48 : 0.42);
+    const positions = points.geometry.attributes.position;
+    const colors = points.geometry.attributes.color;
+    const color = entry.sparkleColor;
+    for (let i = 0; i < positions.count; i++) {
+      const phase = i * 2.39996 + entry.spin;
+      const angle = phase + t * (tier.isShadow ? -0.38 : 0.52);
+      const lift = (i / positions.count + t * (tier.isShadow ? 0.1 : 0.16)) % 1;
+      const radius = (tier.isShadow ? 0.68 : 0.5) + Math.sin(phase + t * 0.7) * 0.13;
+      positions.setXYZ(i, Math.cos(angle) * radius, 0.08 + lift * 1.05, Math.sin(angle) * radius);
+      const twinkle = 0.25 + 0.75 * Math.pow((Math.sin(t * 3.2 + phase) + 1) / 2, 2);
+      if (tier.isShadow) color.setHSL(0.75 + Math.sin(phase) * 0.04, 0.9, 0.68);
+      else if (tier.isShiny) color.setHSL((i / positions.count + t * 0.14) % 1, 1, 0.55);
+      else color.setHSL(0.115 + (i % 3) * 0.015, 0.9, 0.72);
+      color.multiplyScalar(twinkle);
+      colors.setXYZ(i, color.r, color.g, color.b);
+    }
+    positions.needsUpdate = colors.needsUpdate = true;
+  }
+
+  function disposeFoodSparkles(entry) {
+    if (!entry.sparkles) return;
+    entry.sparkles.geometry.dispose();
+    entry.sparkles.material.dispose();
+    entry.group.remove(entry.sparkles);
+    entry.sparkles = null;
+  }
+
   function paintFood(entry, food, t) {
     const tier = food.tier;
     const shinyHue = (t * 0.2 + entry.spin) % 1;
@@ -1880,9 +1961,9 @@
       } else if (tier.isGolden) {
         mat.color.set("#ffd56a");
         mat.emissive.set("#c48410");
-        mat.emissiveIntensity = 0.4;
-        mat.metalness = 0.62;
-        mat.roughness = 0.32;
+        mat.emissiveIntensity = 0.45 + (Math.sin(t * 2.8 + entry.spin) + 1) * 0.08;
+        mat.metalness = 0.72;
+        mat.roughness = 0.22;
       } else if (mat.map) {
         mat.color.set("#ffffff");
         mat.emissive.set("#000000");
@@ -2003,6 +2084,7 @@
       entry.sizeText = sizeText;
     }
     paintFood(entry, food, t);
+    syncFoodSparkles(entry, food, t, scale);
     return food.id;
   }
 
@@ -2069,6 +2151,7 @@
     }
     for (const [id, entry] of view.foods) {
       if (alive.has(id)) continue;
+      disposeFoodSparkles(entry);
       view.scene.remove(entry.group);
       view.foods.delete(id);
     }
@@ -2573,6 +2656,7 @@
       arenaGroup,
       lobby,
       foods: new Map(),
+      foodSparkleTexture: makeFoodSparkleTexture(THREE),
       yaw: 0.55,
       pitch: 0.86,
       distance: state.running ? RUN_CAMERA_DISTANCE : LOBBY_CAMERA_DISTANCE,
