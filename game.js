@@ -1986,11 +1986,6 @@
     if (entry.ring) {
       entry.ring.material.color.set(ringColor(tier));
     }
-    if (entry.aura) {
-      const pulse = 0.22 + (Math.sin(t * 2.6 + entry.spin) + 1) * 0.08;
-      entry.aura.material.opacity = pulse;
-      entry.aura.visible = !!tier.isShadow;
-    }
   }
 
   function syncFood(THREE, food, t) {
@@ -2032,19 +2027,8 @@
         })
       );
       ring.rotation.x = Math.PI / 2;
-      const aura = new THREE.Mesh(
-        new THREE.SphereGeometry(0.92, 28, 20),
-        new THREE.MeshBasicMaterial({
-          color: 0x8a3dff,
-          transparent: true,
-          opacity: 0.28,
-          depthWrite: false,
-        })
-      );
-      aura.visible = !!food.tier.isShadow;
       const label = makeLabelSprite(THREE);
       group.add(holder);
-      group.add(aura);
       group.add(ring);
       group.add(label);
       view.scene.add(group);
@@ -2054,7 +2038,6 @@
         label,
         materials,
         ring,
-        aura,
         spin: Math.random() * Math.PI * 2,
         sizeText: "",
       };
@@ -2070,10 +2053,6 @@
     entry.ring.rotation.set(Math.PI / 2, 0, 0);
     entry.ring.scale.setScalar(scale);
     entry.ring.position.set(0, scale * (RING_TUBE + 0.02), 0);
-    if (entry.aura) {
-      entry.aura.scale.setScalar(scale);
-      entry.aura.position.set(0, scale * 0.45, 0);
-    }
     entry.group.position.set(worldX(food.x), bob, worldZ(food.y));
     entry.label.position.y = scale + 16;
     const sizeText = food.netName
