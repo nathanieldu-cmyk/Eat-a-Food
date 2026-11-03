@@ -14,7 +14,7 @@ function boot() {
   const context = vm.createContext({
     window: {}, console, Math: math, performance: { now: () => 1000 },
     crypto: { randomUUID: () => `food-${++id}` },
-    document: { currentScript: { src: 'game.js?v=196' }, getElementById: () => ({}) },
+    document: { currentScript: { src: 'game.js?v=197' }, getElementById: () => ({}) },
     localStorage: { getItem: () => null, setItem() {} },
   });
   vm.runInContext(fs.readFileSync(path.join(root, 'foods.js'), 'utf8'), context);
@@ -32,12 +32,13 @@ function boot() {
   return context.api;
 }
 
-test('every equipped food gets the closest growth match among foods within 0.2 speed', () => {
+test('every equipped food gets the closest growth plus one within 0.5 speed and never lower growth', () => {
   const g = boot();
   for (const tier of g.ALL_FOODS) {
     const rival = g.companionTier(tier);
-    assert.ok(Math.abs(rival.speed - tier.speed) <= 0.2 + 1e-9, tier.name);
-    const eligible = g.ALL_FOODS.filter(food => Math.abs(food.speed - tier.speed) <= 0.2 + 1e-9);
+    assert.ok(Math.abs(rival.speed - tier.speed) <= 0.5 + 1e-9, tier.name);
+    assert.ok(rival.growth >= tier.growth, tier.name);
+    const eligible = g.ALL_FOODS.filter(food => Math.abs(food.speed - tier.speed) <= 0.5 + 1e-9 && food.growth >= tier.growth);
     const minimumGrowthGap = Math.min(...eligible.map(food => Math.abs(food.growth - (tier.growth + 1))));
     assert.ok(Math.abs(Math.abs(rival.growth - (tier.growth + 1)) - minimumGrowthGap) < 1e-9, tier.name);
   }
@@ -60,7 +61,8 @@ test('starter rivals retain matched speed after CPU updates across the full food
     g.state.rivals.push(extra);
     g.stepWorld(0, 1000);
     assert.equal(starter.speedBoost, 1);
-    assert.ok(Math.abs(g.moveSpeed(starter) - g.moveSpeed(g.state.player)) <= 0.2 * g.SPEED_SCALE + 1e-9, tier.name);
+    assert.ok(Math.abs(g.moveSpeed(starter) - g.moveSpeed(g.state.player)) <= 0.5 * g.SPEED_SCALE + 1e-9, tier.name);
+    assert.ok(starter.tier.growth >= tier.growth, tier.name);
     assert.equal(extra.speedBoost, 1 + g.foodPower(tier) * 0.025);
   }
 });
@@ -75,9 +77,17 @@ test('speed boundary is strict, all rarities are eligible, and growth ties are d
     return ctx.chosen;
   }
   const player = { name: 'Player', speed: 1.2, growth: 3 };
-  const boundary = { name: 'Boundary', speed: 1.4, growth: 3.9 };
-  const outside = { name: 'Outside', speed: 1.40001, growth: 4 };
+  const boundary = { name: 'Boundary', speed: 1.7, growth: 3.9 };
+  const outside = { name: 'Outside', speed: 1.70001, growth: 4 };
   assert.equal(choose(player, [player, boundary, outside]), boundary);
+  const slowerBoundary = { name: 'Slower boundary', speed: 0.7, growth: 4 };
+  const tooSlow = { name: 'Too slow', speed: 0.69999, growth: 4 };
+  assert.equal(choose(player, [player, boundary, slowerBoundary]), slowerBoundary);
+  assert.equal(choose(player, [player, boundary, tooSlow]), boundary);
+  const lessGrowth = { name: 'Less growth', speed: 1.2, growth: 2.99999 };
+  const moreGrowth = { name: 'More growth', speed: 1.2, growth: 5.5 };
+  assert.equal(choose(player, [lessGrowth, moreGrowth]), moreGrowth);
+  assert.equal(choose(player, [lessGrowth]), player);
   const common = { name: 'Common', rarity: 'common', speed: 1.21, growth: 4 };
   assert.equal(choose(player, [player, boundary, common]), common);
   const lower = { name: 'Lower', speed: 1.2, growth: 3.8 };

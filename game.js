@@ -1215,12 +1215,12 @@
     return best;
   }
 
-  // Match the equipped food's stats: speed must stay within 0.2, and growth
-  // must be as close as possible to this food's growth plus 1.
+  // Match the equipped food's stats: speed must stay within 0.5, and growth
+  // cannot be lower than yours. Choose the closest growth to yours plus 1.
   // A tie prefers a different food, then the higher growth.
   function companionTier(tier) {
     const gap = (food) => Math.abs(food.speed - tier.speed);
-    const pool = ALL_FOODS.filter((food) => gap(food) <= 0.2 + 1e-9);
+    const pool = ALL_FOODS.filter((food) => gap(food) <= 0.5 + 1e-9 && food.growth >= tier.growth);
     const target = tier.growth + 1;
     let best = null;
     let bestDist = Infinity;
