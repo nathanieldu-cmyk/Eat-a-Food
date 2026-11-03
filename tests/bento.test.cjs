@@ -23,7 +23,7 @@ function boot(saved) {
   const context = vm.createContext({
     window: {}, Math: math, console,
     document: {
-      currentScript: { src: 'game.js?v=185' },
+      currentScript: { src: 'game.js?v=189' },
       getElementById(id) {
         if (!elements.has(id)) elements.set(id, element());
         return elements.get(id);
@@ -65,8 +65,10 @@ const thresholds = [
   [0, 0, 0], [1, 0, 1], [4, 0, 1], [5, 0, 1], [9, 0, 1],
   [10, 0, 2], [24, 0, 2], [25, 1, 3], [49, 1, 3],
   [50, 2, 4], [99, 2, 4], [100, 3, 5], [149, 3, 5],
-  [150, 4, 6], [199, 4, 6], [200, 5, 7], [299, 5, 7],
-  [300, 6, 8], [399, 6, 8], [400, 7, 9], [999, 12, 14], [1000, 13, 15],
+  [150, 4, 6], [199, 4, 6], [200, 4, 6], [299, 4, 6],
+  [300, 5, 7], [399, 5, 7], [400, 5, 7], [499, 5, 7],
+  [500, 6, 8], [749, 6, 8], [750, 7, 9], [999, 7, 9],
+  [1000, 8, 10], [1249, 8, 10], [1250, 9, 11], [1500, 10, 12],
 ];
 
 function expectedCount(earned, minimum, maximum, roll) {
@@ -269,7 +271,7 @@ test('full inventory message shows the rolled reward count and correct singular 
   for (const [foods, roll, expected] of [
     [1, 0.1, 'You earned 1 bento box, inventory is full.'],
     [25, 0.1, 'You earned 3 bento boxes, inventory is full.'],
-    [1000, 0.1, 'You earned 15 bento boxes, inventory is full.'],
+    [1000, 0.1, 'You earned 10 bento boxes, inventory is full.'],
     [0, 0.9, null],
   ]) {
     const g = boot();

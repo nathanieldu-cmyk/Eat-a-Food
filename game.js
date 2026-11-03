@@ -3023,8 +3023,9 @@
     if (earned < 1) return 0;
     if (earned < 5) return roll < BENTO_RUN_BASE_CHANCE ? 1 : 0;
     if (earned < 10) return roll < 1 / 2 ? 1 : 0;
-    const guaranteed = earned >= 200
-      ? 5 + Math.floor((earned - 200) / 100)
+    const guaranteed = earned >= 500
+      ? 6 + Math.floor((earned - 500) / 250)
+      : earned >= 300 ? 5
       : earned >= 150 ? 4
       : earned >= 100 ? 3
       : earned >= 50 ? 2
