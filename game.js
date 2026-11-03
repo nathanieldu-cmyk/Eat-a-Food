@@ -1215,31 +1215,25 @@
     return best;
   }
 
-  // A food within 0.2 speed of this one, with the growth multiplier nearest to
-  // this one plus 1. If no food is that close in speed, the closest speeds are used.
-  // Never a Common, including Golden, Rainbow, or Shadow Commons.
+  // Match the equipped food's stats: speed must stay within 0.2, and growth
+  // must be as close as possible to this food's growth plus 1.
   // A tie prefers a different food, then the higher growth.
   function companionTier(tier) {
-    const foods = ALL_FOODS.filter((food) => food.rarity !== "common");
     const gap = (food) => Math.abs(food.speed - tier.speed);
-    let pool = foods.filter((food) => gap(food) <= 0.2 + 1e-9);
-    if (!pool.length && foods.length) {
-      const nearest = Math.min(...foods.map(gap));
-      pool = foods.filter((food) => gap(food) <= nearest + 1e-9);
-    }
+    const pool = ALL_FOODS.filter((food) => gap(food) <= 0.2 + 1e-9);
     const target = tier.growth + 1;
     let best = null;
     let bestDist = Infinity;
     for (const food of pool) {
       const dist = Math.abs(food.growth - target);
-      if (dist > bestDist) continue;
-      if (dist < bestDist) {
+      if (dist > bestDist + 1e-9) continue;
+      if (dist < bestDist - 1e-9) {
         best = food;
         bestDist = dist;
         continue;
       }
-      const bestIsSelf = best === tier;
-      const foodIsSelf = food === tier;
+      const bestIsSelf = best.name === tier.name;
+      const foodIsSelf = food.name === tier.name;
       if (bestIsSelf !== foodIsSelf) {
         if (bestIsSelf) best = food;
         continue;
@@ -1255,7 +1249,8 @@
     if (!cpusActive() || !food) return;
     const used = [food, ...arenaHumans()].map((other) => ({ x: other.x, y: other.y }));
     const spot = farArenaSpot(used, ARENA * 0.32);
-    spawnRivalAt(companionTier(food.tier), spot.x, spot.y, 10, true);
+    const rival = spawnRivalAt(companionTier(food.tier), spot.x, spot.y, 10, true);
+    if (rival) rival.isCompanion = true;
     state.lastSpawnAt = performance.now();
   }
 
@@ -3433,7 +3428,7 @@
     const power = foodPower(cpuTier());
     for (const rival of state.rivals) {
       rival.skill = power;
-      rival.speedBoost = 1 + power * 0.025;
+      rival.speedBoost = rival.isCompanion ? 1 : 1 + power * 0.025;
     }
 
     updateFoods(dt);
