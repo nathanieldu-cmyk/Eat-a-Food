@@ -3020,14 +3020,33 @@
     return Math.max(1, 50 - 5 * (Math.max(1, Math.floor(runBoxes)) - 1));
   }
 
-  function addBento(runBoxes = 1) {
+  function rollBentoType(runBoxes = 1) {
+    return Math.random() < 1 / goldBentoDenominator(runBoxes) ? "gold" : "normal";
+  }
+
+  function storeBento(type) {
     advanceBento();
     const bento = save.bento;
-    if (bentoInventoryCount() >= BENTO_MAX_BOXES) return false;
+    if (bentoInventoryCount() >= BENTO_MAX_BOXES) {
+      if (type !== "gold") return false;
+      // Slots show ready boxes first, then the unlocking queue. Upgrade the
+      // last normal slot, keeping its unlock progress and every existing gold.
+      for (const types of [bento.lockedTypes, bento.readyTypes]) {
+        const lastNormal = types.lastIndexOf("normal");
+        if (lastNormal < 0) continue;
+        types[lastNormal] = "gold";
+        return "replaced";
+      }
+      return false;
+    }
     if (bento.locked === 0) bento.unlockStartedAt = Date.now();
-    bento.lockedTypes.push(Math.random() < 1 / goldBentoDenominator(runBoxes) ? "gold" : "normal");
+    bento.lockedTypes.push(type);
     bento.locked += 1;
-    return true;
+    return "added";
+  }
+
+  function addBento(runBoxes = 1) {
+    return !!storeBento(rollBentoType(runBoxes));
   }
 
   function rollRunBentoCount(earned) {
@@ -3176,7 +3195,7 @@
   }
 
   function buyBento() {
-    if (state.running || save.diamonds < BENTO_COST) return;
+    if (state.running || save.diamonds < BENTO_COST || bentoInventoryCount() >= BENTO_MAX_BOXES) return;
     if (!addBento()) return;
     const gold = save.bento.lockedTypes[save.bento.lockedTypes.length - 1] === "gold";
     save.diamonds -= BENTO_COST;
@@ -3559,12 +3578,16 @@
     const bentoCount = rollRunBentoCount(earned);
     let addedBentos = 0;
     let goldBentos = 0;
+    let replacedBentos = 0;
     for (let i = 0; i < bentoCount; i++) {
-      if (!addBento(bentoCount)) break;
-      addedBentos += 1;
-      if (save.bento.lockedTypes[save.bento.lockedTypes.length - 1] === "gold") goldBentos += 1;
+      const type = rollBentoType(bentoCount);
+      const result = storeBento(type);
+      if (result === "added") addedBentos += 1;
+      if (result === "replaced") replacedBentos += 1;
+      if (result && type === "gold") goldBentos += 1;
     }
-    const goldText = goldBentos ? ` 🌟 ${goldBentos} Bento Box${goldBentos === 1 ? "" : "es"} turned gold!` : "";
+    const replacedText = replacedBentos ? ` ${replacedBentos} normal Bento Box${replacedBentos === 1 ? " was" : "es were"} replaced with gold.` : "";
+    const goldText = (goldBentos ? ` 🌟 ${goldBentos} Bento Box${goldBentos === 1 ? "" : "es"} turned gold!` : "") + replacedText;
     const bentoText = bentoCount
       ? addedBentos < bentoCount
         ? ` 🍱 You earned ${bentoCount} bento box${bentoCount === 1 ? "" : "es"}, inventory is full.`
