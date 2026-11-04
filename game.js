@@ -1866,17 +1866,12 @@
     surface.width = surface.height = 128;
     const ctx = surface.getContext("2d");
     const glow = ctx.createRadialGradient(64, 64, 0, 64, 64, 60);
-    glow.addColorStop(0, "rgba(255,255,255,0.85)");
-    glow.addColorStop(0.25, "rgba(255,255,255,0.3)");
+    glow.addColorStop(0, "rgba(255,255,255,0.6)");
+    glow.addColorStop(0.25, "rgba(255,255,255,0.18)");
+    glow.addColorStop(0.6, "rgba(255,255,255,0.04)");
     glow.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, 128, 128);
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.moveTo(64, 3);
-    for (const [x, y] of [[70, 57], [125, 64], [70, 71], [64, 125], [58, 71], [3, 64], [58, 57]]) ctx.lineTo(x, y);
-    ctx.closePath();
-    ctx.fill();
     const texture = new THREE.CanvasTexture(surface);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.generateMipmaps = false;
@@ -1974,7 +1969,7 @@
     geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
     geometry.attributes.color.setUsage(THREE.DynamicDrawUsage);
     const material = new THREE.PointsMaterial({
-      map: texture, vertexColors: true, transparent: true, opacity: 0.95,
+      map: texture, vertexColors: true, transparent: true, opacity: 0.5,
       blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false, sizeAttenuation: true,
     });
     const points = new THREE.Points(geometry, material);
@@ -2012,14 +2007,14 @@
     for (let i = 0; i < positions.count; i++) {
       const phase = i * 2.39996 + entry.spin;
       const angle = phase + t * (tier.isShadow ? -0.38 : 0.52);
-      const clearance = (tier.isShadow ? 0.035 : 0.02) + (Math.sin(phase + t * 0.7) + 1) * 0.012;
-      const u = Math.cos(angle) * 0.012, v = Math.sin(angle) * 0.012;
+      const clearance = (tier.isShadow ? 0.016 : 0.01) + (Math.sin(phase + t * 0.7) + 1) * 0.006;
+      const u = Math.cos(angle) * 0.006, v = Math.sin(angle) * 0.006;
       const offset = i * 3;
       const x = shape.position[offset] + shape.normal[offset] * clearance + shape.tangent[offset] * u + shape.bitangent[offset] * v;
       const y = shape.position[offset + 1] + shape.normal[offset + 1] * clearance + shape.tangent[offset + 1] * u + shape.bitangent[offset + 1] * v;
       const z = shape.position[offset + 2] + shape.normal[offset + 2] * clearance + shape.tangent[offset + 2] * u + shape.bitangent[offset + 2] * v;
       positions.setXYZ(i, x, Math.max(0.01, y), z);
-      const fade = Math.pow((Math.sin(t * 0.9 + i * 2.71 + entry.spin) + 1) / 2, 1.4);
+      const fade = Math.pow((Math.sin(t * 0.55 + i * 2.71 + entry.spin) + 1) / 2, 1.4);
       if (tier.isShadow) color.setHSL(0.75 + Math.sin(phase) * 0.04, 0.9, 0.68);
       else if (tier.isShiny) color.setHSL((i / positions.count + t * 0.14) % 1, 1, 0.55);
       else color.setHSL(0.115 + (i % 3) * 0.015, 0.9, 0.72);
