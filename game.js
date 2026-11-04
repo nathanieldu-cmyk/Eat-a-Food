@@ -1884,6 +1884,88 @@
     return texture;
   }
 
+  function makeFoodSparkleShape(THREE, model, count) {
+    // Sample triangles by surface area in model-local coordinates, so each
+    // base food shares a shape that stays correct as it rotates and grows.
+    model.updateWorldMatrix(true, true);
+    const inverse = new THREE.Matrix4().copy(model.matrixWorld).invert();
+    const faces = [];
+    let totalArea = 0;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    const edge = new THREE.Vector3(), edge2 = new THREE.Vector3(), cross = new THREE.Vector3();
+    function corner(part, offset, target) {
+      const index = part.index ? part.index.getX(offset) : offset;
+      target.fromBufferAttribute(part.position, index).applyMatrix4(part.matrix);
+      return index;
+    }
+    model.traverse((mesh) => {
+      if (!mesh.isMesh || !mesh.geometry.attributes.position) return;
+      const geometry = mesh.geometry;
+      const matrix = new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld);
+      const part = {
+        position: geometry.attributes.position, normal: geometry.attributes.normal,
+        index: geometry.index, matrix, normalMatrix: new THREE.Matrix3().getNormalMatrix(matrix),
+        mirrored: matrix.determinant() < 0,
+      };
+      const start = geometry.drawRange.start;
+      const end = Math.min(part.index ? part.index.count : part.position.count, start + geometry.drawRange.count);
+      for (let offset = start; offset + 2 < end; offset += 3) {
+        corner(part, offset, a); corner(part, offset + 1, b); corner(part, offset + 2, c);
+        const area = cross.crossVectors(edge.subVectors(b, a), edge2.subVectors(c, a)).length() * 0.5;
+        if (!(area > 1e-12)) continue;
+        totalArea += area;
+        faces.push({ part, offset, end: totalArea });
+      }
+    });
+    const shape = {
+      position: new Float32Array(count * 3), normal: new Float32Array(count * 3),
+      tangent: new Float32Array(count * 3), bitangent: new Float32Array(count * 3),
+    };
+    const point = new THREE.Vector3(), normal = new THREE.Vector3();
+    const na = new THREE.Vector3(), nb = new THREE.Vector3(), nc = new THREE.Vector3();
+    const tangent = new THREE.Vector3(), bitangent = new THREE.Vector3(), axis = new THREE.Vector3();
+    for (let i = 0; i < count; i++) {
+      if (faces.length) {
+        const target = ((i * 0.61803398875 + 0.5) % 1) * totalArea;
+        let lo = 0, hi = faces.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if (faces[mid].end < target) lo = mid + 1;
+          else hi = mid;
+        }
+        const { part, offset } = faces[lo];
+        const ia = corner(part, offset, a), ib = corner(part, offset + 1, b), ic = corner(part, offset + 2, c);
+        const u = Math.sqrt((i * 0.754877666 + 0.37) % 1);
+        const v = (i * 0.569840296 + 0.13) % 1;
+        const wa = 1 - u, wb = u * (1 - v), wc = u * v;
+        point.copy(a).multiplyScalar(wa).addScaledVector(b, wb).addScaledVector(c, wc);
+        normal.set(0, 0, 0);
+        if (part.normal) {
+          na.fromBufferAttribute(part.normal, ia).applyNormalMatrix(part.normalMatrix);
+          nb.fromBufferAttribute(part.normal, ib).applyNormalMatrix(part.normalMatrix);
+          nc.fromBufferAttribute(part.normal, ic).applyNormalMatrix(part.normalMatrix);
+          normal.addScaledVector(na, wa).addScaledVector(nb, wb).addScaledVector(nc, wc);
+        }
+        if (normal.lengthSq() < 1e-12) {
+          normal.crossVectors(edge.subVectors(b, a), edge2.subVectors(c, a));
+          if (part.mirrored) normal.negate();
+        }
+        normal.normalize();
+      } else {
+        const y = 1 - 2 * (i + 0.5) / count;
+        const radius = Math.sqrt(1 - y * y), angle = i * 2.39996;
+        normal.set(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+        point.copy(normal).multiplyScalar(0.45);
+      }
+      axis.set(Math.abs(normal.y) < 0.9 ? 0 : 1, Math.abs(normal.y) < 0.9 ? 1 : 0, 0);
+      tangent.crossVectors(normal, axis).normalize();
+      bitangent.crossVectors(normal, tangent).normalize();
+      point.toArray(shape.position, i * 3); normal.toArray(shape.normal, i * 3);
+      tangent.toArray(shape.tangent, i * 3); bitangent.toArray(shape.bitangent, i * 3);
+    }
+    return shape;
+  }
+
   function makeFoodSparkles(THREE, texture) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(80 * 3), 3));
@@ -1913,8 +1995,16 @@
       entry.group.add(entry.sparkles);
     }
     const points = entry.sparkles;
+    if (!entry.sparkleShape) {
+      if (!view.foodSparkleShapes.has(entry.modelFile)) {
+        view.foodSparkleShapes.set(entry.modelFile, makeFoodSparkleShape(view.THREE, entry.holder, 80));
+      }
+      entry.sparkleShape = view.foodSparkleShapes.get(entry.modelFile);
+    }
+    const shape = entry.sparkleShape;
     points.visible = true;
     points.scale.setScalar(scale);
+    points.rotation.copy(entry.holder.rotation);
     points.material.size = scale * (tier.isShadow ? 0.15 : 0.13);
     const positions = points.geometry.attributes.position;
     const colors = points.geometry.attributes.color;
@@ -1922,10 +2012,13 @@
     for (let i = 0; i < positions.count; i++) {
       const phase = i * 2.39996 + entry.spin;
       const angle = phase + t * (tier.isShadow ? -0.38 : 0.52);
-      // Separate phases scatter the stars through a cloud without position resets.
-      const lift = 0.5 + Math.sin(i * 1.73 + entry.spin + t * 0.35) * 0.5;
-      const radius = (tier.isShadow ? 0.68 : 0.5) + Math.sin(phase + t * 0.7) * 0.13;
-      positions.setXYZ(i, Math.cos(angle) * radius, 0.08 + lift * 1.05, Math.sin(angle) * radius);
+      const clearance = (tier.isShadow ? 0.035 : 0.02) + (Math.sin(phase + t * 0.7) + 1) * 0.012;
+      const u = Math.cos(angle) * 0.012, v = Math.sin(angle) * 0.012;
+      const offset = i * 3;
+      const x = shape.position[offset] + shape.normal[offset] * clearance + shape.tangent[offset] * u + shape.bitangent[offset] * v;
+      const y = shape.position[offset + 1] + shape.normal[offset + 1] * clearance + shape.tangent[offset + 1] * u + shape.bitangent[offset + 1] * v;
+      const z = shape.position[offset + 2] + shape.normal[offset + 2] * clearance + shape.tangent[offset + 2] * u + shape.bitangent[offset + 2] * v;
+      positions.setXYZ(i, x, Math.max(0.01, y), z);
       const fade = Math.pow((Math.sin(t * 0.9 + i * 2.71 + entry.spin) + 1) / 2, 1.4);
       if (tier.isShadow) color.setHSL(0.75 + Math.sin(phase) * 0.04, 0.9, 0.68);
       else if (tier.isShiny) color.setHSL((i / positions.count + t * 0.14) % 1, 1, 0.55);
@@ -2036,6 +2129,7 @@
       entry = {
         group,
         holder,
+        modelFile: file,
         label,
         materials,
         ring,
@@ -2637,6 +2731,7 @@
       lobby,
       foods: new Map(),
       foodSparkleTexture: makeFoodSparkleTexture(THREE),
+      foodSparkleShapes: new Map(),
       yaw: 0.55,
       pitch: 0.86,
       distance: state.running ? RUN_CAMERA_DISTANCE : LOBBY_CAMERA_DISTANCE,
