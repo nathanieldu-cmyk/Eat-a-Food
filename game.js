@@ -1886,13 +1886,14 @@
 
   function makeFoodSparkles(THREE, texture) {
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(16 * 3), 3));
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(80 * 3), 3));
+    // RGBA colors give every particle its own smooth fade.
+    geometry.setAttribute("color", new THREE.BufferAttribute(new Float32Array(80 * 4), 4));
     geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
     geometry.attributes.color.setUsage(THREE.DynamicDrawUsage);
     const material = new THREE.PointsMaterial({
       map: texture, vertexColors: true, transparent: true, opacity: 0.95,
-      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+      blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false, sizeAttenuation: true,
     });
     const points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
@@ -1914,22 +1915,22 @@
     const points = entry.sparkles;
     points.visible = true;
     points.scale.setScalar(scale);
-    points.material.size = scale * (tier.isShadow ? 0.48 : 0.42);
+    points.material.size = scale * (tier.isShadow ? 0.15 : 0.13);
     const positions = points.geometry.attributes.position;
     const colors = points.geometry.attributes.color;
     const color = entry.sparkleColor;
     for (let i = 0; i < positions.count; i++) {
       const phase = i * 2.39996 + entry.spin;
       const angle = phase + t * (tier.isShadow ? -0.38 : 0.52);
-      const lift = (i / positions.count + t * (tier.isShadow ? 0.1 : 0.16)) % 1;
+      // Separate phases scatter the stars through a cloud without position resets.
+      const lift = 0.5 + Math.sin(i * 1.73 + entry.spin + t * 0.35) * 0.5;
       const radius = (tier.isShadow ? 0.68 : 0.5) + Math.sin(phase + t * 0.7) * 0.13;
       positions.setXYZ(i, Math.cos(angle) * radius, 0.08 + lift * 1.05, Math.sin(angle) * radius);
-      const twinkle = 0.25 + 0.75 * Math.pow((Math.sin(t * 3.2 + phase) + 1) / 2, 2);
+      const fade = Math.pow((Math.sin(t * 0.9 + i * 2.71 + entry.spin) + 1) / 2, 1.4);
       if (tier.isShadow) color.setHSL(0.75 + Math.sin(phase) * 0.04, 0.9, 0.68);
       else if (tier.isShiny) color.setHSL((i / positions.count + t * 0.14) % 1, 1, 0.55);
       else color.setHSL(0.115 + (i % 3) * 0.015, 0.9, 0.72);
-      color.multiplyScalar(twinkle);
-      colors.setXYZ(i, color.r, color.g, color.b);
+      colors.setXYZW(i, color.r, color.g, color.b, fade);
     }
     positions.needsUpdate = colors.needsUpdate = true;
   }

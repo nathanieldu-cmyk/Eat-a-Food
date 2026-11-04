@@ -35,13 +35,17 @@ test('variant sparkles reuse one particle cloud, follow growth and animate witho
   g.syncFoodSparkles(entry, food, 0, 30);
   const points = entry.sparkles;
   assert.equal(points.isPoints, true);
-  assert.equal(points.geometry.attributes.position.count, 16);
+  assert.equal(points.geometry.attributes.position.count, 80);
+  assert.equal(points.geometry.attributes.color.itemSize, 4);
   assert.equal(entry.group.children.length, 1);
   assert.equal(points.material.map, g.texture);
   assert.equal(points.material.depthWrite, false);
+  assert.equal(points.material.depthTest, false);
+  assert.equal(points.material.fog, false);
   const positions = Array.from(points.geometry.attributes.position.array);
   const colors = Array.from(points.geometry.attributes.color.array);
   const smallSize = points.material.size;
+  assert.ok(smallSize < 30 * 0.2);
   for (let i = 1; i < positions.length; i += 3) assert.ok(positions[i] > 0 && positions[i] < 1.2);
 
   g.syncFoodSparkles(entry, food, 1, 60);
@@ -51,6 +55,28 @@ test('variant sparkles reuse one particle cloud, follow growth and animate witho
   assert.notDeepEqual(Array.from(points.geometry.attributes.position.array), positions);
   assert.notDeepEqual(Array.from(points.geometry.attributes.color.array), colors);
   assert.equal(entry.group.children.length, 1);
+
+  let previousPositions = Array.from(points.geometry.attributes.position.array);
+  let previousAlpha = Array.from({ length: 80 }, (_, i) => points.geometry.attributes.color.getW(i));
+  for (let frame = 1; frame <= 120; frame++) {
+    g.syncFoodSparkles(entry, food, 1 + frame / 60, 60);
+    const positions = points.geometry.attributes.position;
+    const colors = points.geometry.attributes.color;
+    let visible = 0;
+    for (let i = 0; i < positions.count; i++) {
+      const movement = Math.hypot(positions.getX(i) - previousPositions[i * 3],
+        positions.getY(i) - previousPositions[i * 3 + 1], positions.getZ(i) - previousPositions[i * 3 + 2]);
+      assert.ok(movement < 0.05, 'particles orbit continuously without resetting their position');
+      const alpha = colors.getW(i);
+      assert.ok(alpha >= 0 && alpha <= 1);
+      assert.ok(Math.abs(alpha - previousAlpha[i]) < 0.05, 'each particle fades smoothly');
+      if (alpha > 0.05) visible++;
+    }
+    assert.ok(visible > 30, 'the staggered cloud stays visible throughout a run');
+    assert.equal(points.visible, true);
+    previousPositions = Array.from(positions.array);
+    previousAlpha = Array.from({ length: 80 }, (_, i) => colors.getW(i));
+  }
 
   food.tier = {};
   g.syncFoodSparkles(entry, food, 2, 60);
