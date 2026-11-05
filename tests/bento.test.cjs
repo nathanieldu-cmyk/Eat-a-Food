@@ -163,7 +163,7 @@ test('runs below 25 foods no longer get random gold upgrades', () => {
 const rainbowThresholds = [
   [0, 0, 0], [499, 0, 0], [500, 50, 1], [700, 45, 1], [900, 40, 1],
   [1100, 35, 2], [1300, 30, 1], [1500, 25, 1], [1750, 20, 1],
-  [2000, 15, 1], [2250, 10, 1], [2500, 5, 1], [2750, 1, 1], [100000, 1, 1],
+  [2000, 15, 1], [2250, 10, 1], [2500, 5, 1], [2750, 5, 1], [2999, 5, 1], [3000, 1, 1], [100000, 1, 1],
 ];
 
 test('Rainbow odds follow every milestone, stop at one guaranteed box, and ignore luck', () => {

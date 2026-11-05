@@ -3219,9 +3219,9 @@
 
   function rollRunRainbowBentoCount(earned) {
     if (earned < 500) return 0;
-    if (earned >= 2750) return 1;
+    if (earned >= 3000) return 1;
     const denominator = earned >= 1500
-      ? 25 - 5 * Math.floor((earned - 1500) / 250)
+      ? Math.max(5, 25 - 5 * Math.floor((earned - 1500) / 250))
       : 50 - 5 * Math.floor((earned - 500) / 200);
     // The 1,100-food milestone specifically awards two on a successful roll.
     const count = earned >= 1100 && earned < 1300 ? 2 : 1;
