@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=66" />
+  <link rel="stylesheet" href="style.css?v=67" />
   <script type="importmap">
     {
       "imports": {
@@ -69,7 +69,8 @@
       </aside>
       <div class="stage-slot">
     <main class="stage">
-      <canvas id="arena" width="720" height="720"></canvas>
+      <canvas id="arena" width="720" height="720" aria-label="Game arena. On touchscreens, drag on the left to move and on the right to turn the camera."></canvas>
+      <div id="touch-stick" class="touch-stick" aria-hidden="true"><div id="touch-knob" class="touch-knob"></div></div>
       <div id="lobby-hint" class="lobby-hint">Blue circle: start a run · Gold pad: shop · Purple pad: craft</div>
       <div id="leaderboard" class="leaderboard hidden">
         <p class="leaderboard-title">Biggest in the arena</p>
@@ -169,6 +170,6 @@
   </div>
 
   <script src="foods.js?v=32783f4f1709"></script>
-  <script src="game.js?v=204"></script>
+  <script src="game.js?v=205"></script>
 </body>
 </html>

@@ -6,6 +6,11 @@
   })();
   try {
   const canvas = document.getElementById("arena");
+  const touchStickEl = document.getElementById("touch-stick");
+  const touchKnobEl = document.getElementById("touch-knob");
+  const moveStick = { x: 0, y: 0 };
+  const touchControl = { moveId: null, cameraId: null, originX: 0, originY: 0, cameraX: 0, cameraY: 0 };
+
   const uuid = () =>
     (crypto.randomUUID && crypto.randomUUID()) ||
     `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -1444,23 +1449,7 @@
   const moveKeys = new Set();
 
   function controlDirection() {
-    let strafe = 0;
-    let forward = 0;
-    if (moveKeys.has("d")) strafe += 1;
-    if (moveKeys.has("a")) strafe -= 1;
-    if (moveKeys.has("w") || moveKeys.has("arrowup")) forward += 1;
-    if (moveKeys.has("s") || moveKeys.has("arrowdown")) forward -= 1;
-    const mag = Math.hypot(strafe, forward);
-    if (!mag || !view) return null;
-    const yaw = view.yaw;
-    const fx = -Math.sin(yaw);
-    const fz = -Math.cos(yaw);
-    const rx = Math.cos(yaw);
-    const rz = -Math.sin(yaw);
-    return {
-      x: (rx * strafe + fx * forward) / mag,
-      y: (rz * strafe + fz * forward) / mag,
-    };
+    return view ? directionFromKeys([...moveKeys], view.yaw, moveStick) : null;
   }
 
   function steerCamera(dt) {
@@ -1481,14 +1470,7 @@
   }
 
   function playerIsMoving() {
-    return (
-      moveKeys.has("w") ||
-      moveKeys.has("a") ||
-      moveKeys.has("s") ||
-      moveKeys.has("d") ||
-      moveKeys.has("arrowup") ||
-      moveKeys.has("arrowdown")
-    );
+    return keysAreMoving([...moveKeys], moveStick);
   }
 
   function otherFoods(food) {
@@ -1565,7 +1547,7 @@
     return tier.speed;
   }
 
-  function directionFromKeys(keys, yaw) {
+  function directionFromKeys(keys, yaw, stick) {
     const held = new Set(keys || []);
     let strafe = 0;
     let forward = 0;
@@ -1573,6 +1555,10 @@
     if (held.has("a")) strafe -= 1;
     if (held.has("w") || held.has("arrowup")) forward += 1;
     if (held.has("s") || held.has("arrowdown")) forward -= 1;
+    if (stick && Number.isFinite(stick.x) && Number.isFinite(stick.y)) {
+      strafe += Math.max(-1, Math.min(1, stick.x));
+      forward -= Math.max(-1, Math.min(1, stick.y));
+    }
     const mag = Math.hypot(strafe, forward);
     if (!mag) return null;
     const fx = -Math.sin(yaw || 0);
@@ -1582,20 +1568,22 @@
     return {
       x: (rx * strafe + fx * forward) / mag,
       y: (rz * strafe + fz * forward) / mag,
+      strength: Math.min(1, mag),
     };
   }
 
-  function keysAreMoving(keys) {
+  function keysAreMoving(keys, stick) {
     const held = new Set(keys || []);
-    return held.has("w") || held.has("a") || held.has("s") || held.has("d") || held.has("arrowup") || held.has("arrowdown");
+    return !!(stick && Number.isFinite(stick.x) && Number.isFinite(stick.y) && Math.hypot(stick.x, stick.y) > 0) ||
+      held.has("w") || held.has("a") || held.has("s") || held.has("d") || held.has("arrowup") || held.has("arrowdown");
   }
 
   function applyLobbySteer(food, dt, remote) {
     const blocked = !remote && lobbyBlocked();
-    const dir = blocked ? null : remote ? directionFromKeys(remote.keys, remote.yaw) : controlDirection();
+    const dir = blocked ? null : remote ? directionFromKeys(remote.keys, remote.yaw, remote.stick) : controlDirection();
     if (dir) {
       const spd = Math.max(0.75, moveSpeed(food));
-      steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
+      steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd * dir.strength);
     }
     food.vx *= 0.86;
     food.vy *= 0.86;
@@ -1607,13 +1595,13 @@
 
   function applyRunSteer(food, dt, remote) {
     const spd = moveSpeed(food);
-    const dir = remote ? directionFromKeys(remote.keys, remote.yaw) : controlDirection();
-    const moving = remote ? keysAreMoving(remote.keys) : playerIsMoving();
+    const dir = remote ? directionFromKeys(remote.keys, remote.yaw, remote.stick) : controlDirection();
+    const moving = remote ? keysAreMoving(remote.keys, remote.stick) : playerIsMoving();
     const farming = remote ? !!remote.autoFarm : state.autoFarm;
     if (dir) {
-      steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd);
+      steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd * dir.strength);
       const nearest = preferredSprinkle(food);
-      if (nearest && dist(food, nearest) < 140) steerToward(food, nearest, 0.22 * spd);
+      if (nearest && dist(food, nearest) < 140) steerToward(food, nearest, 0.22 * spd * dir.strength);
     } else if (farming && !moving) {
       steerLikeCpu(food, spd);
     }
@@ -2616,6 +2604,8 @@
     const height = canvas.clientHeight || ARENA;
     view.renderer.setSize(width, height, false);
     view.camera.aspect = width / Math.max(1, height);
+    // Preserve the horizontal view on tall phones instead of cropping the arena.
+    view.camera.fov = Math.min(90, 2 * Math.atan(Math.tan(20 * Math.PI / 180) / Math.min(1, view.camera.aspect)) * 180 / Math.PI);
     view.camera.updateProjectionMatrix();
   }
 
@@ -3482,6 +3472,7 @@
   }
 
   function openShop() {
+    resetTouchControls();
     if (state.running) return;
     closeInventory();
     closeCraft();
@@ -3498,6 +3489,7 @@
   }
 
   function openCraft() {
+    resetTouchControls();
     if (state.running) return;
     closeInventory();
     closeShop();
@@ -3514,6 +3506,7 @@
   }
 
   function openInventory() {
+    resetTouchControls();
     closeShop();
     closeCraft();
     renderInventory();
@@ -3731,6 +3724,7 @@
   }
 
   function endRun(wipedOut = false) {
+    resetTouchControls();
     if (!state.running) return;
     state.running = false;
     if (net.role === "guest") net.place = -1;
@@ -3803,22 +3797,85 @@
     overlay.classList.add("hidden");
   }
 
-  let draggingCamera = false;
+  function updateTouchStick(clientX, clientY) {
+    const radius = 44;
+    const dx = clientX - touchControl.originX;
+    const dy = clientY - touchControl.originY;
+    const distance = Math.hypot(dx, dy);
+    const travel = Math.min(distance, radius);
+    const x = distance ? dx / distance : 0;
+    const y = distance ? dy / distance : 0;
+    // A small dead zone prevents accidental movement while resting a thumb.
+    const strength = Math.max(0, (travel - 6) / (radius - 6));
+    moveStick.x = x * strength;
+    moveStick.y = y * strength;
+    touchKnobEl.style.transform = `translate(${x * travel}px, ${y * travel}px)`;
+  }
+
+  function finishControlPointer(e) {
+    if (e.pointerId === touchControl.moveId) {
+      touchControl.moveId = null;
+      moveStick.x = moveStick.y = 0;
+      touchKnobEl.style.transform = "";
+      touchStickEl.classList.remove("active");
+      touchStickEl.style.left = touchStickEl.style.top = "";
+    }
+    if (e.pointerId === touchControl.cameraId) {
+      touchControl.cameraId = null;
+      canvas.classList.remove("dragging");
+    }
+    if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  }
+
+  function resetTouchControls() {
+    if (touchControl.moveId !== null) finishControlPointer({ pointerId: touchControl.moveId });
+    if (touchControl.cameraId !== null) finishControlPointer({ pointerId: touchControl.cameraId });
+  }
+
   canvas.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
-    draggingCamera = true;
-    canvas.classList.add("dragging");
+    if (e.button !== 0 || lobbyBlocked() || !view) return;
+    const rect = canvas.getBoundingClientRect();
+    if (e.pointerType === "touch") {
+      canvas.parentElement.classList.add("touch-controls");
+      if (e.clientX < rect.left + rect.width * 0.5) {
+        if (touchControl.moveId !== null) return;
+        touchControl.moveId = e.pointerId;
+        touchControl.originX = e.clientX;
+        touchControl.originY = e.clientY;
+        touchStickEl.style.left = `${e.clientX - rect.left}px`;
+        touchStickEl.style.top = `${e.clientY - rect.top}px`;
+        touchStickEl.classList.add("active");
+        updateTouchStick(e.clientX, e.clientY);
+      } else {
+        if (touchControl.cameraId !== null) return;
+        touchControl.cameraId = e.pointerId;
+        touchControl.cameraX = e.clientX;
+        touchControl.cameraY = e.clientY;
+      }
+    } else {
+      if (touchControl.cameraId !== null) return;
+      touchControl.cameraId = e.pointerId;
+      touchControl.cameraX = e.clientX;
+      touchControl.cameraY = e.clientY;
+      canvas.classList.add("dragging");
+    }
     canvas.setPointerCapture(e.pointerId);
-  });
-  canvas.addEventListener("pointerup", (e) => {
-    draggingCamera = false;
-    canvas.classList.remove("dragging");
-    if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    e.preventDefault();
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!draggingCamera || !view) return;
-    view.yaw -= e.movementX * 0.005;
-    view.pitch = Math.min(1.28, Math.max(0.22, view.pitch + e.movementY * 0.004));
+    if (e.pointerId === touchControl.moveId) updateTouchStick(e.clientX, e.clientY);
+    if (e.pointerId !== touchControl.cameraId || !view) return;
+    view.yaw -= (e.clientX - touchControl.cameraX) * 0.005;
+    view.pitch = Math.min(1.28, Math.max(0.22, view.pitch + (e.clientY - touchControl.cameraY) * 0.004));
+    touchControl.cameraX = e.clientX;
+    touchControl.cameraY = e.clientY;
+  });
+  canvas.addEventListener("pointerup", finishControlPointer);
+  canvas.addEventListener("pointercancel", finishControlPointer);
+  canvas.addEventListener("lostpointercapture", finishControlPointer);
+  window.addEventListener("resize", resetTouchControls);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { moveKeys.clear(); resetTouchControls(); }
   });
   canvas.addEventListener(
     "wheel",
@@ -3962,6 +4019,7 @@
         x: food ? Math.round(food.x * 10) / 10 : 0,
         y: food ? Math.round(food.y * 10) / 10 : 0,
         keys: [...moveKeys],
+        stick: { x: moveStick.x, y: moveStick.y },
         autoFarm: state.autoFarm,
         yaw: view ? view.yaw : 0,
         food: equippedTier().name,
@@ -4102,6 +4160,7 @@
   }
 
   function openMulti() {
+    resetTouchControls();
     multiModal.classList.remove("hidden");
     multiModal.setAttribute("aria-hidden", "false");
     if (!net.role) reloadIfOutdated();
@@ -5130,7 +5189,7 @@
   window.addEventListener("keyup", (e) => {
     moveKeys.delete(e.key.toLowerCase());
   });
-  window.addEventListener("blur", () => moveKeys.clear());
+  window.addEventListener("blur", () => { moveKeys.clear(); resetTouchControls(); });
 
   enterLobby();
   updateHud();

@@ -1076,40 +1076,79 @@ h1 {
   border: 1px solid rgba(255, 243, 224, 0.14);
 }
 
-@media (max-width: 800px) {
-  body {
-    overflow: auto;
-  }
-
+/* Keep the playfield and run actions together on a phone screen. */
+@media (max-width: 800px), (pointer: coarse) {
   #app {
-    height: auto;
-    max-height: none;
+    height: 100dvh;
+    padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    gap: 8px;
   }
+  h1 { font-size: 1.4rem; line-height: 1.1; }
+  .play-row { display: flex; flex-direction: column; gap: 8px; container-type: normal; }
+  .side-panel { flex: 0 0 auto; width: 100%; overflow: visible; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stats { grid-column: 1 / -1; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .stat { min-width: 0; }
+  .stat .label { font-size: 0.56rem; letter-spacing: 0.03em; }
+  .stat span:last-child { font-size: clamp(0.66rem, 2.6vw, 0.95rem); overflow-wrap: anywhere; }
+  .header-buttons { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .header-buttons .btn { font-size: 0.78rem; padding: 8px 3px; min-height: 40px; }
+  .multi-live, .potion-status { grid-column: 1 / -1; font-size: 0.75rem; }
+  .hud { grid-column: 1 / -1; grid-template-columns: 76px minmax(0, 1fr) 76px; align-items: center; gap: 6px; }
+  .hud .btn { font-size: 0.8rem; padding: 10px 4px; min-height: 44px; }
+  .food-meter { padding: 6px 8px; gap: 4px; }
+  .meter-label { font-size: 0.66rem; }
+  .peanut-meter-hint { grid-column: 1 / -1; grid-row: 2; font-size: 0.75rem; }
+  .stage-slot { flex: 1 1 0; width: 100%; min-height: 0; }
+  .stage { height: 100%; aspect-ratio: auto; border-radius: 14px; }
+  .panel { max-height: calc(100% - 16px); padding: 16px; overflow-y: auto; gap: 10px; }
+  .panel h2 { font-size: 1.4rem; }
+  .panel p { font-size: 0.85rem; }
+  .lobby-hint { font-size: 0.66rem; bottom: 8px; padding: 4px 8px; }
+  .leaderboard { font-size: 0.65rem; min-width: 120px; top: 8px; right: 8px; padding: 6px; }
+  .shop-modal { padding: 10px; }
+  .shop-panel { max-height: calc(100dvh - 20px); overflow-y: auto; overscroll-behavior: contain; }
+  .craft-list { grid-template-columns: 1fr; }
+}
 
-  .play-row {
-    display: grid;
-    grid-template-columns: 1fr;
-    container-type: normal;
-  }
-
-  .side-panel {
-    width: 100%;
-    flex-basis: auto;
-  }
-
-  .stage-slot {
-    width: 100%;
-  }
-
-  .stage {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 1;
-  }
-
-  .craft-list {
-    grid-template-columns: 1fr;
-  }
+.touch-stick {
+  display: none;
+  position: absolute;
+  left: 82px;
+  top: calc(100% - 100px);
+  width: 104px;
+  height: 104px;
+  margin: -52px 0 0 -52px;
+  border: 2px solid rgba(255, 243, 224, 0.42);
+  border-radius: 50%;
+  background: rgba(20, 12, 8, 0.3);
+  pointer-events: none;
+}
+.touch-controls .touch-stick { display: grid; place-items: center; }
+.touch-knob {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(255, 243, 224, 0.5);
+  border: 2px solid rgba(255, 243, 224, 0.65);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.touch-stick.active { background: rgba(20, 12, 8, 0.45); border-color: rgba(255, 243, 224, 0.7); }
+@media (any-pointer: coarse) {
+  .touch-stick { display: grid; place-items: center; }
+  #arena { cursor: default; }
+}
+@media (pointer: coarse) and (orientation: landscape) and (min-width: 600px) {
+  #app { grid-template-rows: minmax(0, 1fr); }
+  h1 { display: none; }
+  .play-row { flex-direction: row; }
+  .side-panel { flex-basis: 210px; width: 210px; overflow-y: auto; align-content: center; }
+  .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .header-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hud { grid-template-columns: 1fr 1fr; }
+  .food-meter { grid-column: 1 / -1; grid-row: 1; }
+  .peanut-meter-hint { grid-row: 2; }
+  .stage-slot { flex: 1 1 0; width: auto; }
+  .touch-stick { top: calc(100% - 78px); }
 }
 
 .multi-status {
