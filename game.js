@@ -355,7 +355,7 @@
   const BENTO_COST = 1000;
   const BENTO_UNLOCK_MS = 2 * 60 * 60 * 1000;
   const BENTO_MAX_BOXES = 5;
-  const BENTO_RUN_BASE_CHANCE = 1 / 4;
+  const BENTO_RUN_BASE_CHANCE = 1 / 8;
   const BENTO_FOODS = 3;
   const BENTO_LUCK_PER_OPEN = 0.01;
   const BENTO_SKIP_COST_PER_HOUR = 1000;
@@ -3225,7 +3225,7 @@
     const roll = Math.random();
     if (earned < 1) return 0;
     if (earned < 5) return roll < BENTO_RUN_BASE_CHANCE ? 1 : 0;
-    if (earned < 10) return roll < 1 / 2 ? 1 : 0;
+    if (earned < 20) return roll < 1 / 4 ? 1 : 0;
     const guaranteed = earned >= 500
       ? 6 + Math.floor((earned - 500) / 250)
       : earned >= 300 ? 5

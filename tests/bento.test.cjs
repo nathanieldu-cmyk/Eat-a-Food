@@ -63,7 +63,7 @@ function boot(saved) {
 
 const thresholds = [
   [0, 0, 0], [1, 0, 1], [4, 0, 1], [5, 0, 1], [9, 0, 1],
-  [10, 0, 2], [24, 0, 2], [25, 1, 3], [49, 1, 3],
+  [10, 0, 1], [19, 0, 1], [20, 0, 2], [24, 0, 2], [25, 1, 3], [49, 1, 3],
   [50, 2, 4], [99, 2, 4], [100, 3, 5], [149, 3, 5],
   [150, 4, 6], [199, 4, 6], [200, 4, 6], [299, 4, 6],
   [300, 5, 7], [399, 5, 7], [400, 5, 7], [499, 5, 7],
@@ -384,15 +384,15 @@ test('finishing a run prioritizes existing gold boxes within ready and locked gr
 
 function expectedCount(earned, minimum, maximum, roll) {
   if (earned < 1) return 0;
-  if (earned < 5) return roll < 0.25 ? 1 : 0;
-  if (earned < 10) return roll < 0.5 ? 1 : 0;
+  if (earned < 5) return roll < 0.125 ? 1 : 0;
+  if (earned < 20) return roll < 0.25 ? 1 : 0;
   return roll < 0.25 ? maximum : roll < 0.5 ? minimum + 1 : minimum;
 }
 
-test('all food milestones and exact 25%/50% probability boundaries', () => {
+test('all food milestones and exact 12.5%/25%/50% probability boundaries', () => {
   const g = boot();
   for (const [earned, minimum, maximum] of thresholds) {
-    for (const roll of [0, 0.249999, 0.25, 0.499999, 0.5, 0.999999]) {
+    for (const roll of [0, 0.124999, 0.125, 0.249999, 0.25, 0.499999, 0.5, 0.999999]) {
       g.math.random = () => roll;
       assert.equal(g.rollRunBentoCount(earned), expectedCount(earned, minimum, maximum, roll));
     }
@@ -401,8 +401,8 @@ test('all food milestones and exact 25%/50% probability boundaries', () => {
       g.math.random = () => n / 1000;
       outcomes.push(g.rollRunBentoCount(earned));
     }
-    assert.equal(outcomes.filter(n => n >= maximum).length, earned < 1 ? 1000 : earned < 10 && earned >= 5 ? 500 : 250);
-    if (earned >= 10) assert.equal(outcomes.filter(n => n >= minimum + 1).length, 500);
+    assert.equal(outcomes.filter(n => n >= maximum).length, earned < 1 ? 1000 : earned < 5 ? 125 : 250);
+    if (earned >= 20) assert.equal(outcomes.filter(n => n >= minimum + 1).length, 500);
     assert.equal(outcomes.filter(n => n >= minimum).length, 1000);
   }
 });
@@ -412,7 +412,7 @@ test('one reward-count roll plus at most one gold-quota roll regardless of luck,
     for (const [earned, minimum, maximum] of thresholds) {
       for (const role of [null, 'host', 'guest']) {
         for (const wipedOut of [false, true]) {
-          for (const roll of [0.249999, 0.25, 0.5]) {
+          for (const roll of [0.124999, 0.125, 0.249999, 0.25, 0.5]) {
             const g = boot();
             if (boosted) {
               for (const name of Object.keys(g.tierByName)) g.save.inventory[name] = 1;
@@ -430,8 +430,9 @@ test('one reward-count roll plus at most one gold-quota roll regardless of luck,
             assert.equal(g.save.bento.locked, expected);
             assert.equal(calls, earned >= 25 ? 2 : 1);
             assert.equal(g.save.diamonds, earned);
-            const [, guaranteedGold] = goldThresholds.findLast(([foods]) => foods <= earned);
-            if (expected) assert.ok(g.elements.get('overlay-msg').textContent.includes(`You earned ${rolled - guaranteedGold} normal bento box`));
+            const [, guaranteedGold, goldDenominator] = goldThresholds.findLast(([foods]) => foods <= earned);
+            const goldCount = Math.min(rolled, guaranteedGold + (goldDenominator && roll < 1 / goldDenominator ? 1 : 0));
+            if (expected) assert.ok(g.elements.get('overlay-msg').textContent.includes(`You earned ${rolled - goldCount} normal bento box`));
             g.endRun(wipedOut);
             assert.equal(calls, earned >= 25 ? 2 : 1, 'ending twice must not roll twice');
             const saved = JSON.parse(g.storage.get('sprinkleFeastSave'));
