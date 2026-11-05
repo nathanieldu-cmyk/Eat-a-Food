@@ -1306,3 +1306,15 @@ h1 {
 @media (max-width: 800px), (pointer: coarse) {
   .index-clipboard { top: 12px; left: 10px; }
 }
+
+.bento-slot.rainbow {
+  grid-template-rows: 1fr auto;
+  height: 44px;
+  padding: 3px 0;
+  border: 1px solid #b8ecff;
+  background: linear-gradient(120deg, #b3436b, #98722d, #378a66, #4266b4, #934fb2);
+  box-shadow: inset 0 0 8px #ffffff50;
+  opacity: 1;
+}
+.bento-slot.rainbow .bento-box-icon { filter: drop-shadow(0 0 3px #dcf7ff); }
+.bento-rainbow-label { color: #fff; font-size: 0.6rem; font-weight: 800; line-height: 1; letter-spacing: 0.03em; text-transform: uppercase; }

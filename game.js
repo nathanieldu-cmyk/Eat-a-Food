@@ -378,7 +378,7 @@
   }
 
   function readBentoTypes(raw, count) {
-    return Array.from({ length: count }, (_, i) => Array.isArray(raw) && raw[i] === "gold" ? "gold" : "normal");
+    return Array.from({ length: count }, (_, i) => Array.isArray(raw) && ["gold", "rainbow"].includes(raw[i]) ? raw[i] : "normal");
   }
 
   function readBento(raw) {
@@ -3188,14 +3188,15 @@
     advanceBento();
     const bento = save.bento;
     if (bentoInventoryCount() >= BENTO_MAX_BOXES) {
-      if (type !== "gold") return false;
-      // Slots show ready boxes first, then the unlocking queue. Upgrade the
-      // last normal slot, keeping its unlock progress and every existing gold.
-      for (const types of [bento.lockedTypes, bento.readyTypes]) {
-        const lastNormal = types.lastIndexOf("normal");
-        if (lastNormal < 0) continue;
-        types[lastNormal] = "gold";
-        return "replaced";
+      // Prefer replacing a normal box; Rainbow can also upgrade Gold.
+      const lowerTypes = type === "rainbow" ? ["normal", "gold"] : type === "gold" ? ["normal"] : [];
+      for (const lower of lowerTypes) {
+        for (const types of [bento.lockedTypes, bento.readyTypes]) {
+          const last = types.lastIndexOf(lower);
+          if (last < 0) continue;
+          types[last] = type;
+          return "replaced";
+        }
       }
       return false;
     }
@@ -3211,21 +3212,20 @@
 
   function rollRunGoldBentoCount(earned) {
     if (earned < 25) return 0;
-    let guaranteed = 0;
-    let denominator;
-    if (earned >= 1500) {
-      // Every five 250-food steps guarantee another gold, then the extra
-      // gold chance starts over at 1/25 and improves through 1/5.
-      const step = Math.floor((earned - 1500) / 250);
-      guaranteed = 2 + Math.floor(step / 5);
-      denominator = 25 - 5 * (step % 5);
-    } else if (earned >= 500) {
-      guaranteed = 1;
-      denominator = 25 - 5 * Math.floor((earned - 500) / 200);
-    } else {
-      denominator = earned >= 400 ? 5 : earned >= 200 ? 10 : earned >= 100 ? 15 : earned >= 50 ? 20 : 25;
-    }
-    return guaranteed + (Math.random() < 1 / denominator ? 1 : 0);
+    if (earned >= 500) return 1;
+    const denominator = earned >= 400 ? 5 : earned >= 200 ? 10 : earned >= 100 ? 15 : earned >= 50 ? 20 : 25;
+    return Math.random() < 1 / denominator ? 1 : 0;
+  }
+
+  function rollRunRainbowBentoCount(earned) {
+    if (earned < 500) return 0;
+    if (earned >= 2750) return 1;
+    const denominator = earned >= 1500
+      ? 25 - 5 * Math.floor((earned - 1500) / 250)
+      : 50 - 5 * Math.floor((earned - 500) / 200);
+    // The 1,100-food milestone specifically awards two on a successful roll.
+    const count = earned >= 1100 && earned < 1300 ? 2 : 1;
+    return Math.random() < 1 / denominator ? count : 0;
   }
 
   function rollRunBentoCount(earned) {
@@ -3282,6 +3282,7 @@
     const bento = save.bento;
     const types = [...bento.readyTypes, ...bento.lockedTypes];
     const goldCount = types.filter((type) => type === "gold").length;
+    const rainbowCount = types.filter((type) => type === "rainbow").length;
     bentoSlotEl.innerHTML = "";
 
     const row = document.createElement("div");
@@ -3289,7 +3290,7 @@
     row.innerHTML = `
       <h3>🍱 Bento Boxes</h3>
       <div class="shop-actions"></div>
-      <p>${bentoInventoryCount()}/${BENTO_MAX_BOXES} boxes${goldCount ? ` · ${goldCount} gold` : ""} · ${bento.ready} ready to open · ${bento.locked} unlocking. <span class="bento-timer">${bentoTimerText()}</span></p>
+      <p>${bentoInventoryCount()}/${BENTO_MAX_BOXES} boxes${goldCount ? ` · ${goldCount} gold` : ""}${rainbowCount ? ` · ${rainbowCount} rainbow` : ""} · ${bento.ready} ready to open · ${bento.locked} unlocking. <span class="bento-timer">${bentoTimerText()}</span></p>
       <p class="bento-luck">Opened ${bento.opened.toLocaleString()} · +${Math.round(bentoLuckBonus() * 100)}% luck forever.</p>
       <p class="bento-luck">${bentoLuckLine()}</p>
       <p class="bento-odds">${bentoOddsHtml()}</p>
@@ -3319,9 +3320,11 @@
       const ready = i < bento.ready;
       const locked = i >= bento.ready && i < bentoInventoryCount();
       const gold = types[i] === "gold";
-      slot.className = "bento-slot" + (locked ? (i === bento.ready ? " unlocking" : " locked") : "") + (gold ? " gold" : "");
-      slot.innerHTML = ready || locked ? `<span class="bento-box-icon" aria-hidden="true">🍱</span>${gold ? '<span class="bento-gold-label">Gold</span>' : ""}` : "";
-      slot.title = ready ? `${gold ? "Gold Bento Box" : "Bento Box"} · Ready to open` : locked ? `${gold ? "Gold Bento Box" : "Bento Box"} · Unlocking` : "Empty slot";
+      const rainbow = types[i] === "rainbow";
+      const boxName = rainbow ? "Rainbow Bento Box" : gold ? "Gold Bento Box" : "Bento Box";
+      slot.className = "bento-slot" + (locked ? (i === bento.ready ? " unlocking" : " locked") : "") + (rainbow ? " rainbow" : gold ? " gold" : "");
+      slot.innerHTML = ready || locked ? `<span class="bento-box-icon" aria-hidden="true">🍱</span>${rainbow ? '<span class="bento-rainbow-label">Rainbow</span>' : gold ? '<span class="bento-gold-label">Gold</span>' : ""}` : "";
+      slot.title = ready ? `${boxName} · Ready to open` : locked ? `${boxName} · Unlocking` : "Empty slot";
       slot.setAttribute("aria-label", slot.title);
       slots.appendChild(slot);
     }
@@ -3395,12 +3398,13 @@
     const beforeLuck = displayedLuckPct();
     const boxes = save.bento.ready;
     const goldBoxes = save.bento.readyTypes.filter((type) => type === "gold").length;
+    const rainbowBoxes = save.bento.readyTypes.filter((type) => type === "rainbow").length;
     const gained = [];
     for (let box = 0; box < boxes; box++) {
-      const gold = save.bento.readyTypes.shift() === "gold";
+      const type = save.bento.readyTypes.shift();
       for (let i = 0; i < BENTO_FOODS; i++) {
         const base = pullBentoFood();
-        const food = gold ? goldenByBase[base.name] : base;
+        const food = type === "rainbow" ? shinyByBase[base.name] : type === "gold" ? goldenByBase[base.name] : base;
         gained.push(food.name);
         save.inventory[food.name] = (save.inventory[food.name] || 0) + 1;
         rememberFood(food.name);
@@ -3410,7 +3414,8 @@
     }
     persistSave();
     renderShop();
-    const title = boxes === 1 ? `${goldBoxes ? "Gold Bento Box" : "Bento Box"} opened!` : `${boxes} Bento Boxes opened${goldBoxes ? ` (${goldBoxes} gold)` : ""}!`;
+    const specialLabels = [goldBoxes ? `${goldBoxes} gold` : "", rainbowBoxes ? `${rainbowBoxes} rainbow` : ""].filter(Boolean).join(", ");
+    const title = boxes === 1 ? `${rainbowBoxes ? "Rainbow Bento Box" : goldBoxes ? "Gold Bento Box" : "Bento Box"} opened!` : `${boxes} Bento Boxes opened${specialLabels ? ` (${specialLabels})` : ""}!`;
     bentoResultsEl.innerHTML = `<p class="bento-results-title">🍱 ${title} Luck +${beforeLuck}% → +${displayedLuckPct()}%</p>`;
     renderPullResults(gained, seenBefore, bentoResultsEl, { keep: true });
     renderEquippedUi();
@@ -3811,20 +3816,29 @@
     }
     const bentoCount = rollRunBentoCount(earned);
     const goldRewardCount = Math.min(bentoCount, rollRunGoldBentoCount(earned));
-    const normalBentoCount = bentoCount - goldRewardCount;
-    const bentoRewards = Array.from({ length: bentoCount }, (_, i) => i < goldRewardCount ? "gold" : "normal");
+    const rainbowRewardCount = Math.min(bentoCount - goldRewardCount, rollRunRainbowBentoCount(earned));
+    const normalBentoCount = bentoCount - goldRewardCount - rainbowRewardCount;
+    const bentoRewards = [
+      ...Array(rainbowRewardCount).fill("rainbow"),
+      ...Array(goldRewardCount).fill("gold"),
+      ...Array(normalBentoCount).fill("normal"),
+    ];
     let addedBentos = 0;
     let goldBentos = 0;
+    let rainbowBentos = 0;
     for (const type of bentoRewards) {
       const result = storeBento(type);
       if (result === "added") addedBentos += 1;
       if (result && type === "gold") goldBentos += 1;
+      if (result && type === "rainbow") rainbowBentos += 1;
     }
     advanceBento();
     for (const types of [save.bento.readyTypes, save.bento.lockedTypes]) {
-      types.sort((a, b) => Number(b === "gold") - Number(a === "gold"));
+      const rank = { normal: 0, gold: 1, rainbow: 2 };
+      types.sort((a, b) => rank[b] - rank[a]);
     }
     const goldText = goldBentos ? ` 🌟 ${goldBentos} Bento Box${goldBentos === 1 ? "" : "es"} turned gold!` : "";
+    const rainbowText = rainbowBentos ? ` 🌈 You earned ${rainbowBentos} Rainbow Bento Box${rainbowBentos === 1 ? "" : "es"}!` : "";
     const bentoText = bentoCount
       ? addedBentos < bentoCount
         ? ` 🍱 You earned ${normalBentoCount} normal bento box${normalBentoCount === 1 ? "" : "es"}, inventory is full.`
@@ -3842,7 +3856,7 @@
     overlayMsg.textContent =
       (wipedOut
         ? `A rival ate you. ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`
-        : `Nice run! ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`) + goldText + bentoText;
+        : `Nice run! ${bankText} (${Math.floor(state.points).toLocaleString()} pts)`) + goldText + rainbowText + bentoText;
     startBtn.textContent = "Back to Lobby";
     afterRunActionsEl.classList.remove("hidden");
     overlay.classList.remove("hidden");

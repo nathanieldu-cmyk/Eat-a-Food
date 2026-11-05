@@ -52,7 +52,7 @@ function boot(saved) {
     renderPotionStatus = () => {};
     renderShop = () => {};
     globalThis.api = { save, state, net, bankPendingFoods, pullFood,
-      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, BENTO_BASE_CHANCES, permanentLuckBonus, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
+      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunRainbowBentoCount, storeBento, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, BENTO_BASE_CHANCES, permanentLuckBonus, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
     return;
     ${marker}
   `), context);
@@ -75,12 +75,8 @@ const goldThresholds = [
   [0, 0, 0], [1, 0, 0], [24, 0, 0], [25, 0, 25], [49, 0, 25],
   [50, 0, 20], [99, 0, 20], [100, 0, 15], [199, 0, 15],
   [200, 0, 10], [299, 0, 10], [300, 0, 10], [399, 0, 10], [400, 0, 5], [499, 0, 5],
-  [500, 1, 25], [699, 1, 25], [700, 1, 20], [899, 1, 20],
-  [900, 1, 15], [1099, 1, 15], [1100, 1, 10], [1299, 1, 10], [1300, 1, 5], [1499, 1, 5],
-  [1500, 2, 25], [1749, 2, 25], [1750, 2, 20], [1999, 2, 20],
-  [2000, 2, 15], [2249, 2, 15], [2250, 2, 10], [2499, 2, 10], [2500, 2, 5], [2749, 2, 5],
-  [2750, 3, 25], [2999, 3, 25], [3000, 3, 20], [3250, 3, 15], [3500, 3, 10], [3750, 3, 5],
-  [3999, 3, 5], [4000, 4, 25], [4250, 4, 20], [5250, 5, 25], [6500, 6, 25], [126500, 102, 25],
+  [500, 1, 0], [699, 1, 0], [700, 1, 0], [900, 1, 0], [1100, 1, 0],
+  [1300, 1, 0], [1500, 1, 0], [2000, 1, 0], [2750, 1, 0], [126500, 1, 0],
 ];
 
 test('gold counts follow every food milestone and exact bonus probability boundary without luck', () => {
@@ -164,23 +160,51 @@ test('runs below 25 foods no longer get random gold upgrades', () => {
   }
 });
 
-test('food milestones award the guaranteed gold quota and optional extra within the total Bento reward', () => {
-  for (const [foods, guaranteed, denominator] of goldThresholds.filter(([foods]) => foods >= 25 && foods <= 6500)) {
-    for (const [goldRoll, bonus] of [[0, 1], [1 / denominator, 0]]) {
+const rainbowThresholds = [
+  [0, 0, 0], [499, 0, 0], [500, 50, 1], [700, 45, 1], [900, 40, 1],
+  [1100, 35, 2], [1300, 30, 1], [1500, 25, 1], [1750, 20, 1],
+  [2000, 15, 1], [2250, 10, 1], [2500, 5, 1], [2750, 1, 1], [100000, 1, 1],
+];
+
+test('Rainbow odds follow every milestone, stop at one guaranteed box, and ignore luck', () => {
+  for (const boosted of [false, true]) {
+    const g = boot();
+    if (boosted) {
+      g.save.bento.opened = 10000;
+      g.save.activePotions.luck = {endsAt: Date.now() + 60000, stacks: 5};
+    }
+    for (let i = 0; i < rainbowThresholds.length; i++) {
+      const [foods, denominator, count] = rainbowThresholds[i];
+      const upper = i + 1 < rainbowThresholds.length ? rainbowThresholds[i+1][0] - 1 : foods;
+      for (const earned of [foods, upper]) {
+        for (const roll of denominator > 1 ? [0, 1/denominator - 1e-9, 1/denominator, 0.999999] : [0, 0.999999]) {
+          let calls = 0;
+          g.math.random = () => { calls++; return roll; };
+          assert.equal(g.rollRunRainbowBentoCount(earned), denominator === 1 || denominator && roll < 1/denominator ? count : 0, `foods=${earned}, roll=${roll}`);
+          assert.equal(calls, denominator > 1 ? 1 : 0);
+        }
+      }
+    }
+  }
+});
+
+test('run rewards grant one Gold from 500 and the correct Rainbow count within normal rewards', () => {
+  for (const [foods, denominator, rainbowCount] of rainbowThresholds.filter(([n]) => n >= 500)) {
+    for (const won of [true, false]) {
       const g = boot();
-      g.math.random = () => 0.9;
-      const total = g.rollRunBentoCount(foods);
       g.state.running = true;
       g.state.foodsEarned = foods;
       let calls = 0;
-      g.math.random = () => ++calls === 1 ? 0.9 : goldRoll;
+      g.math.random = () => ++calls === 1 ? 0.9 : won ? 0 : 0.999999;
       g.endRun();
-      assert.equal(calls, 2);
-      assert.equal(g.bentoInventoryCount(), Math.min(5, total));
-      assert.equal(g.save.bento.lockedTypes.filter(type => type === 'gold').length, Math.min(5, guaranteed + bonus), `foods=${foods}`);
-      assert.ok(guaranteed + bonus <= total, 'gold quota fits the total run reward');
+      const rainbows = won || denominator === 1 ? rainbowCount : 0;
+      assert.equal(g.save.bento.lockedTypes.filter(t => t === 'gold').length, 1);
+      assert.equal(g.save.bento.lockedTypes.filter(t => t === 'rainbow').length, rainbows, `foods=${foods}`);
+      assert.equal(calls, denominator === 1 ? 1 : 2);
+      assert.equal(g.bentoInventoryCount(), 5);
       const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
       assert.deepEqual(Array.from(reloaded.save.bento.lockedTypes), Array.from(g.save.bento.lockedTypes));
+      if (rainbows) assert.match(g.elements.get('overlay-msg').textContent, /Rainbow Bento Box/);
     }
   }
 });
@@ -249,65 +273,63 @@ test('old saves migrate to normal boxes and over-capacity mixed saves retain rea
   assert.deepEqual(Array.from(capped.save.bento.lockedTypes), ['gold']);
 });
 
-test('two gold rewards replace normal boxes and get priority in every ready/locked split', () => {
+test('Rainbow and Gold rewards upgrade normal slots across ready and locked groups without losing progress', () => {
   for (let ready = 0; ready <= 5; ready++) {
     const fixture = boot().save;
     const started = ready < 5 ? Date.now() - 2000 : 0;
-    fixture.bento = { ready, readyTypes: Array(ready).fill('normal'), locked: 5 - ready,
-      lockedTypes: Array(5 - ready).fill('normal'), unlockStartedAt: started, opened: 7 };
+    fixture.bento = { ready, readyTypes: Array(ready).fill('normal'), locked: 5-ready,
+      lockedTypes: Array(5-ready).fill('normal'), unlockStartedAt: started, opened: 7 };
     const g = boot(fixture);
     g.state.running = true;
-    g.state.foodsEarned = 500;
-    let calls = 0;
-    g.math.random = () => ++calls === 1 ? 0.1 : 0;
+    g.state.foodsEarned = 1100;
+    g.math.random = () => 0;
     g.endRun();
-    assert.equal(calls, 2);
-    assert.equal(g.bentoInventoryCount(), 5);
     assert.equal(g.save.bento.ready, ready);
-    assert.equal(g.save.bento.locked, 5 - ready);
+    assert.equal(g.save.bento.locked, 5-ready);
     assert.equal(g.save.bento.unlockStartedAt, started);
-    const readyGold = Math.max(0, ready - 3);
-    const expected = [...Array(readyGold).fill('gold'), ...Array(ready - readyGold).fill('normal'),
-      ...Array(2 - readyGold).fill('gold'), ...Array(3 - ready + readyGold).fill('normal')];
-    assert.deepEqual(Array.from([...g.save.bento.readyTypes, ...g.save.bento.lockedTypes]), expected);
-    assert.ok(!g.elements.get('overlay-msg').textContent.includes('replaced'));
-    assert.ok(g.elements.get('overlay-msg').textContent.endsWith('You earned 6 normal bento boxes, inventory is full.'));
+    const types = [...g.save.bento.readyTypes, ...g.save.bento.lockedTypes];
+    assert.equal(types.filter(t => t === 'rainbow').length, 2);
+    assert.equal(types.filter(t => t === 'gold').length, 1);
+    assert.equal(types.filter(t => t === 'normal').length, 2);
     const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
-    assert.deepEqual(Array.from([...reloaded.save.bento.readyTypes, ...reloaded.save.bento.lockedTypes]), expected);
+    assert.deepEqual(Array.from([...reloaded.save.bento.readyTypes, ...reloaded.save.bento.lockedTypes]), types);
   }
 });
 
-test('gold rewards skip existing gold boxes and replace earlier normal slots', () => {
+test('Rainbow prefers normal slots, upgrades Gold when needed, and can never be downgraded', () => {
+  const g = boot();
+  g.save.bento = {ready: 2, readyTypes: ['normal', 'rainbow'], locked: 3,
+    lockedTypes: ['gold', 'gold', 'gold'], unlockStartedAt: Date.now(), opened: 0};
+  assert.equal(g.storeBento('rainbow'), 'replaced');
+  assert.deepEqual(Array.from(g.save.bento.lockedTypes), ['gold', 'gold', 'gold']);
+  assert.deepEqual(Array.from(g.save.bento.readyTypes), ['rainbow', 'rainbow']);
+  assert.equal(g.storeBento('rainbow'), 'replaced');
+  assert.deepEqual(Array.from(g.save.bento.lockedTypes), ['gold', 'gold', 'rainbow']);
+  assert.equal(g.storeBento('gold'), false);
+  assert.equal(g.storeBento('normal'), false);
+  g.save.bento.lockedTypes = ['rainbow', 'rainbow', 'rainbow'];
+  assert.equal(g.storeBento('rainbow'), false);
+});
+
+test('Rainbow survives timed unlocking, skipping, saving and opening as Rainbow foods', () => {
   const fixture = boot().save;
-  fixture.bento = { ready: 2, readyTypes: ['gold', 'normal'], locked: 3,
-    lockedTypes: ['normal', 'gold', 'normal'], unlockStartedAt: Date.now(), opened: 0 };
+  const start = Date.now();
+  fixture.diamonds = 100000;
+  fixture.bento = {ready: 1, readyTypes: ['rainbow'], locked: 2,
+    lockedTypes: ['rainbow', 'gold'], unlockStartedAt: start, opened: 0};
   const g = boot(fixture);
-  g.state.running = true;
-  g.state.foodsEarned = 1500;
-  let calls = 0;
-  g.math.random = () => ++calls === 1 ? 0.1 : 0;
-  g.endRun();
-  assert.equal(g.bentoInventoryCount(), 5);
-  assert.deepEqual(Array.from([...g.save.bento.readyTypes, ...g.save.bento.lockedTypes]), Array(5).fill('gold'));
-  assert.ok(!g.elements.get('overlay-msg').textContent.includes('replaced'));
-  assert.ok(g.elements.get('overlay-msg').textContent.endsWith('You earned 9 normal bento boxes, inventory is full.'));
-});
-
-test('food-based gold rewards fill spare slots and replace normal overflow boxes first', () => {
-  for (const initialLocked of [3, 5]) {
-    const g = boot();
-    g.save.bento.locked = initialLocked;
-    g.save.bento.unlockStartedAt = Date.now();
-    g.state.running = true;
-    g.state.foodsEarned = 1500;
-    const rolls = [0.1, 0];
-    let calls = 0;
-    g.math.random = () => rolls[calls++];
-    g.endRun();
-    assert.equal(calls, rolls.length);
-    assert.equal(g.bentoInventoryCount(), 5);
-    assert.deepEqual(Array.from(g.save.bento.lockedTypes), ['gold', 'gold', 'gold', 'normal', 'normal']);
-  }
+  g.advanceBento(start + g.BENTO_UNLOCK_MS);
+  g.skipBento();
+  const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
+  assert.deepEqual(Array.from(reloaded.save.bento.readyTypes), ['rainbow', 'rainbow', 'gold']);
+  reloaded.math.random = () => 0.1;
+  reloaded.openBento();
+  const rainbowFoods = Object.entries(reloaded.save.inventory).filter(([name])=>reloaded.tierByName[name].isShiny);
+  assert.equal(rainbowFoods.reduce((n,[,count])=>n+count,0), 6);
+  for (const [name] of rainbowFoods) assert.equal(reloaded.save.discovered[name], true);
+  assert.equal(reloaded.save.bento.opened, 3);
+  assert.equal(reloaded.bentoInventoryCount(), 0);
+  assert.match(reloaded.elements.get('bento-results').innerHTML, /2 rainbow/);
 });
 
 test('a full inventory of gold boxes stays intact and buying while full charges nothing', () => {
@@ -636,5 +658,31 @@ test('full inventory message shows only normal rewards with correct singular or 
     if (expected) assert.ok(message.endsWith(expected), message);
     else assert.ok(!message.includes('inventory is full'));
     assert.equal(g.bentoInventoryCount(), 5);
+  }
+});
+
+
+test('Rainbow Bento Boxes use normal box rolls and only convert the three foods to Rainbow', () => {
+  for (const roll of [0.1, 0.8, 0.985, 0.9999]) {
+    const normal = boot();
+    const rainbow = boot();
+    normal.save.bento.ready = rainbow.save.bento.ready = 1;
+    normal.save.bento.readyTypes = ['normal'];
+    rainbow.save.bento.readyTypes = ['rainbow'];
+    normal.math.random = rainbow.math.random = () => roll;
+    normal.openBento();
+    rainbow.openBento();
+    const baseName = Object.keys(normal.save.inventory).find(name => name !== 'Peanut');
+    const rainbowName = Object.keys(rainbow.save.inventory).find(name => name !== 'Peanut');
+    assert.ok(baseName && rainbowName);
+    assert.equal(rainbow.tierByName[rainbowName].baseName, baseName);
+    assert.equal(rainbow.tierByName[rainbowName].isShiny, true);
+    assert.equal(rainbow.tierByName[rainbowName].rarity, normal.tierByName[baseName].rarity);
+    assert.equal(normal.save.inventory[baseName], 3);
+    assert.equal(rainbow.save.inventory[rainbowName], 3);
+    assert.equal(rainbow.save.discovered[rainbowName], true);
+    assert.equal(normal.save.bento.opened, rainbow.save.bento.opened);
+    assert.equal(normal.totalLuckBonus(), rainbow.totalLuckBonus());
+    assert.match(rainbow.elements.get('bento-results').innerHTML, /Rainbow Bento Box opened!/);
   }
 });
