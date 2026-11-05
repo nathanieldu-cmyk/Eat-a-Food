@@ -109,8 +109,8 @@ test('gold counts follow every food milestone and exact bonus probability bounda
   }
 });
 
-test('buying uses 1/50 even when four boxes are already owned, and saves the gold type', () => {
-  for (const [roll, expected] of [[0.019999, 'gold'], [0.02, 'normal'], [0.025, 'normal']]) {
+test('buying uses 1/25 even when four boxes are already owned, and saves the gold type', () => {
+  for (const [roll, expected] of [[0, 'gold'], [0.02, 'gold'], [0.025, 'gold'], [0.039999, 'gold'], [0.04, 'normal'], [0.999999, 'normal']]) {
     const g = boot();
     g.save.diamonds = 1000;
     g.save.bento.locked = 4;

@@ -3181,7 +3181,7 @@
   }
 
   function rollBentoType() {
-    return Math.random() < 1 / 50 ? "gold" : "normal";
+    return Math.random() < 1 / 25 ? "gold" : "normal";
   }
 
   function storeBento(type) {
