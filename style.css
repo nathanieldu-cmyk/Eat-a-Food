@@ -1235,3 +1235,28 @@ h1 {
 #multi-room.hidden {
   display: none;
 }
+
+
+/* One food per row, with the four versions always alongside each other. */
+.index-scroll { padding-top: 0; }
+.food-index { width: 100%; max-width: 1100px; margin: 0 auto; border-collapse: separate; border-spacing: 8px; table-layout: fixed; }
+.food-index th { text-align: center; font-weight: 800; }
+.food-index thead th { position: sticky; top: 0; z-index: 1; padding: 12px 0; background: var(--panel); }
+.food-index th:first-child { width: 16%; text-align: left; overflow-wrap: anywhere; }
+.food-index td { padding: 0; vertical-align: top; }
+.index-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 108px; padding: 14px 4px; border: 1px solid currentColor; border-radius: 12px; background: color-mix(in srgb, currentColor 20%, #211b19); }
+.index-icon { font-size: 36px; line-height: 1.2; }
+.index-odds { color: #fff3e0; font-size: 12px; font-weight: 800; text-align: center; overflow-wrap: anywhere; }
+.index-locked { color: #777; border-color: #666; background: #454545; }
+.index-locked .food-icon-emoji { filter: brightness(0); }
+.index-locked .food-icon-sparkles,
+.index-locked .food-icon::before { display: none; }
+@media (max-width: 600px) {
+  .index-scroll { padding: 0 2px 12px; }
+  .food-index { border-spacing: 3px 7px; font-size: 11px; }
+  .food-index th:first-child { width: 18%; }
+  .food-index thead th { font-size: 11px; }
+  .index-card { min-height: 92px; padding: 10px 2px; gap: 10px; border-radius: 8px; }
+  .index-icon { font-size: 27px; }
+  .index-odds { font-size: 10px; }
+}

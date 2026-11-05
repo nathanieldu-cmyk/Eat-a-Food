@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=67" />
+  <link rel="stylesheet" href="style.css?v=68" />
   <script type="importmap">
     {
       "imports": {
@@ -44,6 +44,7 @@
           </div>
         </div>
         <div class="header-buttons">
+          <button id="index-btn" class="btn ghost" type="button">Food Index</button>
           <button id="inventory-btn" class="btn ghost" type="button">Inventory</button>
           <button id="shop-btn" class="btn ghost" type="button">Shop</button>
           <button id="craft-btn" class="btn ghost" type="button">Craft</button>
@@ -84,6 +85,7 @@
           <div class="panel-actions">
             <button id="start-btn" class="btn primary">Enter Lobby</button>
             <div id="after-run-actions" class="after-run-actions hidden">
+              <button id="overlay-index-btn" class="btn ghost" type="button">Food Index</button>
               <button id="overlay-inventory-btn" class="btn ghost" type="button">Inventory</button>
               <button id="overlay-shop-btn" class="btn ghost" type="button">Shop</button>
               <button id="overlay-craft-btn" class="btn ghost" type="button">Craft</button>
@@ -121,6 +123,23 @@
         <button id="multi-cpus" class="btn ghost" type="button" aria-pressed="true">CPUs: On</button>
         <p id="multi-cpu-note" class="multi-cpu-note"></p>
         <button id="multi-leave" class="btn danger" type="button">Leave room</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="index-modal" class="inv-modal hidden" aria-hidden="true">
+    <div class="inv-panel index-panel" role="dialog" aria-modal="true" aria-labelledby="index-title">
+      <div class="inv-top">
+        <div class="inv-header">
+          <h2 id="index-title">Food Index</h2>
+          <button id="index-close" class="btn ghost small" type="button">Close</button>
+        </div>
+      </div>
+      <div id="index-scroll" class="inv-scroll index-scroll">
+        <table class="food-index">
+          <thead><tr><th scope="col">Food</th><th scope="col">Normal</th><th scope="col">Gold</th><th scope="col">Rainbow</th><th scope="col">Shadow</th></tr></thead>
+          <tbody id="index-rows"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -170,6 +189,6 @@
   </div>
 
   <script src="foods.js?v=32783f4f1709"></script>
-  <script src="game.js?v=206"></script>
+  <script src="game.js?v=207"></script>
 </body>
 </html>

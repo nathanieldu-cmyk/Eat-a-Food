@@ -32,6 +32,13 @@
   const craftCloseBtn = document.getElementById("craft-close");
   const craftBtn = document.getElementById("craft-btn");
   const overlayCraftBtn = document.getElementById("overlay-craft-btn");
+  const indexModal = document.getElementById("index-modal");
+  const indexRowsEl = document.getElementById("index-rows");
+  const indexScrollEl = document.getElementById("index-scroll");
+  const indexBtn = document.getElementById("index-btn");
+  const indexCloseBtn = document.getElementById("index-close");
+  const overlayIndexBtn = document.getElementById("overlay-index-btn");
+  let indexReturnFocus = null;
   const inventoryModal = document.getElementById("inventory-modal");
   const inventoryBtn = document.getElementById("inventory-btn");
   const shopBtn = document.getElementById("shop-btn");
@@ -996,6 +1003,7 @@
       !shopModal.classList.contains("hidden") ||
       !craftModal.classList.contains("hidden") ||
       !inventoryModal.classList.contains("hidden") ||
+      !indexModal.classList.contains("hidden") ||
       !multiModal.classList.contains("hidden")
     );
   }
@@ -3474,6 +3482,7 @@
   function openShop() {
     resetTouchControls();
     if (state.running) return;
+    closeIndex();
     closeInventory();
     closeCraft();
     bentoResultsEl.innerHTML = "";
@@ -3491,6 +3500,7 @@
   function openCraft() {
     resetTouchControls();
     if (state.running) return;
+    closeIndex();
     closeInventory();
     closeShop();
     renderCraft();
@@ -3505,7 +3515,47 @@
     luckNoticeEl.classList.add("hidden");
   }
 
+  function renderFoodIndex() {
+    const rows = [...FOOD_TIERS].sort((a, b) => a.odds - b.odds);
+    indexRowsEl.innerHTML = rows.map((base) => {
+      const versions = [base, goldenByBase[base.name], shinyByBase[base.name], shadowByBase[base.name]];
+      const cards = versions.map((tier) => {
+        const collected = !!save.discovered?.[tier.name] || ownedCount(tier.name) > 0;
+        return `<td><div class="index-card ${collected ? variantClass(tier) : "index-locked"}" aria-label="${tier.name}: ${collected ? "collected" : "not collected"}, 1 in ${formatOdds(tier.odds)}">
+          <span class="index-icon">${foodIconHtml(tier)}</span>
+          <span class="index-odds">1 in ${formatOdds(tier.odds)}</span>
+        </div></td>`;
+      }).join("");
+      return `<tr><th scope="row">${base.name}</th>${cards}</tr>`;
+    }).join("");
+  }
+
+  function openIndex() {
+    resetTouchControls();
+    if (state.running) return;
+    closeInventory();
+    closeShop();
+    closeCraft();
+    closeMulti();
+    indexReturnFocus = document.activeElement;
+    renderFoodIndex();
+    indexModal.classList.remove("hidden");
+    indexModal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    indexScrollEl.scrollTop = 0;
+    indexCloseBtn.focus();
+  }
+
+  function closeIndex() {
+    if (indexModal.classList.contains("hidden")) return;
+    indexModal.classList.add("hidden");
+    indexModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    indexReturnFocus?.focus();
+  }
+
   function openInventory() {
+    closeIndex();
     resetTouchControls();
     closeShop();
     closeCraft();
@@ -3647,6 +3697,7 @@
       return;
     }
 
+    closeIndex();
     closeInventory();
     closeShop();
     closeCraft();
@@ -3673,6 +3724,7 @@
     updateHud();
     overlay.classList.add("hidden");
     endBtn.disabled = false;
+    indexBtn.disabled = true;
     inventoryBtn.disabled = true;
     shopBtn.disabled = true;
     craftBtn.disabled = true;
@@ -3730,6 +3782,7 @@
     if (net.role === "guest") net.place = -1;
     cancelAnimationFrame(state.animId);
     endBtn.disabled = true;
+    indexBtn.disabled = false;
     inventoryBtn.disabled = false;
     shopBtn.disabled = false;
     craftBtn.disabled = false;
@@ -4219,6 +4272,7 @@
   }
 
   function guestBeginRun(run) {
+    closeIndex();
     closeInventory();
     closeShop();
     closeCraft();
@@ -4235,6 +4289,7 @@
     lobbyHintEl.classList.add("hidden");
     overlay.classList.add("hidden");
     endBtn.disabled = false;
+    indexBtn.disabled = true;
     inventoryBtn.disabled = true;
     shopBtn.disabled = true;
     craftBtn.disabled = true;
@@ -5102,6 +5157,19 @@
     state.autoFarm = !state.autoFarm;
     autoFarmBtn.setAttribute("aria-pressed", state.autoFarm ? "true" : "false");
   });
+  indexBtn.addEventListener("click", openIndex);
+  overlayIndexBtn.addEventListener("click", openIndex);
+  indexCloseBtn.addEventListener("click", closeIndex);
+  indexModal.addEventListener("click", (e) => {
+    if (e.target === indexModal) closeIndex();
+  });
+  indexModal.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
+  indexModal.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      indexCloseBtn.focus();
+    }
+  });
   inventoryBtn.addEventListener("click", openInventory);
   multiBtn.addEventListener("click", openMulti);
   multiCloseBtn.addEventListener("click", closeMulti);
@@ -5175,6 +5243,7 @@
     if (e.key === "Escape") {
       closeShop();
       closeCraft();
+      closeIndex();
       closeInventory();
       closeMulti();
       return;
