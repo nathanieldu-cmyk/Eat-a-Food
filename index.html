@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=68" />
+  <link rel="stylesheet" href="style.css?v=69" />
   <script type="importmap">
     {
       "imports": {
@@ -44,7 +44,6 @@
           </div>
         </div>
         <div class="header-buttons">
-          <button id="index-btn" class="btn ghost" type="button">Food Index</button>
           <button id="inventory-btn" class="btn ghost" type="button">Inventory</button>
           <button id="shop-btn" class="btn ghost" type="button">Shop</button>
           <button id="craft-btn" class="btn ghost" type="button">Craft</button>
@@ -70,6 +69,10 @@
       </aside>
       <div class="stage-slot">
     <main class="stage">
+  <button id="index-btn" class="index-clipboard" type="button" aria-label="Food Index" aria-haspopup="dialog" aria-controls="index-modal" title="Food Index">
+    <span id="index-count" class="clipboard-count">1/232</span>
+    <span class="clipboard-label">Foods</span>
+  </button>
       <canvas id="arena" width="720" height="720" aria-label="Game arena. On touchscreens, drag on the left to move and on the right to turn the camera."></canvas>
       <div id="touch-stick" class="touch-stick" aria-hidden="true"><div id="touch-knob" class="touch-knob"></div></div>
       <div id="lobby-hint" class="lobby-hint">Blue circle: start a run · Gold pad: shop · Purple pad: craft</div>
@@ -85,7 +88,6 @@
           <div class="panel-actions">
             <button id="start-btn" class="btn primary">Enter Lobby</button>
             <div id="after-run-actions" class="after-run-actions hidden">
-              <button id="overlay-index-btn" class="btn ghost" type="button">Food Index</button>
               <button id="overlay-inventory-btn" class="btn ghost" type="button">Inventory</button>
               <button id="overlay-shop-btn" class="btn ghost" type="button">Shop</button>
               <button id="overlay-craft-btn" class="btn ghost" type="button">Craft</button>
@@ -189,6 +191,6 @@
   </div>
 
   <script src="foods.js?v=32783f4f1709"></script>
-  <script src="game.js?v=207"></script>
+  <script src="game.js?v=208"></script>
 </body>
 </html>

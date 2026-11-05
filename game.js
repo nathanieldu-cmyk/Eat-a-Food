@@ -37,7 +37,7 @@
   const indexScrollEl = document.getElementById("index-scroll");
   const indexBtn = document.getElementById("index-btn");
   const indexCloseBtn = document.getElementById("index-close");
-  const overlayIndexBtn = document.getElementById("overlay-index-btn");
+  const indexCountEl = document.getElementById("index-count");
   let indexReturnFocus = null;
   const inventoryModal = document.getElementById("inventory-modal");
   const inventoryBtn = document.getElementById("inventory-btn");
@@ -613,6 +613,7 @@
   }
 
   function persistSave() {
+    renderIndexButton();
     save.version = SAVE_VERSION;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
   }
@@ -3515,6 +3516,13 @@
     luckNoticeEl.classList.add("hidden");
   }
 
+  function renderIndexButton() {
+    const collected = ALL_FOODS.filter((tier) => save.discovered?.[tier.name] || ownedCount(tier.name) > 0).length;
+    indexCountEl.textContent = `${collected}/${ALL_FOODS.length}`;
+    indexBtn.setAttribute("aria-label", `Food Index: ${collected} of ${ALL_FOODS.length} foods collected`);
+    indexBtn.title = `Food Index · ${collected} of ${ALL_FOODS.length} foods collected`;
+  }
+
   function renderFoodIndex() {
     const rows = [...FOOD_TIERS].sort((a, b) => a.odds - b.odds);
     indexRowsEl.innerHTML = rows.map((base) => {
@@ -3532,12 +3540,13 @@
 
   function openIndex() {
     resetTouchControls();
-    if (state.running) return;
+    moveKeys.clear();
     closeInventory();
     closeShop();
     closeCraft();
     closeMulti();
     indexReturnFocus = document.activeElement;
+    renderIndexButton();
     renderFoodIndex();
     indexModal.classList.remove("hidden");
     indexModal.setAttribute("aria-hidden", "false");
@@ -3724,7 +3733,6 @@
     updateHud();
     overlay.classList.add("hidden");
     endBtn.disabled = false;
-    indexBtn.disabled = true;
     inventoryBtn.disabled = true;
     shopBtn.disabled = true;
     craftBtn.disabled = true;
@@ -3782,7 +3790,6 @@
     if (net.role === "guest") net.place = -1;
     cancelAnimationFrame(state.animId);
     endBtn.disabled = true;
-    indexBtn.disabled = false;
     inventoryBtn.disabled = false;
     shopBtn.disabled = false;
     craftBtn.disabled = false;
@@ -4289,7 +4296,6 @@
     lobbyHintEl.classList.add("hidden");
     overlay.classList.add("hidden");
     endBtn.disabled = false;
-    indexBtn.disabled = true;
     inventoryBtn.disabled = true;
     shopBtn.disabled = true;
     craftBtn.disabled = true;
@@ -5158,7 +5164,7 @@
     autoFarmBtn.setAttribute("aria-pressed", state.autoFarm ? "true" : "false");
   });
   indexBtn.addEventListener("click", openIndex);
-  overlayIndexBtn.addEventListener("click", openIndex);
+  renderIndexButton();
   indexCloseBtn.addEventListener("click", closeIndex);
   indexModal.addEventListener("click", (e) => {
     if (e.target === indexModal) closeIndex();
@@ -5248,6 +5254,7 @@
       closeMulti();
       return;
     }
+    if (!indexModal.classList.contains("hidden")) return;
     const name = e.key.toLowerCase();
     if (!MOVE_KEYS.has(name)) return;
     const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");

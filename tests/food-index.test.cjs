@@ -56,3 +56,40 @@ test('discovery is specific to each version, survives crafting, and includes cur
   }
   for (const style of ['common', 'golden', 'shiny', 'shadow']) assert.ok(html.includes(`index-card rarity-${style}`));
 });
+
+test('clipboard counts unique collected versions including crafted-away foods', () => {
+  const g = boot();
+  g.indexCountEl = {};
+  g.indexBtn = { setAttribute(name, value) { this[name] = value; } };
+  vm.runInContext(declaration('renderIndexButton'), g);
+  g.save.discovered = { Peanut: true, 'Golden Peanut': true, 'Old Food': true };
+  g.save.inventory = { Peanut: 20, 'Rainbow Peanut': 1, Cheese: 0 };
+  g.renderIndexButton();
+  assert.equal(g.indexCountEl.textContent, `3/${g.window.FOOD_LIST.length * 4}`);
+  assert.equal(g.indexBtn['aria-label'], `Food Index: 3 of ${g.window.FOOD_LIST.length * 4} foods collected`);
+  g.save.discovered['Shadow Peanut'] = true;
+  g.renderIndexButton();
+  assert.ok(g.indexCountEl.textContent.startsWith('4/'));
+});
+
+test('clipboard opens during an active run and clears held movement', () => {
+  const classes = new Set(['hidden']);
+  const state = { running: true };
+  let reset = false, rendered = false, focused = false;
+  const ctx = vm.createContext({
+    state, moveKeys: new Set(['w']),
+    resetTouchControls() { reset = true; },
+    closeInventory() {}, closeShop() {}, closeCraft() {}, closeMulti() {},
+    renderIndexButton() {}, renderFoodIndex() { rendered = true; },
+    document: { activeElement: {}, body: { style: {} } },
+    indexReturnFocus: null, indexScrollEl: { scrollTop: 100 },
+    indexCloseBtn: { focus() { focused = true; } },
+    indexModal: { classList: { remove(c) { classes.delete(c); } }, setAttribute() {} },
+  });
+  vm.runInContext(declaration('openIndex') + '\nopenIndex();', ctx);
+  assert.equal(classes.has('hidden'), false);
+  assert.equal(state.running, true);
+  assert.equal(ctx.moveKeys.size, 0);
+  assert.ok(reset && rendered && focused);
+  assert.equal(ctx.indexScrollEl.scrollTop, 0);
+});

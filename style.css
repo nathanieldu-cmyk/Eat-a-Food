@@ -1260,3 +1260,49 @@ h1 {
   .index-icon { font-size: 27px; }
   .index-odds { font-size: 10px; }
 }
+
+
+/* The clipboard stays in the playfield while in the lobby or a run. */
+.index-clipboard {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  z-index: 30;
+  width: 54px;
+  height: 59px;
+  padding: 16px 2px 5px;
+  border: 3px solid #a66b39;
+  border-radius: 7px;
+  background: linear-gradient(#fff6d8, #f5ddb1);
+  color: #52321f;
+  box-shadow: 0 3px 0 #51321d, 0 5px 12px #0005;
+  font-family: "Nunito", sans-serif;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  touch-action: manipulation;
+}
+.index-clipboard::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 14px;
+  border: 2px solid #7e786b;
+  border-radius: 5px 5px 3px 3px;
+  background: linear-gradient(#d9d5c8, #a7a292);
+  box-shadow: 0 2px 1px #0003;
+}
+.clipboard-count { font-size: 12px; font-weight: 900; line-height: 1.2; }
+.clipboard-label { font-size: 10px; font-weight: 800; line-height: 1.2; }
+.index-clipboard:hover { background: #fff6dc; }
+.index-clipboard:active { transform: translateY(2px); box-shadow: 0 1px 0 #51321d; }
+.index-clipboard:focus-visible { outline: 3px solid #7ec8ff; outline-offset: 4px; }
+@media (max-width: 800px), (pointer: coarse) {
+  .index-clipboard { top: 12px; left: 10px; }
+}
