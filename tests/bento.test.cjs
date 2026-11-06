@@ -52,7 +52,7 @@ function boot(saved) {
     renderPotionStatus = () => {};
     renderShop = () => {};
     globalThis.api = { save, state, net, bankPendingFoods, pullFood,
-      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunRainbowBentoCount, storeBento, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, BENTO_BASE_CHANCES, permanentLuckBonus, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
+      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunRainbowBentoCount, storeBento, rollBentoType, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, BENTO_BASE_CHANCES, permanentLuckBonus, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
     return;
     ${marker}
   `), context);
@@ -105,8 +105,8 @@ test('gold counts follow every food milestone and exact bonus probability bounda
   }
 });
 
-test('buying uses 1/25 even when four boxes are already owned, and saves the gold type', () => {
-  for (const [roll, expected] of [[0, 'gold'], [0.02, 'gold'], [0.025, 'gold'], [0.039999, 'gold'], [0.04, 'normal'], [0.999999, 'normal']]) {
+test('shop buys have 1/25 Gold and 1/500 Rainbow chances and preserve the awarded type', () => {
+  for (const [roll, expected] of [[0, 'gold'], [0.02, 'gold'], [0.025, 'gold'], [0.039999, 'gold'], [0.04, 'rainbow'], [0.041999, 'rainbow'], [0.042, 'normal'], [0.999999, 'normal']]) {
     const g = boot();
     g.save.diamonds = 1000;
     g.save.bento.locked = 4;
@@ -119,6 +119,7 @@ test('buying uses 1/25 even when four boxes are already owned, and saves the gol
     const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
     assert.equal(reloaded.save.bento.lockedTypes[4], expected);
     if (expected === 'gold') assert.match(g.elements.get('bento-results').innerHTML, /turned gold!/);
+    if (expected === 'rainbow') assert.match(g.elements.get('bento-results').innerHTML, /turned rainbow!/);
   }
 });
 
@@ -684,5 +685,24 @@ test('Rainbow Bento Boxes use normal box rolls and only convert the three foods 
     assert.equal(normal.save.bento.opened, rainbow.save.bento.opened);
     assert.equal(normal.totalLuckBonus(), rainbow.totalLuckBonus());
     assert.match(rainbow.elements.get('bento-results').innerHTML, /Rainbow Bento Box opened!/);
+  }
+});
+
+
+test('one shared shop roll gives exactly 4% Gold and 0.2% Rainbow independent of luck', () => {
+  for (const boosted of [false, true]) {
+    const g = boot();
+    if (boosted) {
+      g.save.bento.opened = 10000;
+      g.save.activePotions.luck = {endsAt: Date.now() + 60000, stacks: 5};
+    }
+    const counts = {normal: 0, gold: 0, rainbow: 0};
+    let calls = 0;
+    for (let n = 0; n < 500; n++) {
+      g.math.random = () => { calls++; return (n + 0.5) / 500; };
+      counts[g.rollBentoType()]++;
+    }
+    assert.deepEqual(counts, {normal: 479, gold: 20, rainbow: 1});
+    assert.equal(calls, 500);
   }
 });

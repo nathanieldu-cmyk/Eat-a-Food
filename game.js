@@ -3181,7 +3181,9 @@
   }
 
   function rollBentoType() {
-    return Math.random() < 1 / 25 ? "gold" : "normal";
+    const roll = Math.random();
+    if (roll < 1 / 25) return "gold";
+    return roll < 1 / 25 + 1 / 500 ? "rainbow" : "normal";
   }
 
   function storeBento(type) {
@@ -3379,14 +3381,14 @@
   function buyBento() {
     if (state.running || save.diamonds < BENTO_COST || bentoInventoryCount() >= BENTO_MAX_BOXES) return;
     if (!addBento()) return;
-    const gold = save.bento.lockedTypes[save.bento.lockedTypes.length - 1] === "gold";
+    const type = save.bento.lockedTypes[save.bento.lockedTypes.length - 1];
     save.diamonds -= BENTO_COST;
     persistSave();
     renderDiamonds();
     renderShop();
     renderPotionStatus();
-    if (gold) {
-      bentoResultsEl.innerHTML = '<p class="bento-results-title">🌟 Your Bento Box turned gold!</p>';
+    if (type === "gold" || type === "rainbow") {
+      bentoResultsEl.innerHTML = `<p class="bento-results-title">${type === "rainbow" ? "🌈 Your Bento Box turned rainbow!" : "🌟 Your Bento Box turned gold!"}</p>`;
       bentoResultsEl.classList.remove("hidden");
     }
   }
