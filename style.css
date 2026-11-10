@@ -1318,3 +1318,16 @@ h1 {
 }
 .bento-slot.rainbow .bento-box-icon { filter: drop-shadow(0 0 3px #dcf7ff); }
 .bento-rainbow-label { color: #fff; font-size: 0.6rem; font-weight: 800; line-height: 1; letter-spacing: 0.03em; text-transform: uppercase; }
+
+.music-toggle {
+  position: absolute; top: 88px; left: 12px; z-index: 30;
+  width: 40px; height: 40px; padding: 0; border-radius: 12px;
+  border: 1px solid #fff3e050; background: #28190fdf; color: #fff3e0;
+  font-size: 20px; cursor: pointer; touch-action: manipulation;
+}
+.music-toggle:hover { background: #513522; }
+.music-toggle:focus-visible { outline: 3px solid #7ec8ff; outline-offset: 3px; }
+.music-credits { margin: 10px 0; font-size: 0.7rem; color: var(--cream-soft); }
+.music-credits summary { cursor: pointer; }
+.music-credits p { font-size: inherit; margin-top: 6px; }
+.music-credits a { color: #9bdcff; }

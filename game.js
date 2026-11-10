@@ -954,6 +954,7 @@
 
   function enterLobby() {
     state.mode = "lobby";
+    window.GameMusic?.setMode("lobby");
     if (!net.role && !soloWorldReady) {
       state.rivals = [];
       state.sprinkles = [];
@@ -3721,6 +3722,7 @@
     pullResultsEl.innerHTML = "";
     state.running = true;
     state.mode = "run";
+    window.GameMusic?.setMode("run");
     state.onShopPad = false;
     state.onCraftPad = false;
     lobbyHintEl.classList.add("hidden");
@@ -4304,6 +4306,7 @@
     pullResultsEl.innerHTML = "";
     state.running = true;
     state.mode = "run";
+    window.GameMusic?.setMode("run");
     net.run = run;
     net.place = -1;
     restoreCarriedPoints();
