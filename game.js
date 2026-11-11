@@ -364,7 +364,7 @@
   const BENTO_MAX_BOXES = 5;
   const BENTO_RUN_BASE_CHANCE = 1 / 8;
   const BENTO_FOODS = 3;
-  const BENTO_LUCK_PER_OPEN = 0.01;
+  const BENTO_LUCK_PER_OPEN = 0.05;
   const BENTO_SKIP_COST_PER_HOUR = 1000;
   // Percent chance of each rarity for one bento food, before permanent luck. Must add up to 100.
   // Commons and uncommons are left out, so bento boxes never give them.

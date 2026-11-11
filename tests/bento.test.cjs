@@ -52,7 +52,7 @@ function boot(saved) {
     renderPotionStatus = () => {};
     renderShop = () => {};
     globalThis.api = { save, state, net, bankPendingFoods, pullFood,
-      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunRainbowBentoCount, storeBento, rollBentoType, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, BENTO_BASE_CHANCES, permanentLuckBonus, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml };
+      loadSave, endRun, addPoints, restoreCarriedPoints, updateHud, tierByName, rollRunGoldBentoCount, rollRunRainbowBentoCount, storeBento, rollBentoType, rollRunBentoCount, addBento, advanceBento, bentoInventoryCount, buyBento, skipBento, openBento, BENTO_UNLOCK_MS, BENTO_BASE_CHANCES, permanentLuckBonus, totalLuckBonus, bentoRarityChances, bentoLuckLine, bentoOddsHtml, bentoLuckBonus };
     return;
     ${marker}
   `), context);
@@ -614,15 +614,15 @@ test('approved base rates sum to 100 and capped chances never decrease as luck g
   let previous = null;
   for (const [opened, rare, epic, legendary, mythic] of [
     [0, 66.9, 31, 1.5, 0.6],
-    [599, 54.321, 39.985, 4.495, 1.199],
-    [600, 54.3, 40, 4.5, 1.2],
-    [601, 54.294, 40, 4.505, 1.201],
-    [1699, 47.706, 40, 9.995, 2.299],
-    [1700, 47.7, 40, 10, 2.3],
-    [1701, 47.699, 40, 10, 2.301],
-    [49399, 0.001, 40, 10, 49.999],
-    [49400, 0, 40, 10, 50],
-    [49401, 0, 40, 10, 50],
+    [119, 54.405, 39.925, 4.475, 1.195],
+    [120, 54.3, 40, 4.5, 1.2],
+    [121, 54.27, 40, 4.525, 1.205],
+    [339, 47.73, 40, 9.975, 2.295],
+    [340, 47.7, 40, 10, 2.3],
+    [341, 47.695, 40, 10, 2.305],
+    [9879, 0.005, 40, 10, 49.995],
+    [9880, 0, 40, 10, 50],
+    [9881, 0, 40, 10, 50],
     [1000000, 0, 40, 10, 50],
   ]) {
     g.save.bento.opened = opened;
@@ -704,5 +704,29 @@ test('one shared shop roll gives exactly 4% Gold and 0.2% Rainbow independent of
     }
     assert.deepEqual(counts, {normal: 479, gold: 20, rainbow: 1});
     assert.equal(calls, 500);
+  }
+});
+
+
+test('every Bento type gives five permanent luck percentage points per box, including mixed batches and reloads', () => {
+  for (const types of [['normal'], ['gold'], ['rainbow'], ['normal','gold','rainbow']]) {
+    const g = boot();
+    g.save.bento.opened = 7;
+    near(g.bentoLuckBonus(), .35);
+    const before = g.permanentLuckBonus(0);
+    g.save.bento.ready = types.length;
+    g.save.bento.readyTypes = [...types];
+    g.math.random = () => .1;
+    g.openBento();
+    near(g.bentoLuckBonus(), .35 + types.length * .05);
+    near(g.permanentLuckBonus(0) - before, types.length * .05);
+    const reloaded = boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
+    assert.equal(reloaded.save.bento.opened, 7 + types.length);
+    near(reloaded.bentoLuckBonus(), (7 + types.length) * .05);
+    const after = g.bentoLuckBonus();
+    g.openBento();
+    near(g.bentoLuckBonus(), after);
+    g.save.activePotions.luck = {endsAt: Date.now() + 60000, stacks:5};
+    near(g.bentoLuckBonus(), after);
   }
 });
