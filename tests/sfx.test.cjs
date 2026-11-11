@@ -10,11 +10,19 @@ function boot(muted = false, supported = true) {
   const storage = new Map([['eatAFoodSfxMuted', String(muted)]]);
   const document = {hidden:false, getElementById:()=>button, addEventListener(k,fn) {events[k]=fn;}};
   class AudioContext {
-    constructor() {this.state='running'; this.currentTime=1; this.voices=[]; contexts.push(this);}
+    constructor() {this.state='running'; this.currentTime=1; this.voices=[]; this.sampleRate=48000; this.buffers=[]; contexts.push(this);}
     createOscillator() {
       const voice = {frequency:{setValueAtTime(f,t) {voice.frequencyValue=f; voice.time=t;}, exponentialRampToValueAtTime(f) {voice.end=f;}},
         connect() {}, disconnect() {}, start() {}, stops:[], stop(time) {voice.stops.push(time ?? 'now');}};
       this.voices.push(voice); return voice;
+    }
+    createBuffer(channels,length,rate) {
+      const data=new Float32Array(length); const buffer={duration:length/rate,sampleRate:rate,length,getChannelData:()=>data};
+      this.buffers.push(buffer);return buffer;
+    }
+    createBufferSource() {
+      const voice={connect() {},disconnect() {},start(time) {voice.time=time;},stops:[],stop(time) {voice.stops.push(time ?? 'now');}};
+      this.voices.push(voice);return voice;
     }
     createGain() {return {gain:{setValueAtTime() {}, exponentialRampToValueAtTime() {}}, connect() {}, disconnect() {}};}
     resume() {this.state='running';return Promise.resolve();}
@@ -24,15 +32,30 @@ function boot(muted = false, supported = true) {
   vm.runInNewContext(fs.readFileSync(path.join(root,'sfx.js'),'utf8'), {window,document,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}});
   return {events,windowEvents,button,storage,document,contexts,api:window.GameSfx};
 }
-test('effects wait for a gesture and all five orb sizes have different notes or timbres', () => {
+test('effects wait for a gesture and all five orb sizes have different crunchy buffers', () => {
   const g=boot();g.api.play('start');assert.equal(g.contexts.length,0);
   g.events.pointerdown();const ctx=g.contexts[0];const signatures=[];
   for(const size of ['xs','small','medium','large','xl']) {
     ctx.currentTime+=1;const before=ctx.voices.length;g.api.play(`orb-${size}`);
-    signatures.push(JSON.stringify(ctx.voices.slice(before).map(v=>[v.type,v.frequencyValue,v.end])));
+    signatures.push(JSON.stringify(ctx.voices.slice(before).map(v=>[v.buffer.duration,Array.from(v.buffer.getChannelData(0).slice(0,100))])));
   }
   assert.equal(new Set(signatures).size,5);
   const before=ctx.voices.length;g.api.play('orb-xl');assert.equal(ctx.voices.length,before);
+});
+
+test('orb crunches stay short, finite, bounded, and cached; bigger orbs have longer bodies', () => {
+  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];let previous=0;
+  for(const size of ['xs','small','medium','large','xl']) {
+    ctx.currentTime+=1;g.api.play(`orb-${size}`);const buffer=ctx.voices.at(-1).buffer;
+    const samples=buffer.getChannelData(0);
+    assert.ok(buffer.duration>previous && buffer.duration<=.25); previous=buffer.duration;
+    assert.ok(samples.every(v=>Number.isFinite(v)&&Math.abs(v)<=.85));
+    assert.equal(Math.abs(samples[0]),0);
+    const energy=samples.reduce((sum,v)=>sum+v*v,0)/samples.length;
+    assert.ok(energy>.001 && energy<.2, `${size}: audible without clipping`);
+    ctx.currentTime+=1;g.api.play(`orb-${size}`);assert.equal(ctx.voices.at(-1).buffer,buffer);
+  }
+  assert.equal(ctx.buffers.length,5);
 });
 test('mute persists and cancels current and scheduled effects; hidden tabs stay silent', () => {
   const g=boot();g.events.keydown();const ctx=g.contexts[0];g.api.play('collect',.6);
