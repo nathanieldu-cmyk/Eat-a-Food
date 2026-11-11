@@ -51,6 +51,7 @@
       if (name.startsWith('orb-')) return;
       stopAll();
     }
+    const volume = name.startsWith('orb-') ? 1.25 : 1;
     for (const [frequency, duration, offset, wave = 'sine', end] of notes) {
       const start = now + Math.max(0, delay) + offset;
       const osc = context.createOscillator();
@@ -58,9 +59,9 @@
       osc.type = wave;
       osc.frequency.setValueAtTime(frequency, start);
       if (end) osc.frequency.exponentialRampToValueAtTime(end, start + duration);
-      gain.gain.setValueAtTime(.0001, start);
-      gain.gain.exponentialRampToValueAtTime(.09, start + .008);
-      gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+      gain.gain.setValueAtTime(.0001 * volume, start);
+      gain.gain.exponentialRampToValueAtTime(.09 * volume, start + .008);
+      gain.gain.exponentialRampToValueAtTime(.0001 * volume, start + duration);
       osc.connect(gain);
       gain.connect(context.destination);
       const voice = {osc, gain};
