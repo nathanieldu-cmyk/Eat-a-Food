@@ -1,9 +1,9 @@
 (() => {
   const tracks = {
-    lobby: new Audio("audio/local-forecast-elevator.mp3"),
+    lobby: new Audio("audio/bossa-antigua.mp3"),
     run: new Audio("audio/monkeys-spinning-monkeys.mp3"),
   };
-  const titles = { lobby: "Local Forecast – Elevator (82 BPM)", run: "Monkeys Spinning Monkeys" };
+  const titles = { lobby: "Bossa Antigua", run: "Monkeys Spinning Monkeys" };
   const button = document.getElementById("music-toggle");
   let mode = "lobby";
   let unlocked = false;

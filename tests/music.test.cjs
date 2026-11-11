@@ -21,10 +21,10 @@ function boot(saved = 'false', reject = false) {
   });
   return {events, windowEvents, button, storage, document, tracks, api:window.GameMusic};
 }
-test('first user gesture starts the looping 82 BPM lobby track; run transitions never overlap or restart a playing track', async () => {
+test('first user gesture starts the looping Bossa Antigua lobby track; run transitions never overlap or restart a playing track', async () => {
   const g = boot(); const [lobby,run] = g.tracks;
   assert.equal(lobby.plays+run.plays,0);
-  assert.match(lobby.src,/local-forecast-elevator/);
+  assert.match(lobby.src,/bossa-antigua/);
   assert.match(run.src,/monkeys-spinning-monkeys/);
   for(const t of g.tracks) {assert.equal(t.loop,true); assert.equal(t.volume,0.3); assert.ok(fs.statSync(path.join(root,t.src)).size>100000);}
   g.events.pointerdown({}); await Promise.resolve();
