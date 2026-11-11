@@ -1331,3 +1331,5 @@ h1 {
 .music-credits summary { cursor: pointer; }
 .music-credits p { font-size: inherit; margin-top: 6px; }
 .music-credits a { color: #9bdcff; }
+
+.sfx-toggle { top: 136px; }

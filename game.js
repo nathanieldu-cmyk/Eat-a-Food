@@ -1413,7 +1413,10 @@
     const growthBoost = food === state.player ? Math.pow(1.25, boostStacks("growth")) : food.growthBoost || 1;
     const gain = pts * food.tier.growth * growthBoost;
     food.size += gain;
-    if (food === state.player) addPoints(pts);
+    if (food === state.player) {
+      window.GameSfx?.play(`orb-${sprinkle.type.key}`);
+      addPoints(pts);
+    }
     else if (net.role === "host" && food.netId) netSend({ t: "ev", kind: "pts", id: food.netId, pts });
     burst(sprinkle.x, sprinkle.y, sprinkle.type.color);
     state.sprinkles.splice(index, 1);
@@ -3397,6 +3400,7 @@
   function openBento() {
     advanceBento();
     if (state.running || save.bento.ready <= 0) return;
+    window.GameSfx?.play("bento");
     const seenBefore = new Set(Object.keys(save.discovered || {}));
     const beforeLuck = displayedLuckPct();
     const boxes = save.bento.ready;
@@ -3421,6 +3425,7 @@
     const title = boxes === 1 ? `${rainbowBoxes ? "Rainbow Bento Box" : goldBoxes ? "Gold Bento Box" : "Bento Box"} opened!` : `${boxes} Bento Boxes opened${specialLabels ? ` (${specialLabels})` : ""}!`;
     bentoResultsEl.innerHTML = `<p class="bento-results-title">🍱 ${title} Luck +${beforeLuck}% → +${displayedLuckPct()}%</p>`;
     renderPullResults(gained, seenBefore, bentoResultsEl, { keep: true });
+    if (gained.length) window.GameSfx?.play("collect", .45);
     renderEquippedUi();
     renderPotionStatus();
   }
@@ -3723,6 +3728,7 @@
     state.running = true;
     state.mode = "run";
     window.GameMusic?.setMode("run");
+    window.GameSfx?.play("start");
     state.onShopPad = false;
     state.onCraftPad = false;
     lobbyHintEl.classList.add("hidden");
@@ -3795,6 +3801,7 @@
   function endRun(wipedOut = false) {
     resetTouchControls();
     if (!state.running) return;
+    if (wipedOut) window.GameSfx?.play("death");
     state.running = false;
     if (net.role === "guest") net.place = -1;
     cancelAnimationFrame(state.animId);
@@ -3810,6 +3817,7 @@
     const earned = state.foodsEarned;
     const seenBefore = new Set(Object.keys(save.discovered || {}));
     const banked = bankPendingFoods();
+    if (banked.length) window.GameSfx?.play("collect", wipedOut ? .6 : 0);
     for (const name of banked) rememberFood(name);
     renderPullResults(banked, seenBefore);
 
@@ -4077,6 +4085,7 @@
     for (let i = state.sprinkles.length - 1; i >= 0; i--) {
       const s = state.sprinkles[i];
       if (dist(food, s) >= reach + s.type.radius) continue;
+      window.GameSfx?.play(`orb-${s.type.key}`);
       burst(s.x, s.y, s.type.color);
       state.sprinkles.splice(i, 1);
       net.ateSpr.push({ key: `${Math.round(s.x)},${Math.round(s.y)}`, at: now });
@@ -4307,6 +4316,7 @@
     state.running = true;
     state.mode = "run";
     window.GameMusic?.setMode("run");
+    window.GameSfx?.play("start");
     net.run = run;
     net.place = -1;
     restoreCarriedPoints();
