@@ -21,7 +21,7 @@ function boot(muted = false, supported = true) {
       this.buffers.push(buffer);return buffer;
     }
     createBufferSource() {
-      const voice={connect() {},disconnect() {},start(time) {voice.time=time;},stops:[],stop(time) {voice.stops.push(time ?? 'now');}};
+      const voice={playbackRate:{value:1},connect() {},disconnect() {},start(time) {voice.time=time;},stops:[],stop(time) {voice.stops.push(time ?? 'now');}};
       this.voices.push(voice);return voice;
     }
     createGain() {return {gain:{setValueAtTime() {}, exponentialRampToValueAtTime() {}}, connect() {}, disconnect() {}};}
@@ -56,6 +56,16 @@ test('orb crunches stay short, finite, bounded, and cached; bigger orbs have lon
     ctx.currentTime+=1;g.api.play(`orb-${size}`);assert.equal(ctx.voices.at(-1).buffer,buffer);
   }
   assert.equal(ctx.buffers.length,5);
+});
+test('rapid pickup chains add gentle pitch variation and reset on the next run', () => {
+  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
+  const rates=[];
+  for(let n=0;n<6;n++) {ctx.currentTime+=.08;g.api.play('orb-small');rates.push(ctx.voices.at(-1).playbackRate.value);}
+  assert.equal(new Set(rates).size,6);
+  assert.ok(rates.every(r=>r>=1 && r<1.1));
+  assert.ok(rates.at(-1)>rates[0]);
+  g.api.play('start');ctx.currentTime+=.08;g.api.play('orb-small');
+  assert.ok(ctx.voices.at(-1).playbackRate.value<1.02);
 });
 test('mute persists and cancels current and scheduled effects; hidden tabs stay silent', () => {
   const g=boot();g.events.keydown();const ctx=g.contexts[0];g.api.play('collect',.6);

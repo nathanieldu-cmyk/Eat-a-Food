@@ -6,7 +6,7 @@
     bento: [[220, .09, 0, 'triangle', 880], [659.25, .25, .10], [830.61, .25, .10], [987.77, .3, .10]],
     collect: [[880, .08, 0], [1174.66, .09, .08], [1568, .17, .16]],
   };
-  // Short, dry crunches: larger pickups have a lower body and more crackles.
+  // Layer a crisp bite, a rounded impact, and a short juicy pop. Larger orbs have more weight.
   const crunches = {
     'orb-xs': {size: 0, duration: .075, pitch: 240},
     'orb-small': {size: 1, duration: .105, pitch: 205},
@@ -19,6 +19,9 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null;
+  let lastPickupAt = -Infinity;
+  let pickupChain = 0;
+  let biteVariation = 0;
   let unlocked = false;
   let muted = false;
   try { muted = localStorage.getItem('eatAFoodSfxMuted') === 'true'; } catch (_) {}
@@ -49,7 +52,7 @@
     const rate = context.sampleRate;
     const buffer = context.createBuffer(1, Math.ceil(duration * rate), rate);
     const data = buffer.getChannelData(0);
-    const grain = Math.max(1, Math.round(rate / (9000 - size * 900)));
+    const grain = Math.max(1, Math.round(rate / (11000 - size * 1100)));
     let seed = 12791 + size * 7919;
     let noise = 0, low = 0, phase = 0;
     for (let i = 0; i < data.length; i++) {
@@ -58,17 +61,20 @@
         seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
         noise = ((seed >>> 0) / 4294967296) * 2 - 1;
       }
-      low += .18 * (noise - low);
-      const crisp = Math.round((noise - low) * 16) / 16;
-      let envelope = Math.exp(-t / .012);
-      for (let crack = 1; crack <= size + 2; crack++) {
-        const elapsed = t - crack * (.009 + size * .003);
-        if (elapsed >= 0) envelope += .65 * Math.pow(.77, crack) * Math.exp(-elapsed / (.004 + size * .001));
+      low += .28 * (noise - low);
+      const crisp = (noise - low) * .65 + low * .35;
+      let envelope = Math.exp(-t / .006);
+      for (let crack = 1; crack <= size + 3; crack++) {
+        const elapsed = t - crack * (.006 + size * .0018);
+        if (elapsed >= 0) envelope += .7 * Math.pow(.72, crack) * Math.exp(-elapsed / (.003 + size * .0007));
       }
-      const frequency = pitch * (.4 + .6 * Math.exp(-t * 45));
+      const frequency = pitch * (.3 + .7 * Math.exp(-t * 75));
       phase += 2 * Math.PI * frequency / rate;
-      const body = Math.sin(phase) * Math.exp(-t / (.018 + size * .012));
-      const bite = crisp * envelope * 1.3 + body * .55;
+      const body = (Math.sin(phase) + .22 * Math.sin(phase * 2.03)) * Math.exp(-t / (.023 + size * .013));
+      const popTime = t - (.018 + size * .004);
+      const popPhase = 2 * Math.PI * (70 * popTime + (450 - size * 45) * .008 * (1 - Math.exp(-Math.max(0, popTime) / .008)));
+      const pop = popTime > 0 ? Math.sin(popPhase) * Math.exp(-popTime / (.012 + size * .003)) * Math.min(1, popTime / .001) : 0;
+      const bite = crisp * envelope * .95 + body * 1.1 + pop * .42;
       const fade = Math.min(1, t / .0008, (duration - t) / .004);
       data[i] = Math.tanh(bite * 1.5) * .85 * fade * Math.pow(1 - t / duration, 1.2);
     }
@@ -81,6 +87,7 @@
     const crunch = crunches[name];
     if ((!notes && !crunch) || !wake()) return;
     const now = context.currentTime;
+    if (name === 'start') { pickupChain = 0; lastPickupAt = -Infinity; }
     if (name.startsWith('orb-')) {
       if (now - (lastOrb.get(name) ?? -Infinity) < .045) return;
       lastOrb.set(name, now);
@@ -92,6 +99,11 @@
     if (crunch) {
       const source = context.createBufferSource();
       source.buffer = crunchBuffer(name, crunch);
+      pickupChain = now - lastPickupAt < .22 ? Math.min(5, pickupChain + 1) : 0;
+      lastPickupAt = now;
+      biteVariation = (biteVariation + 1) % 3;
+      // Tiny pitch variation keeps repeated bites lively without changing the size hierarchy.
+      source.playbackRate.value = 1 + pickupChain * .015 + biteVariation * .008;
       const gain = context.createGain();
       const start = now + Math.max(0, delay);
       gain.gain.setValueAtTime(.22, start);
@@ -144,6 +156,7 @@
     if (document.hidden) {
       stopAll();
       lastOrb.clear();
+      pickupChain = 0; lastPickupAt = -Infinity;
       if (context?.state === 'running') context.suspend().catch(() => {});
     } else wake();
   });
