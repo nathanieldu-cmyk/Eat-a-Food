@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=73" />
+  <link rel="stylesheet" href="style.css?v=74" />
   <script type="importmap">
     {
       "imports": {
@@ -79,7 +79,8 @@
       <div id="weather-effects" class="weather-effects" data-weather="clear" aria-hidden="true"></div>
       <div id="weather-status" class="weather-status" data-weather="clear" title="Every 10 minutes: 25% Gold, 25% Rainbow, 50% clear. Weather lasts 5 minutes. Each food earned during weather has a 10% upgrade chance.">
         <strong id="weather-name">☀ Clear skies</strong>
-        <span id="weather-detail">Weather roll in 10:00</span>
+        <span id="weather-countdown" class="weather-countdown" role="timer" aria-live="off">Next roll in 10:00</span>
+        <span id="weather-detail">25% Gold · 25% Rainbow · 50% clear</span>
       </div>
       <div id="touch-stick" class="touch-stick" aria-hidden="true"><div id="touch-knob" class="touch-knob"></div></div>
       <div id="lobby-hint" class="lobby-hint">Blue circle: start a run · Gold pad: shop · Purple pad: craft</div>
@@ -204,7 +205,7 @@
   <script src="foods.js?v=32783f4f1709"></script>
   <script src="music.js?v=2"></script>
   <script src="sfx.js?v=5"></script>
-  <script src="weather.js?v=1"></script>
+  <script src="weather.js?v=2"></script>
   <script src="game.js?v=216"></script>
 </body>
 </html>
