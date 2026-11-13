@@ -1333,3 +1333,36 @@ h1 {
 .music-credits a { color: #9bdcff; }
 
 .sfx-toggle { top: 136px; }
+
+.weather-status {
+  position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%);
+  max-width: calc(100% - 28px); padding: 7px 13px; border-radius: 12px;
+  background: #20170fe8; border: 1px solid #fff3e033; color: #fff3e0;
+  text-align: center; pointer-events: none; line-height: 1.35;
+}
+.weather-status strong { display: block; font-size: .8rem; }
+.weather-status span { display: block; font-size: .66rem; white-space: nowrap; }
+.weather-status[data-weather="gold"] { border-color: #ffd166aa; color: #ffe29c; }
+.weather-status[data-weather="rainbow"] { border-color: #e9a9ff; background: linear-gradient(110deg, #4c2445ed, #243952ed, #264632ed); }
+.weather-effects { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.weather-effects:not([data-weather="clear"])::before {
+  content: ""; position: absolute; inset: -100% 0 0; opacity: .65;
+  background-image: radial-gradient(ellipse 2px 5px at 20px 25px, #ffe29c 80%, transparent), radial-gradient(circle 2px at 83px 95px, #fff4cc 80%, transparent);
+  background-size: 149px 160px, 211px 237px;
+  animation: weather-fall 6s linear infinite;
+}
+.weather-effects[data-weather="gold"] { background: linear-gradient(#ffcf4510, #ffc23a05); }
+.weather-effects[data-weather="rainbow"] { background: linear-gradient(130deg, #ff6b9d10, #7ec8ff10, #b8f27a10); }
+.weather-effects[data-weather="rainbow"]::before {
+  background-image: radial-gradient(ellipse 2px 5px at 20px 25px, #ff9ed3 80%, transparent), radial-gradient(circle 2px at 83px 95px, #8ee7ff 80%, transparent), radial-gradient(circle 2px at 130px 55px, #d0ffa0 80%, transparent);
+  background-size: 149px 160px, 211px 237px, 193px 201px;
+}
+@keyframes weather-fall { to { transform: translateY(50%); } }
+@media (max-width: 600px) {
+  .weather-status { bottom: 46px; padding: 5px 9px; }
+  .weather-status strong { font-size: .72rem; }
+  .weather-status span { font-size: .6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .weather-effects::before { animation: none !important; }
+}

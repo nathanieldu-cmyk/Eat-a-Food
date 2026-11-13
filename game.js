@@ -673,6 +673,7 @@
     autoFarm: false,
     points: 0,
     foodsEarned: 0,
+    foodWeather: [],
     player: null,
     rivals: [],
     sprinkles: [],
@@ -1175,15 +1176,25 @@
   }
 
   function awardRunFood() {
-    // Slot earned now; the actual food is rolled when the run ends.
+    // Preserve the weather at earning time; food rolls still happen at run end.
+    state.foodWeather[state.foodsEarned] = window.GameWeather?.current() || "clear";
     state.foodsEarned += 1;
     updateHud();
+  }
+
+  function applyFoodWeather(food, weather) {
+    if (food.isShadow || food.isShiny) return food;
+    if (weather !== "gold" && weather !== "rainbow") return food;
+    if (weather === "gold" && food.isGolden) return food;
+    if (Math.random() >= 0.1) return food;
+    const base = food.baseName || food.name;
+    return (weather === "rainbow" ? shinyByBase[base] : goldenByBase[base]) || food;
   }
 
   function bankPendingFoods() {
     const gained = [];
     for (let i = 0; i < state.foodsEarned; i++) {
-      const food = pullFood();
+      const food = applyFoodWeather(pullFood(), state.foodWeather[i]);
       gained.push(food.name);
       save.inventory[food.name] = (save.inventory[food.name] || 0) + 1;
     }
@@ -3733,6 +3744,7 @@
     state.onCraftPad = false;
     lobbyHintEl.classList.add("hidden");
     state.foodsEarned = 0;
+    state.foodWeather = [];
     state.player = null;
     ensureWorld();
     const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
@@ -4321,6 +4333,7 @@
     net.place = -1;
     restoreCarriedPoints();
     state.foodsEarned = 0;
+    state.foodWeather = [];
     state.particles = [];
     lobbyHintEl.classList.add("hidden");
     overlay.classList.add("hidden");
