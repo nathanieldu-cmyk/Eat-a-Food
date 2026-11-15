@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {test} = require('node:test');
 const root = path.resolve(__dirname, '..');
-const interval = 1800000, duration = 300000;
+const interval = 900000, duration = 300000;
 const noon = Date.parse('2026-11-14T12:00:00-06:00');
 const types = ['gold','rainbow','double-diamonds','double-foods'];
 function boot(start = noon + 10 * 60000, feed, saved) {
@@ -22,7 +22,7 @@ function boot(start = noon + 10 * 60000, feed, saved) {
  });
  return {api:window.GameWeather,elements,events,windowEvents,requests,rolls:()=>rolls,setTime:n=>{now=n;},tick:()=>timers.find(t=>t.ms===1000).fn(),sync:()=>timers.find(t=>t.ms===15000).fn()};
 }
-test('every hour and half hour starts one of four events for exactly five minutes',()=>{
+test('every quarter hour starts one of four events for exactly five minutes',()=>{
  const g=boot();
  for(let n=0;n<96;n++){
    const start=noon+n*interval;
@@ -32,7 +32,7 @@ test('every hour and half hour starts one of four events for exactly five minute
    assert.equal(g.elements.get('weather-countdown').textContent,'Event ends in 5:00');
    g.setTime(start+duration-1);assert.equal(g.api.current(),type);
    g.setTime(start+duration);g.tick();assert.equal(g.api.current(),'clear');
-   assert.equal(g.elements.get('weather-countdown').textContent,'Next event in 25:00');
+   assert.equal(g.elements.get('weather-countdown').textContent,'Next event in 10:00');
    assert.match(g.elements.get('weather-detail').textContent,/Next at /);
  }
  assert.equal(g.rolls(),0,'weather and visuals never consume gameplay randomness');
@@ -50,7 +50,7 @@ test('late arrivals, reloads, old saves and background restoration share the clo
  assert.equal(b.elements.get('weather-countdown').textContent,'Event ends in 4:00');
  a.setTime(start+duration);a.events.visibilitychange();assert.equal(a.api.current(),'clear');
  a.setTime(start+10*interval+duration);a.windowEvents.pageshow();
- assert.equal(a.elements.get('weather-countdown').textContent,'Next event in 25:00');
+ assert.equal(a.elements.get('weather-countdown').textContent,'Next event in 10:00');
  a.setTime(start+11*interval);a.tick();const next=boot(start+11*interval+1000);
  assert.equal(a.api.current(),next.api.current());
  assert.equal(next.elements.get('weather-countdown').textContent,'Event ends in 4:59');
@@ -144,21 +144,21 @@ test('new weather cannot retroactively double old rewards and Bento foods stay i
  }
 });
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-test('all four shared override types use the same end time and leave the half-hour clock unchanged',async()=>{
+test('all four shared override types use the same end time and leave the quarter-hour clock unchanged',async()=>{
  for(const type of types){
-   const start=noon+10*60000,event={id:'shared-'+type,type,startsAt:start,endsAt:start+duration};
+   const start=noon+6*60000,event={id:'shared-'+type,type,startsAt:start,endsAt:start+duration};
    const g=boot(start,()=>({ok:true,json:async()=>event}));await flush();
    assert.equal(g.api.current(),type);assert.equal(g.elements.get('weather-countdown').textContent,'Event ends in 5:00');
    assert.equal(g.requests[0].url,'weather-event.json');assert.equal(g.requests[0].options.cache,'no-store');
    g.setTime(start+60000);await g.sync();assert.equal(g.api.current(),type);
    g.setTime(event.endsAt);g.tick();assert.equal(g.api.current(),'clear');
-   assert.equal(g.elements.get('weather-countdown').textContent,'Next event in 15:00');
+   assert.equal(g.elements.get('weather-countdown').textContent,'Next event in 4:00');
    g.setTime(noon+interval);g.tick();assert.ok(types.includes(g.api.current()));
    assert.equal(g.elements.get('weather-countdown').textContent,'Event ends in 5:00');
  }
 });
 test('live events arrive on open pages, invalid or failed feeds do not extend them',async()=>{
- const start=noon+10*60000,event={id:'live',type:'double-foods',startsAt:start,endsAt:start+duration};let data=null,fail=false;
+ const start=noon+6*60000,event={id:'live',type:'double-foods',startsAt:start,endsAt:start+duration};let data=null,fail=false;
  const g=boot(start,()=>{if(fail)throw Error('offline');return {ok:true,json:async()=>data};});await flush();
  assert.equal(g.api.current(),'clear');data=event;await g.sync();assert.equal(g.api.current(),'double-foods');
  data={...event,type:'clear'};await g.sync();assert.equal(g.api.current(),'double-foods');
@@ -167,7 +167,7 @@ test('live events arrive on open pages, invalid or failed feeds do not extend th
  g.setTime(event.endsAt);g.tick();assert.equal(g.api.current(),'clear');
 });
 test('future and expired shared overrides do not block scheduled events or restart on reload',async()=>{
- const event={id:'future',type:'gold',startsAt:noon+10*60000,endsAt:noon+15*60000};const feed=()=>({ok:true,json:async()=>event});
+ const event={id:'future',type:'gold',startsAt:noon+6*60000,endsAt:noon+11*60000};const feed=()=>({ok:true,json:async()=>event});
  const g=boot(noon,feed);await flush();assert.equal(g.api.current(),boot(noon).api.current());
  g.setTime(event.startsAt);g.tick();assert.equal(g.api.current(),'gold');
  const expired=boot(event.endsAt,feed);await flush();assert.equal(expired.api.current(),'clear');

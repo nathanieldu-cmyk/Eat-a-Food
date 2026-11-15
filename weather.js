@@ -1,5 +1,5 @@
 (() => {
-  const INTERVAL = 30 * 60 * 1000;
+  const INTERVAL = 15 * 60 * 1000;
   const DURATION = 5 * 60 * 1000;
   const types = ["gold", "rainbow", "double-diamonds", "double-foods"];
   const status = document.getElementById("weather-status");
@@ -44,7 +44,7 @@
   }
   function scheduledType(slot) {
     // A shared 32-bit permutation gives each event a 25% share of outcomes.
-    // Everyone uses the same half-hour slot, independent of arrival or reloads.
+    // Everyone uses the same quarter-hour slot, independent of arrival or reloads.
     let seed = (slot ^ 0x9e3779b9) >>> 0;
     seed = Math.imul(seed ^ (seed >>> 16), 0x21f0aaad);
     seed = Math.imul(seed ^ (seed >>> 15), 0x735a2d97);
