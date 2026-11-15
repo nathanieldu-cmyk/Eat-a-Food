@@ -1177,8 +1177,9 @@
 
   function awardRunFood() {
     // Preserve the weather at earning time; food rolls still happen at run end.
-    state.foodWeather[state.foodsEarned] = window.GameWeather?.current() || "clear";
-    state.foodsEarned += 1;
+    const weather = window.GameWeather?.current() || "clear";
+    const count = weather === "double-foods" ? 2 : 1;
+    for (let i = 0; i < count; i++) state.foodWeather[state.foodsEarned++] = weather;
     updateHud();
   }
 
@@ -1389,7 +1390,7 @@
     updateHud();
   }
 
-  // Same as addPoints, but eating another food can award at most 10 foods.
+  // Eating another food awards at most 10 base foods, before the weather bonus.
   function addEatPoints(amount) {
     const before = foodsFromPoints(state.points);
     state.points += amount;
@@ -3833,7 +3834,8 @@
     for (const name of banked) rememberFood(name);
     renderPullResults(banked, seenBefore);
 
-    save.diamonds += earned;
+    const diamondsEarned = earned + state.foodWeather.slice(0, earned).filter(type => type === "double-diamonds").length;
+    save.diamonds += diamondsEarned;
     if (earned > save.bestRun) {
       save.bestRun = earned;
       bestRunEl.textContent = `${save.bestRun} foods`;
@@ -3873,7 +3875,7 @@
     renderPotionStatus();
 
     overlayTitle.textContent = wipedOut ? "Wiped Out!" : "Run Ended";
-    const diamondText = `${earned.toLocaleString()} diamond${earned === 1 ? "" : "s"}`;
+    const diamondText = `${diamondsEarned.toLocaleString()} diamond${diamondsEarned === 1 ? "" : "s"}`;
     const bankText = earned
       ? `Banked ${earned} food${earned === 1 ? "" : "s"} and ${diamondText} (rarest first):`
       : `No new foods this run. ${diamondText}.`;

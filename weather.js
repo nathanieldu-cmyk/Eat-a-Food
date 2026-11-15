@@ -1,15 +1,13 @@
 (() => {
-  const INTERVAL = 10 * 60 * 1000;
+  const INTERVAL = 30 * 60 * 1000;
   const DURATION = 5 * 60 * 1000;
-  const KEY = "eatAFoodWeather";
-  const types = ["clear", "gold", "rainbow"];
+  const types = ["gold", "rainbow", "double-diamonds", "double-foods"];
   const status = document.getElementById("weather-status");
   const name = document.getElementById("weather-name");
   const detail = document.getElementById("weather-detail");
   const effects = document.getElementById("weather-effects");
   const timer = document.getElementById("weather-countdown");
   let globalEvent = null;
-  let appliedEventId = "";
   let syncing = false;
   let paintedType = "";
   // Fixed variation keeps visual effects separate from gameplay randomness.
@@ -21,12 +19,6 @@
   }
   function activeEvent(now) {
     if (!globalEvent || now < globalEvent.startsAt || now >= globalEvent.endsAt) return null;
-    if (appliedEventId !== globalEvent.id) {
-      // Resume regular rolls five minutes after the shared event finishes.
-      weather = {type: "clear", endsAt: 0, nextRoll: globalEvent.endsAt + DURATION};
-      appliedEventId = globalEvent.id;
-      persist();
-    }
     return globalEvent;
   }
   async function syncEvent() {
@@ -39,7 +31,7 @@
       if (!response.ok) return;
       const event = await response.json();
       if (event === null) globalEvent = null;
-      else if (typeof event.id === "string" && event.id && ["gold", "rainbow"].includes(event.type) &&
+      else if (typeof event.id === "string" && event.id && types.includes(event.type) &&
           Number.isFinite(event.startsAt) && Number.isFinite(event.endsAt) &&
           event.endsAt - event.startsAt === DURATION) globalEvent = event;
       refresh();
@@ -50,41 +42,25 @@
       syncing = false;
     }
   }
-  function read() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(KEY));
-      const now = Date.now();
-      if (saved && types.includes(saved.type) && Number.isFinite(saved.nextRoll) &&
-          saved.nextRoll > 0 && saved.nextRoll <= now + INTERVAL &&
-          Number.isFinite(saved.endsAt) && saved.endsAt >= 0 &&
-          (saved.type === "clear" ? saved.endsAt === 0 : saved.endsAt === saved.nextRoll - INTERVAL + DURATION)) return saved;
-    } catch {}
-    return { type: "clear", nextRoll: Date.now() + INTERVAL, endsAt: 0 };
+  function scheduledType(slot) {
+    // A shared 32-bit permutation gives each event a 25% share of outcomes.
+    // Everyone uses the same half-hour slot, independent of arrival or reloads.
+    let seed = (slot ^ 0x9e3779b9) >>> 0;
+    seed = Math.imul(seed ^ (seed >>> 16), 0x21f0aaad);
+    seed = Math.imul(seed ^ (seed >>> 15), 0x735a2d97);
+    seed ^= seed >>> 15;
+    return types[seed >>> 30];
   }
-  let weather = read();
-  function persist() {
-    try { localStorage.setItem(KEY, JSON.stringify(weather)); } catch {}
-  }
-  function advance(now) {
+  function currentWeather(now) {
+    const slot = Math.floor(now / INTERVAL);
+    const startsAt = slot * INTERVAL;
+    const nextRoll = startsAt + INTERVAL;
     const event = activeEvent(now);
-    if (event) return event.type;
-    let changed = false;
-    if (now >= weather.nextRoll) {
-      // Skip expired intervals after a suspended tab or an offline period.
-      const rollAt = weather.nextRoll + Math.floor((now - weather.nextRoll) / INTERVAL) * INTERVAL;
-      weather.nextRoll = rollAt + INTERVAL;
-      const roll = now < rollAt + DURATION ? Math.random() : 1;
-      weather.type = roll < .25 ? "gold" : roll < .5 ? "rainbow" : "clear";
-      weather.endsAt = weather.type === "clear" ? 0 : rollAt + DURATION;
-      changed = true;
-    }
-    if (weather.type !== "clear" && now >= weather.endsAt) {
-      weather.type = "clear";
-      weather.endsAt = 0;
-      changed = true;
-    }
-    if (changed) persist();
-    return weather.type;
+    if (event) return {...event, nextRoll};
+    return {
+      type: now < startsAt + DURATION ? scheduledType(slot) : "clear",
+      startsAt, endsAt: startsAt + DURATION, nextRoll,
+    };
   }
   function countdown(ms) {
     const seconds = Math.max(0, Math.ceil(ms / 1000));
@@ -92,31 +68,32 @@
   }
   function refresh() {
     const now = Date.now();
-    const type = advance(now);
+    const weather = currentWeather(now);
+    const type = weather.type;
     if (status) status.dataset.weather = type;
     if (effects && paintedType !== type) {
       effects.dataset.weather = type;
       paintedType = type;
     }
-    if (name) name.textContent = type === "gold" ? "✦ Gold weather" : type === "rainbow" ? "🌈 Rainbow weather" : "☀ Clear skies";
-    if (detail) detail.textContent = type === "clear"
-      ? "25% Gold · 25% Rainbow · 50% clear"
-      : `10% ${type === "gold" ? "Gold" : "Rainbow"} food chance`;
+    if (name) name.textContent = {
+      gold: "✦ Gold weather", rainbow: "🌈 Rainbow weather",
+      "double-diamonds": "💎 Double Diamonds", "double-foods": "🍽 Double Foods", clear: "☀ Clear skies",
+    }[type];
+    if (detail) detail.textContent = {
+      gold: "10% Gold food chance", rainbow: "10% Rainbow food chance",
+      "double-diamonds": "2× diamonds from run foods", "double-foods": "2× foods earned from runs",
+      clear: `Next at ${new Date(weather.nextRoll).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`,
+    }[type];
     if (timer) timer.textContent = type === "clear"
-      ? `Next roll in ${countdown(weather.nextRoll - now)}`
-      : `Event ends in ${countdown((activeEvent(now)?.endsAt || weather.endsAt) - now)}`;
+      ? `Next event in ${countdown(weather.nextRoll - now)}`
+      : `Event ends in ${countdown(weather.endsAt - now)}`;
   }
-  window.GameWeather = { current: () => advance(Date.now()) };
-  persist();
+  window.GameWeather = { current: () => currentWeather(Date.now()).type };
   refresh();
   setInterval(refresh, 1000);
   syncEvent();
   setInterval(syncEvent, 15000);
   document.addEventListener("visibilitychange", () => { refresh(); if (!document.hidden) syncEvent(); });
   window.addEventListener("pageshow", refresh);
-  window.addEventListener("storage", event => {
-    if (event.key !== KEY) return;
-    weather = read();
-    refresh();
-  });
+
 })();
