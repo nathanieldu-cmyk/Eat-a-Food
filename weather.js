@@ -81,7 +81,7 @@
     }[type];
     if (detail) detail.textContent = {
       gold: "10% Gold food chance", rainbow: "10% Rainbow food chance",
-      "double-diamonds": "2× diamonds from run foods", "double-foods": "2× foods earned from runs",
+      "double-diamonds": "2× diamonds from run foods", "double-foods": "Foods duplicated at collection",
       clear: `Next at ${new Date(weather.nextRoll).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`,
     }[type];
     if (timer) timer.textContent = type === "clear"

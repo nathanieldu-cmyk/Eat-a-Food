@@ -1178,8 +1178,7 @@
   function awardRunFood() {
     // Preserve the weather at earning time; food rolls still happen at run end.
     const weather = window.GameWeather?.current() || "clear";
-    const count = weather === "double-foods" ? 2 : 1;
-    for (let i = 0; i < count; i++) state.foodWeather[state.foodsEarned++] = weather;
+    state.foodWeather[state.foodsEarned++] = weather;
     updateHud();
   }
 
@@ -1196,8 +1195,9 @@
     const gained = [];
     for (let i = 0; i < state.foodsEarned; i++) {
       const food = applyFoodWeather(pullFood(), state.foodWeather[i]);
-      gained.push(food.name);
-      save.inventory[food.name] = (save.inventory[food.name] || 0) + 1;
+      const copies = state.foodWeather[i] === "double-foods" ? 2 : 1;
+      for (let copy = 0; copy < copies; copy++) gained.push(food.name);
+      save.inventory[food.name] = (save.inventory[food.name] || 0) + copies;
     }
     if (!save.inventory[save.equipped]) {
       save.equipped = Object.keys(save.inventory)[0] || "Peanut";
@@ -3877,7 +3877,7 @@
     overlayTitle.textContent = wipedOut ? "Wiped Out!" : "Run Ended";
     const diamondText = `${diamondsEarned.toLocaleString()} diamond${diamondsEarned === 1 ? "" : "s"}`;
     const bankText = earned
-      ? `Banked ${earned} food${earned === 1 ? "" : "s"} and ${diamondText} (rarest first):`
+      ? `Banked ${banked.length} food${banked.length === 1 ? "" : "s"} and ${diamondText} (rarest first):`
       : `No new foods this run. ${diamondText}.`;
     overlayMsg.textContent =
       (wipedOut

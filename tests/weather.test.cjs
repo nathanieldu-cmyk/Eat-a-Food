@@ -60,14 +60,14 @@ test('Double Diamonds and Double Foods have distinct names, explanations and eff
  for(let n=0;n<100&&seen.size<4;n++){
    g.setTime(noon+n*interval);g.tick();const type=g.api.current();seen.add(type);
    if(type==='double-diamonds'){assert.match(g.elements.get('weather-name').textContent,/Double Diamonds/);assert.match(g.elements.get('weather-detail').textContent,/2× diamonds/);}
-   if(type==='double-foods'){assert.match(g.elements.get('weather-name').textContent,/Double Foods/);assert.match(g.elements.get('weather-detail').textContent,/2× foods/);}
+   if(type==='double-foods'){assert.match(g.elements.get('weather-name').textContent,/Double Foods/);assert.match(g.elements.get('weather-detail').textContent,/Foods duplicated at collection/);}
  }
  assert.equal(seen.size,4);assert.equal(g.elements.get('weather-effects').children.length,64);
 });
 let harness=fs.readFileSync(path.join(__dirname,'bento.test.cjs'),'utf8').split('const thresholds =')[0];
 harness=harness.replace('window: {}, Math: math, console,','window: {GameWeather:{current:()=>weather}}, Math: math, console,')
  .replace('function boot(saved) {','function boot(saved) {\n  let weather="clear";')
- .replace('globalThis.api = { save, state, net,','globalThis.api = { awardRunFood, applyFoodWeather, save, state, net,')
+ .replace('globalThis.api = { save, state, net,','globalThis.api = { setPull: fn => {pullFood=fn;}, awardRunFood, applyFoodWeather, save, state, net,')
  .replace('return { ...context.api, math, storage, elements };','return { ...context.api, math, storage, elements, setWeather:w=>{weather=w;} };');
 const ctx={require,__dirname,console};vm.runInNewContext(harness+'\nglobalThis.gameBoot=boot;',ctx);
 const gameBoot=ctx.gameBoot;
@@ -111,27 +111,28 @@ test('weather leaves Bento contents and non-weather run foods unchanged', () => 
 });
 
 
-test('double food slots count immediately and double diamond slots bank correctly after expiry for every role and ending',()=>{
+test('Double Foods keeps base counts and duplicates at collection while Double Diamonds banks independently for every role and ending',()=>{
  for(const role of [null,'host','guest'])for(const death of [false,true]){
    const g=gameBoot();g.state.running=true;g.state.player={tier:g.tierByName.Peanut};g.net.role=role;
    const before=g.save.inventory.Peanut;
    for(const type of ['clear','double-diamonds','double-foods','gold','rainbow','double-diamonds']){g.setWeather(type);g.awardRunFood();}
-   assert.equal(g.state.foodsEarned,7);assert.equal(g.elements.get('food-count').textContent,'7');
-   assert.equal(g.state.foodWeather.filter(t=>t==='double-foods').length,2);
+   assert.equal(g.state.foodsEarned,6);assert.equal(g.elements.get('food-count').textContent,'6');
+   assert.equal(g.state.foodWeather.filter(t=>t==='double-foods').length,1);
    g.setWeather('clear');g.math.random=()=>.9;g.endRun(death);
-   assert.equal(g.save.inventory.Peanut,before+7);assert.equal(g.save.diamonds,9);assert.equal(g.save.bestRun,7);
-   assert.match(g.elements.get('overlay-msg').textContent,/Banked 7 foods and 9 diamonds/);
+   assert.equal(g.save.inventory.Peanut,before+7);assert.equal(g.save.diamonds,8);assert.equal(g.save.bestRun,6);
+   assert.match(g.elements.get('overlay-msg').textContent,/Banked 7 foods and 8 diamonds/);
    const saved=JSON.parse(g.storage.get('sprinkleFeastSave'));const reloaded=gameBoot(saved);
-   assert.equal(reloaded.save.inventory.Peanut,before+7);assert.equal(reloaded.save.diamonds,9);
-   g.endRun(death);assert.equal(g.save.diamonds,9);
+   assert.equal(reloaded.save.inventory.Peanut,before+7);assert.equal(reloaded.save.diamonds,8);
+   g.endRun(death);assert.equal(g.save.diamonds,8);
  }
 });
-test('point progress earns twice the foods during Double Foods and stops doubling at event end',()=>{
+test('Double Foods preserves point progress and live counts, then duplicates only eligible food slots at collection',()=>{
  const g=gameBoot();g.state.running=true;g.state.player={tier:g.tierByName.Peanut};
- g.setWeather('double-foods');g.addPoints(1500);assert.equal(g.state.foodsEarned,2);
+ g.setWeather('double-foods');g.addPoints(1500);assert.equal(g.state.foodsEarned,1);
  assert.equal(g.elements.get('food-fill').style.width,'50%');
- g.setWeather('clear');g.addPoints(500);assert.equal(g.state.foodsEarned,3);
- g.endRun();assert.equal(g.save.diamonds,3);
+ g.setWeather('clear');g.addPoints(500);assert.equal(g.state.foodsEarned,2);
+ const before=g.save.inventory.Peanut;g.endRun();assert.equal(g.save.diamonds,2);
+ assert.equal(g.save.inventory.Peanut,before+3);assert.match(g.elements.get('overlay-msg').textContent,/Banked 3 foods and 2 diamonds/);
 });
 test('new weather cannot retroactively double old rewards and Bento foods stay independent',()=>{
  const g=gameBoot();g.state.running=true;g.state.player={tier:g.tierByName.Peanut};
@@ -172,4 +173,25 @@ test('future and expired shared overrides do not block scheduled events or resta
  g.setTime(event.startsAt);g.tick();assert.equal(g.api.current(),'gold');
  const expired=boot(event.endsAt,feed);await flush();assert.equal(expired.api.current(),'clear');
  const next=boot(noon+interval,feed);await flush();assert.equal(next.api.current(),boot(noon+interval).api.current());
+});
+
+test('Double Foods duplicates the exact rolled food and version without additional rolls or diamonds',()=>{
+ const g=gameBoot(),names=['Cheese','Golden Cheese','Rainbow Cheese','Shadow Cheese'];let pulls=0;
+ const before=Object.fromEntries(names.map(name=>[name,g.save.inventory[name]||0]));
+ g.state.running=true;g.state.player={tier:g.tierByName.Peanut};g.setWeather('double-foods');
+ for(const name of names){assert.ok(g.tierByName[name]);g.awardRunFood();}
+ assert.equal(g.state.foodsEarned,4);assert.equal(g.elements.get('food-count').textContent,'4');
+ g.setPull(()=>g.tierByName[names[pulls++]]);g.setWeather('clear');g.endRun();
+ assert.equal(pulls,4);assert.equal(g.save.diamonds,4);assert.equal(g.save.bestRun,4);
+ for(const name of names){assert.equal(g.save.inventory[name],before[name]+2);assert.equal(g.save.discovered[name],true);}
+ assert.match(g.elements.get('overlay-msg').textContent,/Banked 8 foods and 4 diamonds/);
+ g.endRun();assert.equal(pulls,4);assert.equal(g.save.diamonds,4);
+});
+test('duplicated foods do not advance run milestones or inflate diamond payouts',()=>{
+ const g=gameBoot();g.state.running=true;g.state.player={tier:g.tierByName.Peanut};g.setWeather('double-foods');
+ for(let i=0;i<24;i++)g.awardRunFood();
+ g.math.random=()=>.9;const before=g.save.inventory.Peanut;g.endRun();
+ assert.equal(g.state.foodsEarned,24);assert.equal(g.save.bestRun,24);assert.equal(g.save.diamonds,24);
+ assert.equal(g.save.inventory.Peanut,before+48);assert.equal(g.bentoInventoryCount(),0);
+ assert.match(g.elements.get('overlay-msg').textContent,/Banked 48 foods and 24 diamonds/);
 });
