@@ -1597,9 +1597,10 @@
   function moveSpeed(food) {
     const boost = food === state.player ? Math.pow(1.25, boostStacks("speed")) : food.speedBoost || 1;
     const base = (food.tier.speed || 1) * SPEED_SCALE * boost;
-    // Bigger body = slower. Starts full speed around size 10, soft-floors later.
-    const bulk = Math.max(0, food.size - 10);
-    const sizeFactor = Math.max(0.32, 1 / (1 + bulk / 180));
+    // Slow down with visible body growth, rather than the faster-growing score.
+    // Twice the starting radius retains ~71% speed; large bodies retain at least half.
+    const radiusRatio = Math.max(1, food.drawRadius() / BASE_FOOD_DRAW_RADIUS);
+    const sizeFactor = Math.max(0.5, 1 / Math.sqrt(radiusRatio));
     return base * sizeFactor;
   }
 
