@@ -71,12 +71,16 @@ harness=harness.replace('window: {}, Math: math, console,','window: {GameWeather
  .replace('return { ...context.api, math, storage, elements };','return { ...context.api, math, storage, elements, setWeather:w=>{weather=w;} };');
 const ctx={require,__dirname,console};vm.runInNewContext(harness+'\nglobalThis.gameBoot=boot;',ctx);
 const gameBoot=ctx.gameBoot;
-test('Gold and Rainbow weather chances decrease by food rarity, preserve identity and ignore luck', () => {
- const rates={common:.10,uncommon:.075,rare:.05,epic:.025,legendary:.01,mythic:.005};
+test('Gold retains its odds while Rainbow uses lower rarity odds, preserving identity and ignoring luck', () => {
+ const ratesByWeather={
+   gold:{common:.10,uncommon:.075,rare:.05,epic:.025,legendary:.01,mythic:.005},
+   rainbow:{common:.075,uncommon:.05,rare:.025,epic:.01,legendary:.005,mythic:.005},
+ };
  for(const boosted of [false,true]) {
    const g=gameBoot();
    if(boosted){g.save.bento.opened=100000;g.save.activePotions.luck={endsAt:Date.now()+60000,stacks:5};}
    for(const weather of ['gold','rainbow']) {
+     const rates=ratesByWeather[weather];
      for(const base of Object.values(g.tierByName).filter(t=>!t.isGolden&&!t.isShiny&&!t.isShadow)) {
        const chance=rates[base.rarity];assert.ok(chance);
        for(const roll of [0,chance-1e-9,chance,.999999]) {
