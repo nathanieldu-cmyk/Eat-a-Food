@@ -1393,3 +1393,12 @@ h1 {
 .weather-effects[data-weather="double-foods"] { background: linear-gradient(#b8f27a18, #ffcf7508); }
 .weather-effects[data-weather="double-foods"] .weather-sparkle { color: #c8ff94; }
 .weather-effects[data-weather="double-foods"] .weather-sparkle::before { clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%); }
+
+.giveaway-status {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  max-width: calc(100% - 160px); padding: 9px 14px; border: 1px solid #f4b4ff;
+  border-radius: 12px; background: linear-gradient(115deg, #63324bee, #245269ee, #3e552bee);
+  color: #fff; font-size: .8rem; font-weight: 800; text-align: center;
+  pointer-events: none; line-height: 1.5;
+}
+.giveaway-status.hidden { display: none; }

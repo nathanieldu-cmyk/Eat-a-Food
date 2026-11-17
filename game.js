@@ -444,6 +444,7 @@
       activePotions: emptyActivePotions(),
       bento: emptyBento(),
       discovered: { Peanut: true },
+      giveawayClaims: {},
       // Already applied, so a brand-new save is not given the old starter foods.
       grantedGoldenCosmicFeast: true,
       grantedRamen: true,
@@ -512,6 +513,7 @@
       next.grantedRamen = !!parsed.grantedRamen;
       next.clearedToCracker = !!parsed.clearedToCracker;
       next.keptSingleCracker = !!parsed.keptSingleCracker;
+      next.giveawayClaims = Object.fromEntries(Object.entries(parsed.giveawayClaims || {}).filter(([id, claimed]) => /^[a-zA-Z0-9-]{1,100}$/.test(id) && claimed === true));
       next.discovered = {};
       const rawDiscovered = Array.isArray(parsed.discovered)
         ? parsed.discovered
@@ -623,6 +625,32 @@
     if (!save.discovered || typeof save.discovered !== "object") save.discovered = {};
     if (save.discovered[name]) return false;
     save.discovered[name] = true;
+    return true;
+  }
+
+  function claimRainbowPepper(event) {
+    const now = Date.now();
+    if (document.hidden || !event || event.type !== "rainbow-pepper" ||
+        typeof event.id !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(event.id) ||
+        !Number.isFinite(event.startsAt) || !Number.isFinite(event.endsAt) ||
+        event.endsAt - event.startsAt !== 60000 || now < event.startsAt || now >= event.endsAt) return false;
+    const claimKey = `eatAFoodGiveaway:${event.id}`;
+    if (localStorage.getItem(claimKey)) return false;
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    if (stored.giveawayClaims?.[event.id]) {
+      localStorage.setItem(claimKey, "claimed");
+      return false;
+    }
+    const food = "Rainbow Pepper";
+    save.inventory[food] = Math.max(save.inventory[food] || 0, Number(stored.inventory?.[food]) || 0) + 1;
+    save.giveawayClaims = {...stored.giveawayClaims, ...save.giveawayClaims, [event.id]: true};
+    rememberFood(food);
+    persistSave();
+    localStorage.setItem(claimKey, "claimed");
+    window.GameSfx?.play("collect");
+    renderEquippedUi();
+    if (!inventoryModal.classList.contains("hidden")) renderInventory();
+    if (!indexModal.classList.contains("hidden")) renderFoodIndex();
     return true;
   }
 
@@ -5311,6 +5339,7 @@
   });
   window.addEventListener("blur", () => { moveKeys.clear(); resetTouchControls(); });
 
+  window.GameGiveaway = { claim: claimRainbowPepper };
   enterLobby();
   updateHud();
   resumePendingNet();
