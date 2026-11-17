@@ -103,6 +103,8 @@
       epic: 0.025, legendary: 0.01, mythic: 0.005 },
     rainbow: { common: 0.075, uncommon: 0.05, rare: 0.025,
       epic: 0.01, legendary: 0.005, mythic: 0.005 },
+    shadow: { common: 0.075, uncommon: 0.05, rare: 0.025,
+      epic: 0.01, legendary: 0.005, mythic: 0.005 },
   };
   const MAX_RIVALS = 5;
   const RANDOM_CPU_EVERY_MS = 8000;
@@ -1217,13 +1219,13 @@
   }
 
   function applyFoodWeather(food, weather) {
-    if (food.isShadow || food.isShiny) return food;
-    if (weather !== "gold" && weather !== "rainbow") return food;
+    if (food.isShadow || food.isShiny && weather !== "shadow") return food;
+    if (weather !== "gold" && weather !== "rainbow" && weather !== "shadow") return food;
     if (weather === "gold" && food.isGolden) return food;
     const chance = WEATHER_UPGRADE_CHANCES[weather][food.rarity] || 0;
     if (Math.random() >= chance) return food;
     const base = food.baseName || food.name;
-    return (weather === "rainbow" ? shinyByBase[base] : goldenByBase[base]) || food;
+    return (weather === "shadow" ? shadowByBase[base] : weather === "rainbow" ? shinyByBase[base] : goldenByBase[base]) || food;
   }
 
   function bankPendingFoods() {

@@ -1402,3 +1402,7 @@ h1 {
   pointer-events: none; line-height: 1.5;
 }
 .giveaway-status.hidden { display: none; }
+
+.weather-status[data-weather="shadow"] { border-color: #bd8bff; color: #ead7ff; background: #20102fed; box-shadow: 0 0 18px #7b39ae66; }
+.weather-effects[data-weather="shadow"] { background: linear-gradient(#2511374d, #431a3f26); }
+.weather-effects[data-weather="shadow"] .weather-sparkle { color: #b889ff; filter: drop-shadow(0 0 6px #b14bff); }

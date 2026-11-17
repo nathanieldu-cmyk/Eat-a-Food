@@ -31,9 +31,9 @@
       if (!response.ok) return;
       const event = await response.json();
       if (event === null) globalEvent = null;
-      else if (typeof event.id === "string" && event.id && types.includes(event.type) &&
+      else if (typeof event.id === "string" && event.id && (types.includes(event.type) || event.type === "shadow") &&
           Number.isFinite(event.startsAt) && Number.isFinite(event.endsAt) &&
-          event.endsAt - event.startsAt === DURATION) globalEvent = event;
+          event.endsAt - event.startsAt === (event.type === "shadow" ? 120000 : DURATION)) globalEvent = event;
       refresh();
     } catch {
       // Keep the last known event until its fixed end time if the feed is offline.
@@ -76,11 +76,12 @@
       paintedType = type;
     }
     if (name) name.textContent = {
-      gold: "✦ Gold weather", rainbow: "🌈 Rainbow weather",
+      gold: "✦ Gold weather", rainbow: "🌈 Rainbow weather", shadow: "🌑 Shadow weather",
       "double-diamonds": "💎 Double Diamonds", "double-foods": "🍽 Double Foods", clear: "☀ Clear skies",
     }[type];
     if (detail) detail.textContent = {
       gold: "Up to 10% Gold · rarer foods have lower odds", rainbow: "Up to 7.5% Rainbow · rarer foods have lower odds",
+      shadow: "Up to 7.5% Shadow · rarer foods have lower odds",
       "double-diamonds": "2× diamonds from run foods", "double-foods": "Foods duplicated at collection",
       clear: `Next at ${new Date(weather.nextRoll).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`,
     }[type];

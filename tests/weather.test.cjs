@@ -209,3 +209,26 @@ test('duplicated foods do not advance run milestones or inflate diamond payouts'
  assert.equal(g.save.inventory.Peanut,before+48);assert.equal(g.bentoInventoryCount(),0);
  assert.match(g.elements.get('overlay-msg').textContent,/Banked 48 foods and 24 diamonds/);
 });
+
+
+test('Shadow overrides last exactly two minutes, use a countdown and leave regular event odds intact',async()=>{
+ const start=noon+6*60000,event={id:'shadow-live',type:'shadow',startsAt:start,endsAt:start+120000};
+ let record=event;const feed=()=>({ok:true,json:async()=>record});const g=boot(start-1,feed);await flush();assert.equal(g.api.current(),'clear');
+ g.setTime(start);g.tick();assert.equal(g.api.current(),'shadow');assert.equal(g.elements.get('weather-name').textContent,'🌑 Shadow weather');assert.equal(g.elements.get('weather-countdown').textContent,'Event ends in 2:00');
+ assert.equal(g.elements.get('weather-effects').dataset.weather,'shadow');
+ g.setTime(event.endsAt-1);g.tick();assert.equal(g.api.current(),'shadow');
+ g.setTime(event.endsAt);g.tick();assert.equal(g.api.current(),'clear');
+ const expired=boot(event.endsAt,feed);await flush();assert.equal(expired.api.current(),'clear');
+ record={...event,endsAt:start+300000};const invalid=boot(start,feed);await flush();assert.equal(invalid.api.current(),'clear');
+ g.setTime(noon+interval);g.tick();assert.ok(types.includes(g.api.current()));
+});
+test('Shadow food odds match Rainbow rates across rarities, upgrade all lower versions and bank after expiry',()=>{
+ const g=gameBoot(),rates={common:.075,uncommon:.05,rare:.025,epic:.01,legendary:.005,mythic:.005};
+ for(const base of Object.values(g.tierByName).filter(t=>!t.isGolden&&!t.isShiny&&!t.isShadow))for(const prefix of ['','Golden ','Rainbow ']){
+   const original=g.tierByName[prefix+base.name];const chance=rates[base.rarity];
+   for(const roll of [0,chance-1e-9,chance,.999999]){g.math.random=()=>roll;assert.equal(g.applyFoodWeather(original,'shadow').name,roll<chance?'Shadow '+base.name:original.name);}
+ }
+ g.math.random=()=>0;assert.equal(g.applyFoodWeather(g.tierByName['Shadow Peanut'],'shadow').name,'Shadow Peanut');
+ g.state.running=true;g.state.player={tier:g.tierByName.Peanut};g.setWeather('shadow');g.awardRunFood();g.setWeather('clear');g.endRun();
+ assert.equal(g.save.inventory['Shadow Peanut'],1);assert.equal(g.save.discovered['Shadow Peanut'],true);assert.equal(g.save.diamonds,1);
+});
