@@ -80,7 +80,7 @@
       "double-diamonds": "💎 Double Diamonds", "double-foods": "🍽 Double Foods", clear: "☀ Clear skies",
     }[type];
     if (detail) detail.textContent = {
-      gold: "10% Gold food chance", rainbow: "10% Rainbow food chance",
+      gold: "Up to 10% Gold · rarer foods have lower odds", rainbow: "Up to 10% Rainbow · rarer foods have lower odds",
       "double-diamonds": "2× diamonds from run foods", "double-foods": "Foods duplicated at collection",
       clear: `Next at ${new Date(weather.nextRoll).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`,
     }[type];

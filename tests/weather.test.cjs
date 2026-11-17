@@ -71,24 +71,34 @@ harness=harness.replace('window: {}, Math: math, console,','window: {GameWeather
  .replace('return { ...context.api, math, storage, elements };','return { ...context.api, math, storage, elements, setWeather:w=>{weather=w;} };');
 const ctx={require,__dirname,console};vm.runInNewContext(harness+'\nglobalThis.gameBoot=boot;',ctx);
 const gameBoot=ctx.gameBoot;
-test('each eligible food has exactly 10% conversion, retaining base food and rarity without downgrades', () => {
- const g=gameBoot();
- for(const weather of ['gold','rainbow']) {
-   let converted=0;
-   for(let n=0;n<1000;n++) {g.math.random=()=> (n+.5)/1000;const food=g.applyFoodWeather(g.tierByName.Peanut,weather);if(food.name!=='Peanut') converted++;}
-   assert.equal(converted,100);
-   for(const roll of [0,.099999,.1,.999999]) {
-     g.math.random=()=>roll;
-     const food=g.applyFoodWeather(g.tierByName.Cheese,weather);
-     assert.equal(food.name,roll<.1?`${weather==='gold'?'Golden':'Rainbow'} Cheese`:'Cheese');
-     assert.equal(food.rarity,g.tierByName.Cheese.rarity);
+test('Gold and Rainbow weather chances decrease by food rarity, preserve identity and ignore luck', () => {
+ const rates={common:.10,uncommon:.075,rare:.05,epic:.025,legendary:.01,mythic:.005};
+ for(const boosted of [false,true]) {
+   const g=gameBoot();
+   if(boosted){g.save.bento.opened=100000;g.save.activePotions.luck={endsAt:Date.now()+60000,stacks:5};}
+   for(const weather of ['gold','rainbow']) {
+     for(const base of Object.values(g.tierByName).filter(t=>!t.isGolden&&!t.isShiny&&!t.isShadow)) {
+       const chance=rates[base.rarity];assert.ok(chance);
+       for(const roll of [0,chance-1e-9,chance,.999999]) {
+         g.math.random=()=>roll;
+         const food=g.applyFoodWeather(base,weather);
+         assert.equal(food.name,roll<chance?`${weather==='gold'?'Golden':'Rainbow'} ${base.name}`:base.name);
+         assert.equal(food.rarity,base.rarity);
+       }
+     }
+     for(const [rarity,chance] of Object.entries(rates)) {
+       const base=Object.values(g.tierByName).find(t=>t.rarity===rarity&&!t.isGolden&&!t.isShiny&&!t.isShadow);
+       let converted=0;
+       for(let n=0;n<2000;n++){g.math.random=()=> (n+.5)/2000;if(g.applyFoodWeather(base,weather).name!==base.name)converted++;}
+       assert.equal(converted,chance*2000,`${weather} ${rarity}`);
+     }
    }
+   g.math.random=()=>0;
+   assert.equal(g.applyFoodWeather(g.tierByName.Peanut,'clear').name,'Peanut');
+   for(const name of ['Rainbow Peanut','Shadow Peanut'])for(const weather of ['gold','rainbow'])assert.equal(g.applyFoodWeather(g.tierByName[name],weather).name,name);
+   assert.equal(g.applyFoodWeather(g.tierByName['Golden Peanut'],'gold').name,'Golden Peanut');
+   assert.equal(g.applyFoodWeather(g.tierByName['Golden Peanut'],'rainbow').name,'Rainbow Peanut');
  }
- g.math.random=()=>0;
- assert.equal(g.applyFoodWeather(g.tierByName.Peanut,'clear').name,'Peanut');
- for(const name of ['Rainbow Peanut','Shadow Peanut']) for(const weather of ['gold','rainbow']) assert.equal(g.applyFoodWeather(g.tierByName[name],weather).name,name);
- assert.equal(g.applyFoodWeather(g.tierByName['Golden Peanut'],'gold').name,'Golden Peanut');
- assert.equal(g.applyFoodWeather(g.tierByName['Golden Peanut'],'rainbow').name,'Rainbow Peanut');
 });
 test('weather is captured for each earned food, survives expiration, banks and discovers on manual end or death for every role', () => {
  for(const role of [null,'host','guest']) for(const death of [false,true]) {

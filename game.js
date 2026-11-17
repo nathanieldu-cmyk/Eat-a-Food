@@ -98,6 +98,10 @@
   const MIN_CAMERA_DISTANCE = 240;
   const MAX_CAMERA_DISTANCE = 1650 * MAP_SCALE;
   const POINTS_PER_FOOD = 1000;
+  const WEATHER_UPGRADE_CHANCES = {
+    common: 0.10, uncommon: 0.075, rare: 0.05,
+    epic: 0.025, legendary: 0.01, mythic: 0.005,
+  };
   const MAX_RIVALS = 5;
   const RANDOM_CPU_EVERY_MS = 8000;
   const MAX_SPRINKLES = Math.round(250 * AREA_SCALE);
@@ -1214,7 +1218,8 @@
     if (food.isShadow || food.isShiny) return food;
     if (weather !== "gold" && weather !== "rainbow") return food;
     if (weather === "gold" && food.isGolden) return food;
-    if (Math.random() >= 0.1) return food;
+    const chance = WEATHER_UPGRADE_CHANCES[food.rarity] || 0;
+    if (Math.random() >= chance) return food;
     const base = food.baseName || food.name;
     return (weather === "rainbow" ? shinyByBase[base] : goldenByBase[base]) || food;
   }
