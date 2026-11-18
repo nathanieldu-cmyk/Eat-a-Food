@@ -66,7 +66,7 @@ let harness=fs.readFileSync(path.join(__dirname,'bento.test.cjs'),'utf8').split(
 harness=harness.replace('globalThis.api = { save, state, net,','globalThis.api = { setTutorialStep, save, state, net,');
 const gameCtx={require,__dirname,console};vm.runInNewContext(harness+'\nglobalThis.gameBoot=boot;',gameCtx);
 test('new saves start the tutorial, existing saves skip it, and saved steps survive reloads',()=>{
- const fresh=gameCtx.gameBoot();assert.equal(fresh.save.tutorial.step,'start');
+ const fresh=gameCtx.gameBoot(undefined,true);assert.equal(fresh.save.tutorial.step,'start');
  const legacy=JSON.parse(JSON.stringify(fresh.save));delete legacy.tutorial;assert.equal(gameCtx.gameBoot(legacy).save.tutorial.step,'done');
  for(const step of ['collect','equip','bento','potions','craft-info','multiplayer-info','finish','done']){
    fresh.setTutorialStep(step);const reloaded=gameCtx.gameBoot(JSON.parse(fresh.storage.get('sprinkleFeastSave')));assert.equal(reloaded.save.tutorial.step,step);
@@ -94,4 +94,38 @@ test('tutorial link starts a returning player guide and consumes only the tutori
  assert.equal(g.ctx.window.location.href,'https://eat-a-food-eta.vercel.app/?room=ABCD');
  g.state.running=true;until(g,'collect');assert.equal(g.ctx.window.location.href,'https://eat-a-food-eta.vercel.app/?room=ABCD');
  const normal=boot('done','?tutorial=0');assert.equal(normal.document.body.child,undefined);
+});
+
+
+test('opening tutorial cards stay clear of the player food on desktop and small screens',()=>{
+ for(const [width,height,cardWidth,cardHeight,food] of [
+  [1280,720,320,220,{left:570,top:285,right:710,bottom:430}],
+  [375,812,351,220,{left:130,top:330,right:245,bottom:470}],
+  [844,390,300,170,{left:370,top:160,right:475,bottom:280}],
+  [320,568,296,220,{left:110,top:270,right:210,bottom:360}],
+ ]){
+  const g=boot();g.ctx.innerWidth=width;g.ctx.innerHeight=height;
+  const card=g.node('.tutorial-card');card.offsetWidth=cardWidth;card.offsetHeight=cardHeight;
+  g.api.foodBounds=()=>food;
+  for(const step of ['start','collect','end-run']){
+   g.state.step=step;g.state.running=step!=='start';g.state.foods=step==='end-run'?1:0;g.tick();
+   const x=parseFloat(card.style.left),y=parseFloat(card.style.top);
+   assert.ok(x>=12&&x+cardWidth<=width-12);assert.ok(y>=12&&y+cardHeight<=height-12);
+   const overlap=Math.max(0,Math.min(x+cardWidth,food.right)-Math.max(x,food.left))*Math.max(0,Math.min(y+cardHeight,food.bottom)-Math.max(y,food.top));
+   assert.equal(overlap,0,`${width}x${height} ${step} hides food`);
+  }
+ }
+});
+
+test('food avoidance bounds track the actual food and canvas using the game camera',async()=>{
+ const THREE=await import(require('node:url').pathToFileURL(path.join(root,'vendor/three.module.js')).href);
+ const game=fs.readFileSync(path.join(root,'game.js'),'utf8');const start=game.indexOf('  function tutorialFoodBounds('),end=game.indexOf('\n  function ',start+1);
+ const camera=new THREE.PerspectiveCamera(40,1,10,16000);camera.position.set(0,820,700);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+ let width=636;const ctx={view:{THREE,camera},state:{player:{x:1440,y:1440,drawRadius:()=>30}},FOOD_MODEL_SCALE:2.15,canvas:{getBoundingClientRect:()=>({left:470,top:70,width,height:width})},worldX:x=>x-1440,worldZ:y=>y-1440,Math};
+ vm.runInNewContext(game.slice(start,end)+'\nglobalThis.bounds=tutorialFoodBounds;',ctx);
+ const first=ctx.bounds();assert.ok(first.right>first.left&&first.bottom>first.top);
+ const center=new THREE.Vector3(0,30,0).project(camera);const screen={x:470+(center.x+1)*width/2,y:70+(1-center.y)*width/2};
+ assert.ok(screen.x>first.left&&screen.x<first.right&&screen.y>first.top&&screen.y<first.bottom);
+ width/=2;const smaller=ctx.bounds();assert.ok(Math.abs((smaller.right-smaller.left-24)*2-(first.right-first.left-24))<1e-8);
+ ctx.state.player=null;assert.equal(ctx.bounds(),null);
 });

@@ -445,15 +445,16 @@
     return {
       version: SAVE_VERSION,
       tutorial: { step: "start" },
-      inventory: { Peanut: 1 },
-      equipped: "Peanut",
+      firstRunRewardClaimed: false,
+      inventory: { Popcorn: 1 },
+      equipped: "Popcorn",
       bestRun: 0,
       carryPoints: 0,
       diamonds: 0,
       potions: starterPotions(),
       activePotions: emptyActivePotions(),
       bento: emptyBento(),
-      discovered: { Peanut: true },
+      discovered: { Popcorn: true },
       giveawayClaims: {},
       // Already applied, so a brand-new save is not given the old starter foods.
       grantedGoldenCosmicFeast: true,
@@ -490,6 +491,7 @@
       const next = defaultSave();
       // Saves from before the tutorial belong to returning players.
       next.tutorial = {step: TUTORIAL_STEPS.includes(parsed.tutorial?.step) ? parsed.tutorial.step : "done"};
+      next.firstRunRewardClaimed = parsed.firstRunRewardClaimed !== false;
       const fromVersion = Number(parsed.version || 1);
       let renamed = false;
       if (parsed.inventory && typeof parsed.inventory === "object") {
@@ -501,7 +503,7 @@
           if (n <= 0 || !tierByName[name]) continue;
           next.inventory[name] = (next.inventory[name] || 0) + n;
         }
-        if (Object.keys(next.inventory).length === 0) next.inventory = { Peanut: 1 };
+        if (Object.keys(next.inventory).length === 0) next.inventory = { [next.firstRunRewardClaimed ? "Peanut" : "Popcorn"]: 1 };
       }
       const equippedName = renameSheetFood(migrateFoodName(parsed.equipped || "", fromVersion));
       if (equippedName !== (parsed.equipped || "")) renamed = true;
@@ -857,15 +859,16 @@
     return (1 / food.odds) * (1 + bonus * rank);
   }
 
-  function pullFood() {
+  function pullFood(excludedName = null) {
+    const pool = excludedName ? FOOD_TIERS.filter(food => food.name !== excludedName) : FOOD_TIERS;
     let total = 0;
-    for (const food of FOOD_TIERS) total += pullWeight(food);
+    for (const food of pool) total += pullWeight(food);
     let roll = Math.random() * total;
-    for (const food of FOOD_TIERS) {
+    for (const food of pool) {
       roll -= pullWeight(food);
       if (roll <= 0) return food;
     }
-    return FOOD_TIERS[FOOD_TIERS.length - 1];
+    return pool[pool.length - 1];
   }
 
   // Percent chance of each rarity for one bento food, using permanent luck (potions don't count).
@@ -1243,7 +1246,8 @@
   function bankPendingFoods() {
     const gained = [];
     for (let i = 0; i < state.foodsEarned; i++) {
-      const food = applyFoodWeather(pullFood(), state.foodWeather[i]);
+      const food = applyFoodWeather(pullFood(save.firstRunRewardClaimed ? null : "Peanut"), state.foodWeather[i]);
+      save.firstRunRewardClaimed = true;
       const copies = state.foodWeather[i] === "double-foods" ? 2 : 1;
       for (let copy = 0; copy < copies; copy++) gained.push(food.name);
       save.inventory[food.name] = (save.inventory[food.name] || 0) + copies;
@@ -4031,6 +4035,22 @@
     return {left, top, width: Math.max(...pixels.map(p => p.x)) - left, height: Math.max(...pixels.map(p => p.y)) - top};
   }
 
+  function tutorialFoodBounds() {
+    if (!view || !state.player) return null;
+    const rect = canvas.getBoundingClientRect();
+    const food = state.player;
+    const reach = food.drawRadius() * FOOD_MODEL_SCALE * 0.8;
+    const height = food.drawRadius() * FOOD_MODEL_SCALE + 40;
+    const pixels = [];
+    for (const x of [-reach, reach]) for (const z of [-reach, reach]) for (const y of [0, height]) {
+      const point = new view.THREE.Vector3(worldX(food.x) + x, y, worldZ(food.y) + z).project(view.camera);
+      if (point.z < -1 || point.z > 1) return null;
+      pixels.push({x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2});
+    }
+    return {left: Math.min(...pixels.map(p => p.x)) - 12, top: Math.min(...pixels.map(p => p.y)) - 12,
+      right: Math.max(...pixels.map(p => p.x)) + 12, bottom: Math.max(...pixels.map(p => p.y)) + 12};
+  }
+
   function closeOverlay() {
     overlay.classList.add("hidden");
   }
@@ -5456,6 +5476,7 @@
     setStep: setTutorialStep,
     prepare: () => { closeOverlay(); },
     portalBounds: tutorialPortalBounds,
+    foodBounds: tutorialFoodBounds,
     closeMultiplayer: closeMulti,
   };
   enterLobby();

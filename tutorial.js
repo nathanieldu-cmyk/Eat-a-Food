@@ -98,6 +98,21 @@
     return right - left > 12 && bottom - top > 12 ? {left, top, right, bottom, width: right - left, height: bottom - top} : null;
   }
   const clamp = (n, low, high) => Math.max(low, Math.min(n, Math.max(low, high)));
+  function keepTutorialClearOfFood(x, y, width, height, food, viewportWidth, viewportHeight) {
+    const fit = p => ({x: clamp(p.x, 12, viewportWidth - width - 12), y: clamp(p.y, 12, viewportHeight - height - 12)});
+    const preferred = fit({x, y});
+    if (!food) return preferred;
+    const candidates = [preferred,
+      {x: 12, y: 12}, {x: viewportWidth - width - 12, y: 12},
+      {x: 12, y: viewportHeight - height - 12}, {x: viewportWidth - width - 12, y: viewportHeight - height - 12},
+      {x: food.left - width - 16, y: food.top}, {x: food.right + 16, y: food.top},
+      {x: food.left, y: food.top - height - 16}, {x: food.left, y: food.bottom + 16},
+    ].map(fit);
+    const overlap = p => Math.max(0, Math.min(p.x + width, food.right) - Math.max(p.x, food.left)) *
+      Math.max(0, Math.min(p.y + height, food.bottom) - Math.max(p.y, food.top));
+    return candidates.reduce((best, candidate) => overlap(candidate) < overlap(best) ? candidate : best, preferred);
+  }
+
   function position() {
     if (stopped) return;
     const config = currentConfig;
@@ -130,7 +145,9 @@
       Object.assign(arrow.style, {left: `${ax}px`, top: `${ay}px`});
     }
     if (current === 'finish') y = (innerHeight - height) / 2;
-    Object.assign(card.style, {left: `${clamp(x, 12, innerWidth - width - 12)}px`, top: `${clamp(y, 12, innerHeight - height - 12)}px`});
+    const food = config.portal || config.target === '.food-meter' || config.target === '#end-btn' ? api.foodBounds?.() : null;
+    const placement = keepTutorialClearOfFood(x, y, width, height, food, innerWidth, innerHeight);
+    Object.assign(card.style, {left: `${placement.x}px`, top: `${placement.y}px`});
   }
   function tick() {
     if (stopped || document.hidden) return;

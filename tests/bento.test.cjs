@@ -9,6 +9,10 @@ const foods = fs.readFileSync(path.join(root, 'foods.js'), 'utf8');
 const game = fs.readFileSync(path.join(root, 'game.js'), 'utf8');
 
 function boot(saved) {
+  // Most reward tests model an existing Peanut player, independent of new-player onboarding.
+  if (!saved && arguments[1] !== true) saved = {version: 2, inventory: {Peanut: 1}, equipped: 'Peanut',
+    tutorial: {step: 'start'}, firstRunRewardClaimed: true,
+    grantedGoldenCosmicFeast: true, grantedRamen: true, clearedToCracker: true, keptSingleCracker: true};
   const storage = new Map();
   if (saved) storage.set('sprinkleFeastSave', JSON.stringify(saved));
   const elements = new Map();
