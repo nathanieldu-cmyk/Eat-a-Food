@@ -1876,8 +1876,12 @@
     return sprite;
   }
 
-  function writeLabel(sprite, text) {
+  function writeLabel(sprite, text, { worldLineHeight = 26, caption = "" } = {}) {
     const canvas2d = sprite.userData.canvas;
+    const lines = String(text).split("\n");
+    const lineHeight = 64;
+    const captionHeight = caption ? 36 : 0;
+    canvas2d.height = lines.length * lineHeight + captionHeight;
     const ctx2d = canvas2d.getContext("2d");
     const pad = 28;
     const height = canvas2d.height;
@@ -1888,28 +1892,43 @@
     for (let attempt = 0; attempt < 12; attempt++) {
       font = `700 ${fontSize}px Fredoka, Nunito, sans-serif`;
       ctx2d.font = font;
-      textWidth = Math.ceil(ctx2d.measureText(text).width);
+      textWidth = Math.ceil(Math.max(...lines.map(line => ctx2d.measureText(line).width)));
       if (textWidth + pad * 2 <= maxWidth || fontSize <= 4) break;
       fontSize = Math.max(4, Math.floor((fontSize * (maxWidth - pad * 2)) / Math.max(1, textWidth)));
     }
+    const captionFont = `700 ${Math.round(fontSize * 0.55)}px Fredoka, Nunito, sans-serif`;
+    if (caption) {
+      ctx2d.font = captionFont;
+      textWidth = Math.max(textWidth, Math.ceil(ctx2d.measureText(caption).width));
+    }
     const used = Math.min(maxWidth, textWidth + pad * 2);
     ctx2d.clearRect(0, 0, maxWidth, height);
-    ctx2d.font = font;
     ctx2d.textAlign = "center";
     ctx2d.textBaseline = "middle";
-    ctx2d.lineWidth = Math.max(2, fontSize / 5);
     ctx2d.lineJoin = "round";
     ctx2d.strokeStyle = "rgba(20,10,6,0.85)";
     ctx2d.fillStyle = "#fff6ea";
-    ctx2d.strokeText(text, maxWidth / 2, height / 2 + 2);
-    ctx2d.fillText(text, maxWidth / 2, height / 2 + 2);
+    if (caption) {
+      ctx2d.font = captionFont;
+      ctx2d.lineWidth = Math.max(2, fontSize * 0.55 / 5);
+      ctx2d.strokeText(caption, maxWidth / 2, captionHeight / 2);
+      ctx2d.fillText(caption, maxWidth / 2, captionHeight / 2);
+    }
+    ctx2d.font = font;
+    ctx2d.lineWidth = Math.max(2, fontSize / 5);
+    lines.forEach((line, i) => {
+      const y = captionHeight + lineHeight * (i + 0.5) + 2;
+      ctx2d.strokeText(line, maxWidth / 2, y);
+      ctx2d.fillText(line, maxWidth / 2, y);
+    });
     const tex = sprite.userData.tex;
     const repeatX = used / maxWidth;
     tex.repeat.set(repeatX, 1);
     tex.offset.set((1 - repeatX) / 2, 0);
     tex.needsUpdate = true;
     sprite.userData.text = text;
-    const worldHeight = 26;
+    sprite.userData.caption = caption;
+    const worldHeight = worldLineHeight * height / lineHeight;
     sprite.scale.set(worldHeight * (used / height), worldHeight, 1);
   }
 
@@ -2257,6 +2276,7 @@
       );
       ring.rotation.x = Math.PI / 2;
       const label = makeLabelSprite(THREE);
+      label.center.set(0.5, 0);
       group.add(holder);
       group.add(ring);
       group.add(label);
@@ -2286,11 +2306,10 @@
     entry.ring.position.set(0, scale * (RING_TUBE + 0.02), 0);
     entry.group.position.set(worldX(food.x), bob, worldZ(food.y));
     entry.label.position.y = scale + 16;
-    const sizeText = food.netName
-      ? `${food.netName}  ${formatCount(food.displaySize())}`
-      : formatCount(food.displaySize());
+    const labelText = `${food.tier.name}\n${formatCount(food.displaySize())}`;
+    const sizeText = `${food.netName || ""}\n${labelText}`;
     if (entry.sizeText !== sizeText) {
-      writeLabel(entry.label, sizeText);
+      writeLabel(entry.label, labelText, {worldLineHeight: 64, caption: food.netName || ""});
       entry.sizeText = sizeText;
     }
     paintFood(entry, food, t);
