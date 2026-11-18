@@ -61,14 +61,19 @@ test('name colors match every inventory rarity and variant while size numbers re
   }
  }
 });
-test('labels scale directly with visible food radius and cap at the previous full size without redrawing textures',async()=>{
+test('small foods have readable labels that keep growing smoothly to the same maximum without redrawing textures',async()=>{
  const g=await boot();let radius=120;const f=food('Popcorn',{drawRadius:()=>radius});g.syncFood(g.THREE,f,0);
  const label=g.view.foods.get(f.id).label,ctx=label.userData.canvas.getContext('2d');const width=label.scale.x,height=label.scale.y,clears=ctx.clears;
- assert.equal(height,128);
- for(radius of [17,30,60,90,120,240,17]){
-  g.syncFood(g.THREE,f,1);const factor=Math.min(1,radius/120);
-  assert.ok(Math.abs(label.scale.x-width*factor)<1e-9);assert.ok(Math.abs(label.scale.y-height*factor)<1e-9);
+ assert.equal(height,128);let previous=0,smallHeight;
+ for(radius of [17,30,60,90,119,120,240]){
+  g.syncFood(g.THREE,f,1);
+  if(radius===17){smallHeight=label.scale.y;assert.ok(smallHeight>=height*.30&&smallHeight<=height*.34,'starting text has a readable minimum');}
+  if(radius<=120){assert.ok(label.scale.y>previous,'labels keep growing at every food size');previous=label.scale.y;}
+  else assert.equal(label.scale.y,height,'full-size text remains capped');
+  if(radius<120)assert.ok(label.scale.y>height*radius/120,'small-food text is larger than strict proportional scaling');
+  assert.ok(Math.abs(label.scale.x/label.scale.y-width/height)<1e-9,'both text lines retain matching proportions');
   assert.equal(ctx.clears,clears,'growth only adjusts the sprite transform');
   assert.equal(label.center.y,0);assert.ok(label.position.y>radius*2.15);
  }
+ radius=17;g.syncFood(g.THREE,f,2);assert.equal(label.scale.y,smallHeight,'new small foods return to readable text without accumulated scaling');
 });

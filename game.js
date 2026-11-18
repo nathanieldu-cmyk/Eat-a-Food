@@ -2323,8 +2323,8 @@
       writeLabel(entry.label, labelText, {worldLineHeight: 64, caption: food.netName || "", lineColors: [nameColor, "#ffffff"]});
       entry.sizeText = sizeText;
     }
-    // Labels reach full text size when the food reaches its visible radius cap.
-    const labelScale = Math.min(1, radius / 120);
+    // Give small foods readable labels while growing smoothly to full text size.
+    const labelScale = 0.2 + 0.8 * Math.min(1, radius / 120);
     entry.label.scale.set(entry.label.userData.baseWidth * labelScale,
       entry.label.userData.baseHeight * labelScale, 1);
     paintFood(entry, food, t);
