@@ -122,6 +122,7 @@
   const SPRINKLE_GROWTH_SCALE = 55;
   const STORAGE_KEY = "sprinkleFeastSave";
   const SAVE_VERSION = 2;
+  const TUTORIAL_STEPS = ["start", "collect", "end-run", "inventory", "equip", "close-inventory", "shop", "bento", "potions", "close-shop", "craft", "craft-info", "close-craft", "multiplayer", "multiplayer-info", "finish", "done"];
   const LUCK_BASE = 1;
   const LUCK_EVERY = 10;
   const LUCK_STEP = 0.5;
@@ -443,6 +444,7 @@
   function defaultSave() {
     return {
       version: SAVE_VERSION,
+      tutorial: { step: "start" },
       inventory: { Peanut: 1 },
       equipped: "Peanut",
       bestRun: 0,
@@ -486,6 +488,8 @@
       if (!raw) return defaultSave();
       const parsed = JSON.parse(raw);
       const next = defaultSave();
+      // Saves from before the tutorial belong to returning players.
+      next.tutorial = {step: TUTORIAL_STEPS.includes(parsed.tutorial?.step) ? parsed.tutorial.step : "done"};
       const fromVersion = Number(parsed.version || 1);
       let renamed = false;
       if (parsed.inventory && typeof parsed.inventory === "object") {
@@ -671,6 +675,7 @@
   }
 
   const save = loadSave();
+  let tutorialEquipRevision = 0;
   if (!save.keptSingleCracker) {
     save.inventory = { Cracker: 1 };
     save.equipped = "Cracker";
@@ -3014,6 +3019,7 @@
       e.stopPropagation();
       if (state.running) return;
       save.equipped = tier.name;
+      tutorialEquipRevision++;
       persistSave();
       renderEquippedUi();
       renderInventory();
@@ -3093,6 +3099,7 @@
   function equipFood(tier) {
     if (state.running || !tier || ownedCount(tier.name) <= 0) return;
     save.equipped = tier.name;
+    tutorialEquipRevision++;
     persistSave();
     updateHud();
     renderInventory();
@@ -3126,6 +3133,7 @@
       btn.type = "button";
       btn.className = "btn ghost";
       btn.textContent = option.label;
+      if (option.label === "Equip Best Overall") btn.id = "equip-best-overall";
       btn.disabled = state.running || ownedFoods().length === 0;
       btn.addEventListener("click", () => {
         const scrollTop = inventoryScrollEl.scrollTop;
@@ -4000,6 +4008,27 @@
     if (net.role === "host") broadcastSnap(true);
     draw();
     startLobbyLoop();
+  }
+
+  function setTutorialStep(step) {
+    if (!TUTORIAL_STEPS.includes(step)) return;
+    save.tutorial = {step};
+    persistSave();
+  }
+
+  function tutorialPortalBounds() {
+    if (!view || state.mode !== "lobby") return null;
+    const rect = canvas.getBoundingClientRect();
+    const pixels = [];
+    for (let i = 0; i < 8; i++) {
+      const angle = i * Math.PI / 4;
+      const point = new view.THREE.Vector3(worldX(PORTAL_SPOT.x) + Math.cos(angle) * PORTAL_RADIUS,
+        10, worldZ(PORTAL_SPOT.y) + Math.sin(angle) * PORTAL_RADIUS).project(view.camera);
+      if (point.z < -1 || point.z > 1) return null;
+      pixels.push({x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2});
+    }
+    const left = Math.min(...pixels.map(p => p.x)), top = Math.min(...pixels.map(p => p.y));
+    return {left, top, width: Math.max(...pixels.map(p => p.x)) - left, height: Math.max(...pixels.map(p => p.y)) - top};
   }
 
   function closeOverlay() {
@@ -5420,6 +5449,15 @@
   window.addEventListener("blur", () => { moveKeys.clear(); resetTouchControls(); });
 
   window.GameGiveaway = { claim: claimRainbowPepper };
+  window.GameTutorialApi = {
+    snapshot: () => ({step: save.tutorial.step, running: state.running, foods: state.foodsEarned,
+      equipped: save.equipped, best: pickBestOwned(t => t.multiplier * t.growth * t.speed)?.name,
+      equipRevision: tutorialEquipRevision, ready: !!view}),
+    setStep: setTutorialStep,
+    prepare: () => { closeOverlay(); },
+    portalBounds: tutorialPortalBounds,
+    closeMultiplayer: closeMulti,
+  };
   enterLobby();
   updateHud();
   resumePendingNet();

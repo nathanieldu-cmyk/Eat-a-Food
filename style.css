@@ -1430,3 +1430,16 @@ h1 {
 .bento-shop-description > span { display: block; }
 .bento-row > p { font-size: .8rem; }
 .bento-row .bento-odds { font-size: .74rem; }
+
+.tutorial-root { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+.tutorial-highlight { position: fixed; border: 3px solid #ffdc75; border-radius: 14px; box-shadow: 0 0 0 3px #301c12aa, 0 0 24px #ffc34b77; }
+.tutorial-arrow { position: fixed; font: 900 38px/1 system-ui, sans-serif; color: #ffdc75; text-shadow: 0 2px 6px #000; }
+.tutorial-card { position: fixed; width: min(320px, calc(100vw - 24px)); padding: 15px; border-radius: 16px; border: 2px solid #ffdc75; background: #2b1a10f5; color: #fff3e0; box-shadow: 0 12px 36px #0008; pointer-events: auto; }
+.tutorial-card h2 { font-family: Fredoka, sans-serif; font-size: 1.15rem; line-height: 1.2; margin: 4px 0 8px; }
+.tutorial-progress { color: #ffdc75; font-size: .67rem; text-transform: uppercase; font-weight: 800; letter-spacing: .06em; }
+.tutorial-copy { font-size: .84rem; line-height: 1.5; }
+.tutorial-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.tutorial-skip { background: none; border: 0; color: #dfc6ae; font: inherit; font-size: .73rem; cursor: pointer; padding: 5px 0; }
+.tutorial-card button:focus-visible { outline: 3px solid #89dfff; outline-offset: 3px; }
+.tutorial-card [hidden], .tutorial-root > [hidden] { display: none; }
+@media (max-height: 480px) { .tutorial-card { padding: 10px; width: min(300px, calc(100vw - 24px)); } .tutorial-copy { font-size: .74rem; line-height: 1.35; } }
