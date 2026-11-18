@@ -129,12 +129,12 @@
 
   // Higher rarity always beats lower rarity on BOTH multiplier and speed.
   const RARITIES = [
-    { id: "common", label: "Common", rank: 0 },
-    { id: "uncommon", label: "Uncommon", rank: 1 },
-    { id: "rare", label: "Rare", rank: 2 },
-    { id: "epic", label: "Epic", rank: 3 },
-    { id: "legendary", label: "Legendary", rank: 4 },
-    { id: "mythic", label: "Mythic", rank: 5 },
+    { id: "common", label: "Common", rank: 0, color: "#d7d7d7" },
+    { id: "uncommon", label: "Uncommon", rank: 1, color: "#6dde8a" },
+    { id: "rare", label: "Rare", rank: 2, color: "#6eb6ff" },
+    { id: "epic", label: "Epic", rank: 3, color: "#c089ff" },
+    { id: "legendary", label: "Legendary", rank: 4, color: "#ffb347" },
+    { id: "mythic", label: "Mythic", rank: 5, color: "#ff6b9d" },
   ];
 
   // Speeds are irregular within a rarity (no sorted pattern), but higher
@@ -321,6 +321,13 @@
     if (tier.isShiny) return "rarity-shiny";
     if (tier.isGolden) return "rarity-golden";
     return `rarity-${tier.rarity}`;
+  }
+
+  function foodLabelColor(tier) {
+    if (tier.isShadow) return "#c89bff";
+    if (tier.isShiny) return "#9ae7ff";
+    if (tier.isGolden) return "#ffd700";
+    return rarityById[tier.rarity]?.color || "#d7d7d7";
   }
 
   function variantLabel(tier) {
@@ -1876,7 +1883,7 @@
     return sprite;
   }
 
-  function writeLabel(sprite, text, { worldLineHeight = 26, caption = "" } = {}) {
+  function writeLabel(sprite, text, { worldLineHeight = 26, caption = "", lineColors = [] } = {}) {
     const canvas2d = sprite.userData.canvas;
     const lines = String(text).split("\n");
     const lineHeight = 64;
@@ -1917,6 +1924,7 @@
     ctx2d.font = font;
     ctx2d.lineWidth = Math.max(2, fontSize / 5);
     lines.forEach((line, i) => {
+      ctx2d.fillStyle = lineColors[i] || "#fff6ea";
       const y = captionHeight + lineHeight * (i + 0.5) + 2;
       ctx2d.strokeText(line, maxWidth / 2, y);
       ctx2d.fillText(line, maxWidth / 2, y);
@@ -1929,7 +1937,9 @@
     sprite.userData.text = text;
     sprite.userData.caption = caption;
     const worldHeight = worldLineHeight * height / lineHeight;
-    sprite.scale.set(worldHeight * (used / height), worldHeight, 1);
+    sprite.userData.baseWidth = worldHeight * used / height;
+    sprite.userData.baseHeight = worldHeight;
+    sprite.scale.set(sprite.userData.baseWidth, worldHeight, 1);
   }
 
   function normalizeModel(THREE, root) {
@@ -2307,11 +2317,16 @@
     entry.group.position.set(worldX(food.x), bob, worldZ(food.y));
     entry.label.position.y = scale + 16;
     const labelText = `${food.tier.name}\n${formatCount(food.displaySize())}`;
-    const sizeText = `${food.netName || ""}\n${labelText}`;
+    const nameColor = foodLabelColor(food.tier);
+    const sizeText = `${nameColor}\n${food.netName || ""}\n${labelText}`;
     if (entry.sizeText !== sizeText) {
-      writeLabel(entry.label, labelText, {worldLineHeight: 64, caption: food.netName || ""});
+      writeLabel(entry.label, labelText, {worldLineHeight: 64, caption: food.netName || "", lineColors: [nameColor, "#ffffff"]});
       entry.sizeText = sizeText;
     }
+    // Labels reach full text size when the food reaches its visible radius cap.
+    const labelScale = Math.min(1, radius / 120);
+    entry.label.scale.set(entry.label.userData.baseWidth * labelScale,
+      entry.label.userData.baseHeight * labelScale, 1);
     paintFood(entry, food, t);
     syncFoodSparkles(entry, food, t, scale);
     return food.id;
