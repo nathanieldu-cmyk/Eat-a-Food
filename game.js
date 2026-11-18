@@ -1836,6 +1836,8 @@
     FOOD_TIERS.map((food) => [food.name, food.model || "cookie.glb"])
   );
 
+  const foodModelDownloads = new Map();
+
   let view = null;
   let previewId = 0;
 
@@ -2206,25 +2208,48 @@
         });
       }
     }
-    return (file) => {
+    return (file, priority = false) => {
       const failure = failures.get(file);
-      if (templates.has(file) || pending.has(file) || failure && (failure.count >= 2 || now() < failure.retryAt)) return;
+      if (templates.has(file) || failure && (failure.count >= 2 || now() < failure.retryAt)) return;
+      if (pending.has(file)) {
+        const queued = queue.indexOf(file);
+        if (priority && queued > 0) queue.unshift(queue.splice(queued, 1)[0]);
+        return;
+      }
       pending.add(file);
-      queue.push(file);
+      if (priority) queue.unshift(file);
+      else queue.push(file);
       pump();
     };
   }
 
+  function fetchFoodModel(file, priority = "auto") {
+    if (foodModelDownloads.has(file)) return foodModelDownloads.get(file);
+    const download = (async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      try {
+        const response = await fetch(`models/${file}`, {signal: controller.signal, priority});
+        if (!response.ok) throw new Error(`Model request failed (${response.status})`);
+        return await response.arrayBuffer();
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
+    foodModelDownloads.set(file, download);
+    download.catch(() => {
+      if (foodModelDownloads.get(file) === download) foodModelDownloads.delete(file);
+    });
+    return download;
+  }
+
   async function loadFoodModel(loader, file) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch(`models/${file}`, {signal: controller.signal});
-      if (!response.ok) throw new Error(`Model request failed (${response.status})`);
-      const data = await response.arrayBuffer();
+      const data = await fetchFoodModel(file);
       return await loader.parseAsync(data, new URL("models/", window.location.href).href);
     } finally {
-      clearTimeout(timeout);
+      // Parsed templates own their buffers; don't retain a second copy of the GLB.
+      foodModelDownloads.delete(file);
     }
   }
 
@@ -2239,18 +2264,18 @@
     view.scene.remove(entry.group);
   }
 
-  function syncFood(THREE, food, t) {
+  function syncFood(THREE, food, t, priority = false) {
     let entry = view.foods.get(food.id);
     if (entry && !entry.hasTemplate && view.templates.has(entry.modelFile)) {
       disposeFoodEntry(entry);
       view.foods.delete(food.id);
       entry = null;
     }
-    if (entry && !entry.hasTemplate) view.requestModel(entry.modelFile);
+    if (entry && !entry.hasTemplate) view.requestModel(entry.modelFile, priority);
     if (!entry) {
       const file = modelFileFor(food.tier);
       const template = view.templates.get(file);
-      if (!template) view.requestModel(file);
+      if (!template) view.requestModel(file, priority);
       const group = new THREE.Group();
       const holder = new THREE.Group();
       const materials = [];
@@ -2386,10 +2411,10 @@
     const t = performance.now() / 1000;
     const alive = new Set();
     const zone = localZone();
+    if (state.player) alive.add(syncFood(view.THREE, state.player, t, true));
     if (zone === "arena") {
       for (const rival of state.rivals) alive.add(syncFood(view.THREE, rival, t));
     }
-    if (state.player) alive.add(syncFood(view.THREE, state.player, t));
     for (const human of net.humans.values()) {
       if ((human.zone || "lobby") === zone) alive.add(syncFood(view.THREE, human, t));
     }
@@ -2791,6 +2816,8 @@
   }
 
   async function initView() {
+    // Download the equipped model alongside the renderer modules.
+    fetchFoodModel(modelFileFor(equippedTier()), "high").catch(() => {});
     const THREE = await import("./vendor/three.module.js");
     const { GLTFLoader } = await import("./vendor/GLTFLoader.js?v=3");
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -2904,6 +2931,7 @@
       const gltf = await loadFoodModel(loader, file);
       return normalizeModel(THREE, gltf.scene);
     }, templates, (file) => view.foodSparkleShapes.delete(file));
+    view.requestModel(modelFileFor(equippedTier()), true);
     resizeView();
     window.addEventListener("resize", resizeView);
     startLobbyLoop();
