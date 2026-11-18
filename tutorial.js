@@ -1,6 +1,16 @@
 (() => {
   const api = window.GameTutorialApi;
-  if (!api || api.snapshot().step === 'done') return;
+  if (!api) return;
+  if (window.location) {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('tutorial') === '1') {
+      api.setStep('start');
+      // Consume this request so refreshing resumes progress rather than restarting.
+      url.searchParams.delete('tutorial');
+      window.history.replaceState(window.history.state, '', url.href);
+    }
+  }
+  if (api.snapshot().step === 'done') return;
 
   function nextTutorialStep(step, state, ui, equipped) {
     switch (step) {

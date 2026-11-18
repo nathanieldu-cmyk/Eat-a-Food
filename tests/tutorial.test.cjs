@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {test}=require('node:test');
 const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'tutorial.js'),'utf8');
-function boot(step='start') {
+function boot(step='start', query='') {
  const state={step,running:false,foods:0,equipped:'Peanut',best:'Peanut',equipRevision:0,ready:true};
  const elements=new Map(),listeners={};let poll,stopped=false,prepared=0;
  const body={appendChild(el){this.child=el;}};
@@ -19,7 +19,8 @@ function boot(step='start') {
  for(const id of ['inventory-modal','shop-modal','craft-modal','multi-modal','index-modal'])node('#'+id).classList.add('hidden');
  const api={snapshot:()=>({...state}),setStep:s=>{state.step=s;},prepare(){prepared++;node('#overlay').classList.add('hidden');},portalBounds:()=>({left:820,top:150,width:130,height:80}),closeMultiplayer(){node('#multi-modal').classList.add('hidden');}};
  const document={body,hidden:false,createElement:()=>node('root'),getElementById:id=>node('#'+id),querySelector:node,addEventListener(k,fn){listeners[k]=fn;},removeEventListener(){}};
- const ctx={window:{GameTutorialApi:api,addEventListener(){},removeEventListener(){}},document,innerWidth:1280,innerHeight:720,getComputedStyle:()=>({overflowX:'visible',overflowY:'visible'}),setInterval(fn){poll=fn;return 1;},clearInterval(){stopped=true;}};
+ const location={href:'https://eat-a-food-eta.vercel.app/'+query};
+ const ctx={URL,window:{location,history:{state:null,replaceState(state,title,url){location.href=url;}},GameTutorialApi:api,addEventListener(){},removeEventListener(){}},document,innerWidth:1280,innerHeight:720,getComputedStyle:()=>({overflowX:'visible',overflowY:'visible'}),setInterval(fn){poll=fn;return 1;},clearInterval(){stopped=true;}};
  vm.runInNewContext(source,ctx);
  return {state,node,document,api,ctx,tick(){poll?.();},open(id){node('#'+id).classList.remove('hidden');},close(id){node('#'+id).classList.add('hidden');},next(){node('.tutorial-next').click();},stopped:()=>stopped,prepared:()=>prepared};
 }
@@ -85,4 +86,12 @@ test('opening an unrelated menu points to its close button before resuming the s
  const g=boot();g.open('shop-modal');g.tick();assert.equal(g.state.step,'start');assert.equal(g.node('h2').textContent,'Close Shop');
  assert.equal(g.node('.tutorial-next').hidden,true);g.close('shop-modal');g.tick();assert.equal(g.node('h2').textContent,'Start your first run');
  g.open('index-modal');g.tick();assert.equal(g.node('h2').textContent,'Close Food Index');
+});
+
+test('tutorial link starts a returning player guide and consumes only the tutorial URL parameter',()=>{
+ const g=boot('done','?tutorial=1&room=ABCD');
+ assert.equal(g.state.step,'start');assert.equal(g.state.equipped,'Peanut');assert.ok(g.document.body.child);
+ assert.equal(g.ctx.window.location.href,'https://eat-a-food-eta.vercel.app/?room=ABCD');
+ g.state.running=true;until(g,'collect');assert.equal(g.ctx.window.location.href,'https://eat-a-food-eta.vercel.app/?room=ABCD');
+ const normal=boot('done','?tutorial=0');assert.equal(normal.document.body.child,undefined);
 });
