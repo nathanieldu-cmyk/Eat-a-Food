@@ -3936,7 +3936,7 @@
     for (const name of banked) rememberFood(name);
     renderPullResults(banked, seenBefore);
 
-    const diamondsEarned = earned + state.foodWeather.slice(0, earned).filter(type => type === "double-diamonds").length;
+    const diamondsEarned = earned + state.foodWeather.slice(0, earned).filter(type => type === "triple-diamonds").length * 2;
     save.diamonds += diamondsEarned;
     if (earned > save.bestRun) {
       save.bestRun = earned;

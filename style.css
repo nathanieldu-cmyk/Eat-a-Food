@@ -1385,11 +1385,11 @@ h1 {
   .weather-sparkle:nth-child(3n + 1) { top: 80%; }
 }
 
-.weather-status[data-weather="double-diamonds"] { border-color: #79e8ff; color: #b8f2ff; background: #143544ee; }
+.weather-status[data-weather="triple-diamonds"] { border-color: #79e8ff; color: #b8f2ff; background: #143544ee; }
 .weather-status[data-weather="double-foods"] { border-color: #b5f283; color: #defbc4; background: #294123ee; }
-.weather-effects[data-weather="double-diamonds"] { background: linear-gradient(#7eeaff18, #75baff08); }
-.weather-effects[data-weather="double-diamonds"] .weather-sparkle { color: #8ee7ff; }
-.weather-effects[data-weather="double-diamonds"] .weather-sparkle::before { clip-path: polygon(50% 0, 100% 38%, 50% 100%, 0 38%); }
+.weather-effects[data-weather="triple-diamonds"] { background: linear-gradient(#7eeaff18, #75baff08); }
+.weather-effects[data-weather="triple-diamonds"] .weather-sparkle { color: #8ee7ff; }
+.weather-effects[data-weather="triple-diamonds"] .weather-sparkle::before { clip-path: polygon(50% 0, 100% 38%, 50% 100%, 0 38%); }
 .weather-effects[data-weather="double-foods"] { background: linear-gradient(#b8f27a18, #ffcf7508); }
 .weather-effects[data-weather="double-foods"] .weather-sparkle { color: #c8ff94; }
 .weather-effects[data-weather="double-foods"] .weather-sparkle::before { clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%); }

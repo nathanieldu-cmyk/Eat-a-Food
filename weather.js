@@ -1,7 +1,7 @@
 (() => {
   const INTERVAL = 15 * 60 * 1000;
   const DURATION = 5 * 60 * 1000;
-  const types = ["gold", "rainbow", "double-diamonds", "double-foods"];
+  const types = ["gold", "rainbow", "triple-diamonds", "double-foods"];
   const status = document.getElementById("weather-status");
   const name = document.getElementById("weather-name");
   const detail = document.getElementById("weather-detail");
@@ -77,12 +77,12 @@
     }
     if (name) name.textContent = {
       gold: "✦ Gold weather", rainbow: "🌈 Rainbow weather", shadow: "🌑 Shadow weather",
-      "double-diamonds": "💎 Double Diamonds", "double-foods": "🍽 Double Foods", clear: "☀ Clear skies",
+      "triple-diamonds": "💎 Triple Diamonds", "double-foods": "🍽 Double Foods", clear: "☀ Clear skies",
     }[type];
     if (detail) detail.textContent = {
       gold: "Up to 10% Gold · rarer foods have lower odds", rainbow: "Up to 7.5% Rainbow · rarer foods have lower odds",
       shadow: "Up to 5% Shadow · rarer foods have lower odds",
-      "double-diamonds": "2× diamonds from run foods", "double-foods": "Foods duplicated at collection",
+      "triple-diamonds": "3× diamonds from run foods", "double-foods": "Foods duplicated at collection",
       clear: `Next at ${new Date(weather.nextRoll).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`,
     }[type];
     if (timer) timer.textContent = type === "clear"
