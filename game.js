@@ -714,6 +714,8 @@
     onShopPad: false,
     onCraftPad: false,
     autoFarm: false,
+    runStartedAt: null,
+    autoFarmRestartTimer: null,
     points: 0,
     foodsEarned: 0,
     foodWeather: [],
@@ -725,6 +727,8 @@
     animId: 0,
     particles: [],
   };
+
+  const AUTO_FARM_RUN_MS = 10 * 60 * 1000;
 
   let lastFrameAt = 0;
   const PENDING_NET_KEY = "eatAFoodPendingRoom";
@@ -3756,6 +3760,7 @@
 
   // Returns false when the run ended during this step.
   function runStep(dt, now) {
+    if (checkAutoFarmRun(now)) return false;
     if (net.role === "guest") {
       if (state.player && net.place >= 0) {
         applyRunSteer(state.player, dt, null);
@@ -3855,6 +3860,7 @@
     pullResultsEl.classList.add("hidden");
     pullResultsEl.innerHTML = "";
     state.running = true;
+    state.runStartedAt = performance.now();
     state.mode = "run";
     window.GameMusic?.setMode("run");
     window.GameSfx?.play("start");
@@ -3933,6 +3939,7 @@
     if (!state.running) return;
     if (wipedOut) window.GameSfx?.play("death");
     state.running = false;
+    state.runStartedAt = null;
     if (net.role === "guest") net.place = -1;
     cancelAnimationFrame(state.animId);
     endBtn.disabled = true;
@@ -4012,6 +4019,47 @@
     if (net.role === "host") broadcastSnap(true);
     draw();
     startLobbyLoop();
+    if (wipedOut) queueAutoFarmRun();
+  }
+
+  function setAutoFarm(enabled) {
+    state.autoFarm = enabled;
+    autoFarmBtn.setAttribute("aria-pressed", String(enabled));
+    if (!enabled && state.autoFarmRestartTimer !== null) {
+      clearTimeout(state.autoFarmRestartTimer);
+      state.autoFarmRestartTimer = null;
+    }
+  }
+
+  function queueAutoFarmRun() {
+    if (!state.autoFarm) return;
+    if (state.autoFarmRestartTimer !== null) clearTimeout(state.autoFarmRestartTimer);
+    // Leave a moment for the death and collection sounds before starting again.
+    state.autoFarmRestartTimer = setTimeout(() => {
+      state.autoFarmRestartTimer = null;
+      if (!state.autoFarm || state.running) return;
+      if (net.role === "guest") {
+        if (!net.migrating && netReady()) {
+          closeOverlay();
+          netSend({t: "farm-start"});
+        }
+        // Retry until the host confirms entry; duplicate requests are harmless.
+        queueAutoFarmRun();
+      } else startRun();
+    }, 1000);
+  }
+
+  function checkAutoFarmRun(now) {
+    if (!state.autoFarm || !state.running || !Number.isFinite(state.runStartedAt) ||
+        now - state.runStartedAt < AUTO_FARM_RUN_MS) return false;
+    if (net.role === "guest") {
+      net.endedRun = net.run;
+      netSend({t: "end"});
+    }
+    // Use the normal collection path so food, diamonds and Bento rewards bank once.
+    endRun(false);
+    queueAutoFarmRun();
+    return true;
   }
 
   function setTutorialStep(step) {
@@ -4486,6 +4534,7 @@
     pullResultsEl.classList.add("hidden");
     pullResultsEl.innerHTML = "";
     state.running = true;
+    state.runStartedAt = performance.now();
     state.mode = "run";
     window.GameMusic?.setMode("run");
     window.GameSfx?.play("start");
@@ -4519,7 +4568,10 @@
     if (mine) {
       const inArena = mine.zone === "arena";
       if (inArena && !state.running && mine.run && mine.run !== net.endedRun) guestBeginRun(mine.run);
-      else if (!inArena && state.running) endRun(false);
+      else if (!inArena && state.running) {
+        net.endedRun = net.run;
+        endRun(true);
+      }
       // Skip stale positions from a run this player already ended.
       const current = state.running ? inArena && mine.run === net.run : !inArena;
       if (current) {
@@ -5192,6 +5244,12 @@
       } else if (msg.t === "end") {
         const food = net.humans.get(conn.peer);
         if (food && food.zone === "arena") sendToLobby(food);
+      } else if (msg.t === "farm-start") {
+        const food = net.humans.get(conn.peer);
+        if (food && food.zone === "lobby") {
+          enterArena(food);
+          broadcastSnap(true);
+        }
       }
     });
     conn.on("close", () => {
@@ -5361,8 +5419,7 @@
     endRun(false);
   });
   autoFarmBtn.addEventListener("click", () => {
-    state.autoFarm = !state.autoFarm;
-    autoFarmBtn.setAttribute("aria-pressed", state.autoFarm ? "true" : "false");
+    setAutoFarm(!state.autoFarm);
   });
   indexBtn.addEventListener("click", openIndex);
   renderIndexButton();
