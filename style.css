@@ -1412,3 +1412,24 @@ h1 {
 .weather-effects[data-weather="bento-frenzy"] .weather-sparkle { color: #ffc76b; }
 .weather-effects[data-weather="bento-frenzy"] .weather-sparkle::before { content: "🍱"; clip-path: none; background: transparent; font-size: calc(var(--size) + 4px); }
 .weather-effects[data-weather="bento-frenzy"] .weather-sparkle::after { display: none; }
+
+/* Keep Bento copy on stable single lines; long text remains horizontally scrollable. */
+#bento-slot { min-width: 0; }
+.bento-row { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; }
+.bento-row h3 { min-width: 0; overflow-x: auto; }
+.bento-row h3,
+.bento-row .shop-actions .btn,
+.bento-slot span { white-space: nowrap; }
+.bento-row > p,
+.bento-shop-description,
+.bento-results-title {
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.bento-row > p { grid-column: 1 / -1; }
+.bento-shop-description:focus-visible { outline: 2px solid #ffd166; outline-offset: 3px; }
