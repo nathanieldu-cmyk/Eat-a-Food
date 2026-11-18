@@ -1,7 +1,15 @@
 (() => {
   const INTERVAL = 15 * 60 * 1000;
-  const DURATION = 5 * 60 * 1000;
-  const types = ["gold", "rainbow", "triple-diamonds", "double-foods"];
+  const DURATION = 3 * 60 * 1000;
+  const events = [
+    {type: "double-foods", chance: 25},
+    {type: "triple-diamonds", chance: 20},
+    {type: "bento-frenzy", chance: 20},
+    {type: "gold", chance: 20},
+    {type: "rainbow", chance: 10},
+    {type: "shadow", chance: 5},
+  ];
+  const types = events.map(event => event.type);
   const status = document.getElementById("weather-status");
   const name = document.getElementById("weather-name");
   const detail = document.getElementById("weather-detail");
@@ -31,9 +39,9 @@
       if (!response.ok) return;
       const event = await response.json();
       if (event === null) globalEvent = null;
-      else if (typeof event.id === "string" && event.id && (types.includes(event.type) || event.type === "shadow") &&
+      else if (typeof event.id === "string" && event.id && types.includes(event.type) &&
           Number.isFinite(event.startsAt) && Number.isFinite(event.endsAt) &&
-          event.endsAt - event.startsAt === (event.type === "shadow" ? 120000 : DURATION)) globalEvent = event;
+          event.endsAt - event.startsAt === DURATION) globalEvent = event;
       refresh();
     } catch {
       // Keep the last known event until its fixed end time if the feed is offline.
@@ -42,14 +50,22 @@
       syncing = false;
     }
   }
+  function eventTypeForRoll(roll) {
+    let cumulative = 0;
+    for (const event of events) {
+      cumulative += event.chance;
+      if (roll < cumulative / 100) return event.type;
+    }
+    return events[events.length - 1].type;
+  }
   function scheduledType(slot) {
-    // A shared 32-bit permutation gives each event a 25% share of outcomes.
+    // A shared 32-bit permutation selects the same weighted event for everyone.
     // Everyone uses the same quarter-hour slot, independent of arrival or reloads.
     let seed = (slot ^ 0x9e3779b9) >>> 0;
     seed = Math.imul(seed ^ (seed >>> 16), 0x21f0aaad);
     seed = Math.imul(seed ^ (seed >>> 15), 0x735a2d97);
     seed ^= seed >>> 15;
-    return types[seed >>> 30];
+    return eventTypeForRoll((seed >>> 0) / 4294967296);
   }
   function currentWeather(now) {
     const slot = Math.floor(now / INTERVAL);
@@ -77,11 +93,13 @@
     }
     if (name) name.textContent = {
       gold: "✦ Gold weather", rainbow: "🌈 Rainbow weather", shadow: "🌑 Shadow weather",
+      "bento-frenzy": "🍱 Bento Box Frenzy",
       "triple-diamonds": "💎 Triple Diamonds", "double-foods": "🍽 Double Foods", clear: "☀ Clear skies",
     }[type];
     if (detail) detail.textContent = {
       gold: "Up to 10% Gold · rarer foods have lower odds", rainbow: "Up to 7.5% Rainbow · rarer foods have lower odds",
       shadow: "Up to 5% Shadow · rarer foods have lower odds",
+      "bento-frenzy": "2× run boxes · 2× Gold & Rainbow odds",
       "triple-diamonds": "3× diamonds from run foods", "double-foods": "Foods duplicated at collection",
       clear: `Next at ${new Date(weather.nextRoll).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`,
     }[type];

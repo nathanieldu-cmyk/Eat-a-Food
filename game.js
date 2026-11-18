@@ -3299,9 +3299,10 @@
   }
 
   function rollBentoType() {
+    const multiplier = window.GameWeather?.current() === "bento-frenzy" ? 2 : 1;
     const roll = Math.random();
-    if (roll < 1 / 25) return "gold";
-    return roll < 1 / 25 + 1 / 500 ? "rainbow" : "normal";
+    if (roll < multiplier / 25) return "gold";
+    return roll < multiplier / 25 + multiplier / 500 ? "rainbow" : "normal";
   }
 
   function storeBento(type) {
@@ -3330,14 +3331,14 @@
     return !!storeBento(rollBentoType());
   }
 
-  function rollRunGoldBentoCount(earned) {
+  function rollRunGoldBentoCount(earned, chanceMultiplier = 1) {
     if (earned < 25) return 0;
     if (earned >= 500) return 1;
     const denominator = earned >= 400 ? 5 : earned >= 200 ? 10 : earned >= 100 ? 15 : earned >= 50 ? 20 : 25;
-    return Math.random() < 1 / denominator ? 1 : 0;
+    return Math.random() < Math.min(1, chanceMultiplier / denominator) ? 1 : 0;
   }
 
-  function rollRunRainbowBentoCount(earned) {
+  function rollRunRainbowBentoCount(earned, chanceMultiplier = 1) {
     if (earned < 500) return 0;
     if (earned >= 3000) return 1;
     const denominator = earned >= 1500
@@ -3345,7 +3346,7 @@
       : 50 - 5 * Math.floor((earned - 500) / 200);
     // The 1,100-food milestone specifically awards two on a successful roll.
     const count = earned >= 1100 && earned < 1300 ? 2 : 1;
-    return Math.random() < 1 / denominator ? count : 0;
+    return Math.random() < Math.min(1, chanceMultiplier / denominator) ? count : 0;
   }
 
   function rollRunBentoCount(earned) {
@@ -3942,9 +3943,13 @@
       save.bestRun = earned;
       bestRunEl.textContent = `${save.bestRun} foods`;
     }
-    const bentoCount = rollRunBentoCount(earned);
-    const goldRewardCount = Math.min(bentoCount, rollRunGoldBentoCount(earned));
-    const rainbowRewardCount = Math.min(bentoCount - goldRewardCount, rollRunRainbowBentoCount(earned));
+    const bentoMultiplier = window.GameWeather?.current() === "bento-frenzy" || state.foodWeather.includes("bento-frenzy") ? 2 : 1;
+    const baseBentoCount = rollRunBentoCount(earned);
+    const baseGoldCount = Math.min(baseBentoCount, rollRunGoldBentoCount(earned, bentoMultiplier));
+    const baseRainbowCount = Math.min(baseBentoCount - baseGoldCount, rollRunRainbowBentoCount(earned, bentoMultiplier));
+    const bentoCount = baseBentoCount * bentoMultiplier;
+    const goldRewardCount = baseGoldCount * bentoMultiplier;
+    const rainbowRewardCount = baseRainbowCount * bentoMultiplier;
     const normalBentoCount = bentoCount - goldRewardCount - rainbowRewardCount;
     const bentoRewards = [
       ...Array(rainbowRewardCount).fill("rainbow"),

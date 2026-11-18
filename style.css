@@ -1406,3 +1406,9 @@ h1 {
 .weather-status[data-weather="shadow"] { border-color: #bd8bff; color: #ead7ff; background: #20102fed; box-shadow: 0 0 18px #7b39ae66; }
 .weather-effects[data-weather="shadow"] { background: linear-gradient(#2511374d, #431a3f26); }
 .weather-effects[data-weather="shadow"] .weather-sparkle { color: #b889ff; filter: drop-shadow(0 0 6px #b14bff); }
+
+.weather-status[data-weather="bento-frenzy"] { border-color: #ffcc76; color: #ffe6bc; background: #59351cee; }
+.weather-effects[data-weather="bento-frenzy"] { background: linear-gradient(#ffb54a18, #ff776608); }
+.weather-effects[data-weather="bento-frenzy"] .weather-sparkle { color: #ffc76b; }
+.weather-effects[data-weather="bento-frenzy"] .weather-sparkle::before { content: "🍱"; clip-path: none; background: transparent; font-size: calc(var(--size) + 4px); }
+.weather-effects[data-weather="bento-frenzy"] .weather-sparkle::after { display: none; }
