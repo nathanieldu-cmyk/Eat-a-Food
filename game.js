@@ -453,15 +453,15 @@
       version: SAVE_VERSION,
       tutorial: { step: "start" },
       firstRunRewardClaimed: false,
-      inventory: { Popcorn: 1 },
-      equipped: "Popcorn",
+      inventory: { Peanut: 1 },
+      equipped: "Peanut",
       bestRun: 0,
       carryPoints: 0,
       diamonds: 0,
       potions: starterPotions(),
       activePotions: emptyActivePotions(),
       bento: emptyBento(),
-      discovered: { Popcorn: true },
+      discovered: { Peanut: true },
       giveawayClaims: {},
       // Already applied, so a brand-new save is not given the old starter foods.
       grantedGoldenCosmicFeast: true,
@@ -510,7 +510,7 @@
           if (n <= 0 || !tierByName[name]) continue;
           next.inventory[name] = (next.inventory[name] || 0) + n;
         }
-        if (Object.keys(next.inventory).length === 0) next.inventory = { [next.firstRunRewardClaimed ? "Peanut" : "Popcorn"]: 1 };
+        if (Object.keys(next.inventory).length === 0) next.inventory = { Peanut: 1 };
       }
       const equippedName = renameSheetFood(migrateFoodName(parsed.equipped || "", fromVersion));
       if (equippedName !== (parsed.equipped || "")) renamed = true;

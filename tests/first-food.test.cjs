@@ -8,8 +8,8 @@ function usePeanutRoll(g){
  for(let i=0;i<1000;i++){const roll=i/1000;g.math.random=()=>roll;if(g.pullFood().name==='Peanut')return;}
  assert.fail('normal food pool must still include Peanut');
 }
-test('first-time players start with Popcorn and their first run reward cannot be Peanut',()=>{
- const g=fresh();assert.equal(g.save.equipped,'Popcorn');assert.equal(g.save.inventory.Popcorn,1);assert.equal(g.save.inventory.Peanut,undefined);assert.equal(g.save.discovered.Popcorn,true);
+test('first-time players start with only Peanut and their first run reward cannot be Peanut',()=>{
+ const g=fresh();assert.equal(g.save.equipped,'Peanut');assert.equal(JSON.stringify(g.save.inventory),JSON.stringify({Peanut:1}));assert.equal(JSON.stringify(g.save.discovered),JSON.stringify({Peanut:true}));
  // The same roll normally produces Peanut, but the first reward excludes it.
  usePeanutRoll(g);assert.equal(g.pullFood().name,'Peanut');
  g.state.foodsEarned=1;const first=g.bankPendingFoods();assert.notEqual(first[0],'Peanut');assert.equal(g.save.firstRunRewardClaimed,true);
@@ -31,5 +31,15 @@ test('double foods duplicates the non-Peanut first reward, and weather keeps the
   const g=fresh();usePeanutRoll(g);g.state.foodsEarned=1;g.state.foodWeather=[weather];const foods=g.bankPendingFoods();
   assert.ok(foods.every(name=>!name.includes('Peanut')));assert.equal(foods.length,weather==='double-foods'?2:1);
   if(foods.length===2)assert.equal(foods[0],foods[1]);
+ }
+});
+
+test('fresh Peanut inventory survives reload and empty-inventory recovery',()=>{
+ const initial=JSON.parse(JSON.stringify(fresh().save));
+ for(const inventory of [initial.inventory,{}, {Popcorn:0}]){
+  const g=ctx.gameBoot({...initial,inventory});
+  assert.equal(JSON.stringify(g.save.inventory),JSON.stringify({Peanut:1}));
+  assert.equal(g.save.equipped,'Peanut');assert.equal(g.save.firstRunRewardClaimed,false);
+  usePeanutRoll(g);g.state.foodsEarned=1;assert.notEqual(g.bankPendingFoods()[0],'Peanut');
  }
 });
