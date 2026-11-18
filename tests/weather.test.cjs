@@ -222,8 +222,8 @@ test('Shadow overrides last exactly two minutes, use a countdown and leave regul
  record={...event,endsAt:start+300000};const invalid=boot(start,feed);await flush();assert.equal(invalid.api.current(),'clear');
  g.setTime(noon+interval);g.tick();assert.ok(types.includes(g.api.current()));
 });
-test('Shadow food odds match Rainbow rates across rarities, upgrade all lower versions and bank after expiry',()=>{
- const g=gameBoot(),rates={common:.075,uncommon:.05,rare:.025,epic:.01,legendary:.005,mythic:.005};
+test('Shadow food odds match the requested rates across rarities, upgrade all lower versions and bank after expiry',()=>{
+ const g=gameBoot(),rates={common:.05,uncommon:.025,rare:.02,epic:.01,legendary:.005,mythic:.001};
  for(const base of Object.values(g.tierByName).filter(t=>!t.isGolden&&!t.isShiny&&!t.isShadow))for(const prefix of ['','Golden ','Rainbow ']){
    const original=g.tierByName[prefix+base.name];const chance=rates[base.rarity];
    for(const roll of [0,chance-1e-9,chance,.999999]){g.math.random=()=>roll;assert.equal(g.applyFoodWeather(original,'shadow').name,roll<chance?'Shadow '+base.name:original.name);}

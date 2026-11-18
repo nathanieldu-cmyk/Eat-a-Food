@@ -103,8 +103,8 @@
       epic: 0.025, legendary: 0.01, mythic: 0.005 },
     rainbow: { common: 0.075, uncommon: 0.05, rare: 0.025,
       epic: 0.01, legendary: 0.005, mythic: 0.005 },
-    shadow: { common: 0.075, uncommon: 0.05, rare: 0.025,
-      epic: 0.01, legendary: 0.005, mythic: 0.005 },
+    shadow: { common: 0.05, uncommon: 0.025, rare: 0.02,
+      epic: 0.01, legendary: 0.005, mythic: 0.001 },
   };
   const MAX_RIVALS = 5;
   const RANDOM_CPU_EVERY_MS = 8000;

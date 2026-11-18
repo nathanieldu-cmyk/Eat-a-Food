@@ -81,7 +81,7 @@
     }[type];
     if (detail) detail.textContent = {
       gold: "Up to 10% Gold · rarer foods have lower odds", rainbow: "Up to 7.5% Rainbow · rarer foods have lower odds",
-      shadow: "Up to 7.5% Shadow · rarer foods have lower odds",
+      shadow: "Up to 5% Shadow · rarer foods have lower odds",
       "double-diamonds": "2× diamonds from run foods", "double-foods": "Foods duplicated at collection",
       clear: `Next at ${new Date(weather.nextRoll).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`,
     }[type];
