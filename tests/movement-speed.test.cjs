@@ -32,8 +32,8 @@ test('tier speed advantages and potion bonuses remain proportional for local, re
  for(const size of [10,1000,10000,1000000]){
    const local=g.createFood({speed:2},0,0),remote=g.createFood({speed:2},0,0),cpu=g.createFood({speed:3},0,0,true);
    local.size=remote.size=cpu.size=size;g.state.player=local;g.setStacks(0);
-   near(g.moveSpeed(local),g.moveSpeed(remote));near(g.moveSpeed(cpu)/g.moveSpeed(local),1.5);
+   near(g.moveSpeed(local),g.moveSpeed(remote));near(g.moveSpeed(cpu)/g.moveSpeed(local),1.65);
    g.setStacks(1);remote.speedBoost=1.25;near(g.moveSpeed(local),g.moveSpeed(remote));
-   cpu.speedBoost=1.4;near(g.moveSpeed(cpu)/g.moveSpeed(remote),3*1.4/(2*1.25));
+   cpu.speedBoost=1.4;near(g.moveSpeed(cpu)/g.moveSpeed(remote),3*1.1*1.4/(2*1.25));
  }
 });

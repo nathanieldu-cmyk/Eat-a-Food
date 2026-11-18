@@ -926,6 +926,13 @@
   }
 
   function createFood(tier, x, y, isRival = false) {
+    // Keep the bonus on a CPU-owned copy, applied once even if reused by a respawn.
+    if (isRival && !tier.cpuBoosted) tier = {
+      ...tier, cpuBoosted: true,
+      multiplier: tier.multiplier * 1.1,
+      growth: tier.growth * 1.1,
+      speed: tier.speed * 1.1,
+    };
     return {
       id: uuid(),
       tier,
@@ -4505,11 +4512,10 @@
       state.rivals = msg.rivals.map((rival) => {
         const tier = tierByName[rival.food] || FOOD_TIERS[0];
         let food = previous.get(rival.id);
-        if (!food) {
+        if (!food || food.tier.name !== tier.name) {
           food = createFood(tier, rival.x, rival.y, true);
           food.id = rival.id;
         }
-        food.tier = tier;
         food.tx = rival.x;
         food.ty = rival.y;
         food.size = Math.max(1, rival.size || 1);
