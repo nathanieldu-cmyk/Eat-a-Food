@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=80" />
+  <link rel="stylesheet" href="style.css?v=81" />
   <script type="importmap">
     {
       "imports": {
@@ -182,7 +182,15 @@
         <button id="shop-close" class="btn ghost small" type="button">Close</button>
       </div>
       <p id="shop-diamonds" class="shop-diamonds"></p>
-      <p class="inv-hint bento-shop-description" tabindex="0">Bento boxes cost 1,000 diamonds, or are earned from runs. Each takes 2 hours to unlock, one at a time, with room for 5 boxes total, including boxes ready to open. Skip the wait for 1,000 diamonds per hour left. Gold boxes give Golden foods; Rainbow boxes give Rainbow foods. Every +100% permanent luck adds +1.5% epic (up to 40%), +0.5% legendary (up to 10%), and +0.1% mythic chance.</p>
+      <div class="inv-hint bento-shop-description">
+        <span>1,000 💎 per box · 5-box limit</span>
+        <span>2h unlock · One box at a time</span>
+        <span>Skip: 1,000 💎 per hour left</span>
+        <span>Gold → Golden · Rainbow → Rainbow</span>
+        <span>Per +100% permanent luck:</span>
+        <span>Epic +1.5% · Legendary +0.5% · Mythic +0.1%</span>
+        <span>Epic cap 40% · Legendary cap 10%</span>
+      </div>
       <div id="bento-slot" class="shop-list"></div>
       <div id="bento-results" class="pull-results bento-results hidden"></div>
       <p class="inv-hint">Potions cost 500 diamonds. Each one adds 10 minutes. Luck strength stacks up to ×5; other potions keep one strength and only stack time.</p>
@@ -207,7 +215,8 @@
   <script src="music.js?v=2"></script>
   <script src="sfx.js?v=5"></script>
   <script src="weather.js?v=11"></script>
-  <script src="game.js?v=228"></script>
+  <script src="game.js?v=229"></script>
   <script src="giveaway.js?v=1"></script>
+  <script src="bento-fit.js?v=1"></script>
 </body>
 </html>

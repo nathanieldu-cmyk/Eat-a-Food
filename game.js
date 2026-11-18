@@ -3372,8 +3372,8 @@
     const next = bento.unlockStartedAt + BENTO_UNLOCK_MS - Date.now();
     const all = next + (bento.locked - 1) * BENTO_UNLOCK_MS;
     return bento.locked > 1
-      ? `Next unlock in ${formatLongRemaining(next)} · all ${bento.locked} in ${formatLongRemaining(all)}.`
-      : `Unlocks in ${formatLongRemaining(next)}.`;
+      ? `Next ${formatLongRemaining(next)} · All ${formatLongRemaining(all)}`
+      : `Unlocks in ${formatLongRemaining(next)}`;
   }
 
   function bentoOddsHtml() {
@@ -3411,10 +3411,12 @@
     row.innerHTML = `
       <h3>🍱 Bento Boxes</h3>
       <div class="shop-actions"></div>
-      <p>${bentoInventoryCount()}/${BENTO_MAX_BOXES} boxes${goldCount ? ` · ${goldCount} gold` : ""}${rainbowCount ? ` · ${rainbowCount} rainbow` : ""} · ${bento.ready} ready to open · ${bento.locked} unlocking. <span class="bento-timer">${bentoTimerText()}</span></p>
+      <p>${bentoInventoryCount()}/${BENTO_MAX_BOXES} boxes · ${bento.ready} ready · ${bento.locked} unlocking</p>
+      ${goldCount || rainbowCount ? `<p>${goldCount} Gold · ${rainbowCount} Rainbow</p>` : ""}
+      <p class="bento-timer">${bentoTimerText()}</p>
       <p class="bento-luck">Opened ${bento.opened.toLocaleString()} · +${Math.round(bentoLuckBonus() * 100)}% luck forever.</p>
-      <p class="bento-luck">${bentoLuckLine()}</p>
-      <p class="bento-odds">${bentoOddsHtml()}</p>
+      ${Object.keys(BENTO_CHANCE_PER_100_LUCK).map(id => `<p class="bento-luck">Odds bonus: +${(bentoRarityChances()[id] - BENTO_BASE_CHANCES[id]).toFixed(1)}% ${rarityById[id].label}</p>`).join("")}
+      ${[["rare", "epic"], ["legendary", "mythic"]].map(ids => `<p class="bento-odds">${ids.map(id => `<span class="rarity-${id}">${rarityById[id].label} ${Number(bentoRarityChances()[id].toFixed(1))}%</span>`).join(" · ")}</p>`).join("")}
     `;
     const actions = row.querySelector(".shop-actions");
     const full = bentoInventoryCount() >= BENTO_MAX_BOXES;
