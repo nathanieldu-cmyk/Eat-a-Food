@@ -3851,17 +3851,20 @@
       const have = source === "fragment" ? save.relics.fragments[item.id] || 0 : api.available(save, api.keyFor(item.id, source));
       const sourceName = source === "fragment" ? "matching fragments" : `${source} relics`;
       const canCombine = have >= needed && save.diamonds >= cost;
-      return `<article class="relic-card relic-${tier}">
-        <div class="relic-card-heading"><span class="relic-icon" aria-hidden="true">${item.icon}</span><h3>${item.name}</h3></div>
+      return `<article class="relic-card relic-${tier}" tabindex="-1">
+        <div class="relic-card-heading"><span class="relic-icon relic-emblem" aria-hidden="true">${item.icon}</span><h3>${item.name}</h3></div>
         <p>${api.describe(key)}</p>
-        <p class="relic-count">${total} owned · ${free} available${total - free ? ` · ${total - free} equipped` : ""}</p>
-        <p class="relic-recipe">${have}/${needed} ${sourceName} + ${cost.toLocaleString()} 💎</p>
-        <button class="btn ghost small" type="button" data-relic-combine="${item.id}" data-source="${source}" ${canCombine ? "" : "disabled"} aria-label="Combine into one ${tier} ${item.name}">Make ${tier} relic</button>
+        <p class="relic-count"><span class="relic-mini-emblem" aria-hidden="true">${item.icon}</span> ${total} owned · ${free} available${total - free ? ` · ${total - free} equipped` : ""}</p>
+        <p class="relic-recipe"><span class="${source === "fragment" ? "relic-fragment-icon" : "relic-mini-emblem"}" aria-hidden="true">${item.icon}</span> ${have}/${needed} ${sourceName} + ${cost.toLocaleString()} 💎</p>
+        <button class="btn ghost small" type="button" data-relic-combine="${item.id}" data-source="${source}" ${canCombine ? "" : "disabled"} aria-label="Combine into one ${tier} ${item.name} for ${cost.toLocaleString()} diamonds">Make ${tier} relic · ${cost.toLocaleString()} diamonds</button>
       </article>`;
     }).join("");
   }
 
   function finishRelicAction(message) {
+    const panel = relicModal.querySelector(".relic-panel");
+    const scrollTop = panel?.scrollTop || 0;
+    const scrollLeft = panel?.scrollLeft || 0;
     const active = document.activeElement;
     const focusId = active?.id;
     const combineId = active?.dataset?.relicCombine;
@@ -3871,11 +3874,13 @@
     renderRelics();
     renderEquippedUi();
     relicStatusEl.textContent = message;
-    if (focusId) document.getElementById(focusId)?.focus();
-    else if (combineId) {
-      const button = relicListEl.querySelector(`[data-relic-combine="${combineId}"]`);
-      if (button && !button.disabled) button.focus();
-      else relicTierEl.focus();
+    const control = focusId ? document.getElementById(focusId)
+      : combineId ? relicListEl.querySelector(`[data-relic-combine="${combineId}"]`) : null;
+    const focusTarget = control?.disabled ? control.closest(".relic-card, .relic-pack-card") : control;
+    focusTarget?.focus({preventScroll: true});
+    if (panel) {
+      panel.scrollTop = scrollTop;
+      panel.scrollLeft = scrollLeft;
     }
   }
 

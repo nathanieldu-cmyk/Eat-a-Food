@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=83" />
+  <link rel="stylesheet" href="style.css?v=84" />
   <script type="importmap">
     {
       "imports": {
@@ -216,11 +216,12 @@
 
   <div id="relic-modal" class="shop-modal hidden" aria-hidden="true">
     <div class="shop-panel relic-panel" role="dialog" aria-modal="true" aria-labelledby="relic-title">
-      <div class="inv-header"><h2 id="relic-title">Relics</h2><button id="relic-close" class="btn ghost small" type="button">Close</button></div>
+      <div class="inv-header"><h2 id="relic-title"><span aria-hidden="true">🧿</span> Relics</h2><button id="relic-close" class="btn ghost small" type="button">Close</button></div>
       <div class="relic-intro"><p>Find fragments. Forge relics. Give your food a new edge.</p><strong id="relic-diamonds">0 diamonds</strong></div>
       <p id="relic-run-note" class="relic-run-note hidden">Your run continues while this is open. Equip or remove relics at any time.</p>
-      <section class="relic-pack-card" aria-labelledby="relic-pack-title">
-        <div><h3 id="relic-pack-title">Basic Relic Pack</h3><p>3 fragments · 250 diamonds</p><p>Each fragment has a 1 in 7 chance of being any relic type. Repeats are possible.</p></div>
+      <section class="relic-pack-card" tabindex="-1" aria-labelledby="relic-pack-title">
+        <span class="relic-pack-art" aria-hidden="true"><span class="relic-pack-seal">🧿</span><span class="relic-pack-mark">RELICS</span><span class="relic-pack-stars">✦ ✦ ✦</span></span>
+        <div><h3 id="relic-pack-title">Basic Relic Pack</h3><p><span class="relic-fragment-icon" aria-hidden="true">✦</span> 3 fragments · 250 diamonds</p><p>Each fragment has a 1 in 7 chance of being any relic type. Repeats are possible.</p></div>
         <button id="relic-pack" class="btn primary" type="button">Buy pack · 250 💎</button>
       </section>
       <p id="relic-status" class="relic-status" role="status" aria-live="polite"></p>
@@ -241,7 +242,7 @@
   <script src="sfx.js?v=5"></script>
   <script src="weather.js?v=11"></script>
   <script src="relics.js?v=1"></script>
-  <script src="game.js?v=240"></script>
+  <script src="game.js?v=241"></script>
   <script src="giveaway.js?v=1"></script>
   <script src="bento-fit.js?v=1"></script>
   <script src="tutorial.js?v=3"></script>
