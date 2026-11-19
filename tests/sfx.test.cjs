@@ -101,7 +101,7 @@ test('both single-player and multiplayer run starts play one start cue; missing 
       state:{rivals:[]},net:{role:null},view:null,ARENA:1800,lastTime:0,previewId:0,performance:{now:()=>0},
       requestAnimationFrame:()=>1,cancelAnimationFrame:noop,loop:noop,ensureWorld:noop,arenaHumans:()=>[],farArenaSpot:()=>({x:0,y:0}),
       createFood:()=>({}),equippedTier:()=>({}),restoreCarriedPoints:noop,clampToArena:noop,spawnBetterRival:noop,updateHud:noop,
-      openInventory:noop,closeIndex:noop,closeInventory:noop,closeShop:noop,closeCraft:noop,closeMulti:noop};
+      openInventory:noop,closeRelics:noop,refreshPlayerRelics:noop,closeIndex:noop,closeInventory:noop,closeShop:noop,closeCraft:noop,closeMulti:noop};
     for(const key of ['pullResultsEl','lobbyHintEl','overlay','endBtn','inventoryBtn','shopBtn','craftBtn'])ctx[key]=element();
     vm.runInNewContext(declaration(name)+`\n${name}(1);`,ctx);return events;
   }

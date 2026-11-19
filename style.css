@@ -59,7 +59,7 @@ body {
   width: 280px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 14px;
   min-height: 0;
   overflow: auto;
@@ -1443,3 +1443,42 @@ h1 {
 .tutorial-card button:focus-visible { outline: 3px solid #89dfff; outline-offset: 3px; }
 .tutorial-card [hidden], .tutorial-root > [hidden] { display: none; }
 @media (max-height: 480px) { .tutorial-card { padding: 10px; width: min(300px, calc(100vw - 24px)); } .tutorial-copy { font-size: .74rem; line-height: 1.35; } }
+
+/* The mint Relics stand and its collection. */
+.relic-button { border-color: #4de0be88; color: #9af0da; }
+.relic-panel { width: min(900px, 96vw); max-height: 92dvh; overflow-y: auto; }
+.relic-panel h3 { font-family: "Fredoka", sans-serif; font-size: 1.05rem; }
+.relic-panel p { font-size: .9rem; line-height: 1.5; }
+.relic-intro, .relic-pack-card, .relic-collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.relic-intro { margin: 12px 0 18px; flex-wrap: wrap; }
+#relic-diamonds { color: #8ee7ff; white-space: nowrap; }
+.relic-pack-card, .relic-attachment { padding: 18px; border: 1px solid #4de0be66; border-radius: 16px; background: #16332b66; }
+.relic-pack-card p:last-child { color: #d3e8df; margin-top: 6px; }
+.relic-pack-card .btn { flex-shrink: 0; }
+.relic-status { min-height: 1.5em; margin: 12px 0; color: #9af0da; }
+.relic-run-note { padding: 10px 12px; margin-bottom: 14px; border: 1px solid #ffd16666; border-radius: 10px; color: #ffe09a; }
+.relic-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+.relic-panel label { display: grid; gap: 6px; font-size: .9rem; font-weight: 800; min-width: 0; }
+.relic-panel select { width: 100%; min-height: 44px; border: 1px solid #8ed8c788; border-radius: 10px; background: #211b16; color: #fff3e0; font: inherit; padding: 8px 30px 8px 10px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%239af0da' stroke-width='2'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; }
+.relic-panel :is(select,button):focus-visible { outline: 3px solid #9af0da; outline-offset: 3px; }
+.relic-collection-heading { margin: 22px 0 10px; }
+.relic-collection-heading label { grid-template-columns: auto minmax(120px, 1fr); align-items: center; }
+.relic-rules { margin-bottom: 14px; color: #eedcc6; }
+.relic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.relic-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid #fff3e035; border-radius: 14px; background: #ffffff08; }
+.relic-card-heading { display: flex; align-items: center; gap: 10px; }
+.relic-icon { font-size: 1.8rem; }
+.relic-card .relic-count { margin-top: auto; color: #9af0da; font-weight: 800; }
+.relic-card .relic-recipe { color: #e3d3c0; }
+.relic-advanced { border-color: #8dbbff77; }
+.relic-godly { border-color: #f3c36b99; background: #f3c36b0b; }
+.relic-equipped-line { color: #9af0da; font-size: .85rem; margin: 5px 0; }
+@media (max-width: 600px) {
+  .relic-grid, .relic-fields { grid-template-columns: 1fr; }
+  .relic-pack-card { flex-direction: column; align-items: stretch; }
+  .relic-pack-card .btn { width: 100%; }
+  .relic-panel { padding: 18px 14px; }
+  .relic-attachment, .relic-pack-card { padding: 14px; }
+}
+
+.relic-run-note.hidden { display: none; }

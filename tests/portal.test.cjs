@@ -19,7 +19,7 @@ const names = [
   'ARENA', 'LOBBY_RADIUS', 'PORTAL_RADIUS', 'SHOP_PAD_RADIUS', 'SHOP_STALL_RADIUS',
   'CRAFT_PAD_RADIUS', 'CRAFT_STALL_RADIUS', 'PORTAL_SPOT', 'SHOP_PAD_SPOT',
   'SHOP_STALL_SPOT', 'CRAFT_PAD_SPOT', 'CRAFT_STALL_SPOT', 'LOBBY_SPAWN',
-  'RING_MAJOR', 'RING_TUBE', 'FOOD_MODEL_SCALE',
+  'RELIC_PAD_RADIUS', 'RELIC_STALL_RADIUS', 'RELIC_PAD_SPOT', 'RELIC_STALL_SPOT', 'RING_MAJOR', 'RING_TUBE', 'FOOD_MODEL_SCALE',
 ];
 const constants = names.map(name => {
   const match = source.match(new RegExp(`^  const ${name} = [^;]+;`, 'm'));
@@ -141,4 +141,12 @@ test('portal has a marked spinning O, a raised 3D rim, and a flat glow', async (
     assert.ok(Math.abs(normal.x) < 1e-9 && Math.abs(normal.z) < 1e-9);
     assert.ok(Math.abs(Math.abs(normal.y) - 1) < 1e-9);
   }
+});
+
+test('the mint Relics pad opens the collection once on entry and can be revisited',()=>{
+ const g=boot();let opens=0;
+ Object.assign(g.ctx,{dist:(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),openShop(){},openCraft(){},openRelics(){opens++;}});
+ vm.runInContext(declaration('checkLobbyPads')+'\nglobalThis.checkRelicPad=checkLobbyPads;',g.ctx);
+ const spot={x:1440,y:1675};g.ctx.checkRelicPad(spot);g.ctx.checkRelicPad(spot);assert.equal(opens,1);
+ g.ctx.checkRelicPad({x:1440,y:1440});g.ctx.checkRelicPad(spot);assert.equal(opens,2);
 });

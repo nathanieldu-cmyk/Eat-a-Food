@@ -18,6 +18,7 @@ function boot() {
     document: { currentScript: { src: 'game.js?v=197' }, getElementById: () => ({}) },
     localStorage: { getItem: () => null, setItem() {} },
   });
+  vm.runInContext(fs.readFileSync(path.join(root, 'relics.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(path.join(root, 'foods.js'), 'utf8'), context);
   const marker = '  bestRunEl.textContent = `${save.bestRun} foods`;';
   assert.ok(source.includes(marker));

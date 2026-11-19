@@ -40,6 +40,7 @@ function boot(saved) {
     },
     cancelAnimationFrame() {},
   });
+  vm.runInContext(fs.readFileSync(path.join(root, "relics.js"), "utf8"), context);
   vm.runInContext(foods, context);
   // Run the real save/food initialization, then expose the actual game functions
   // before animation and rendering bootstraps. View effects and the unrelated

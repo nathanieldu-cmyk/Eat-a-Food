@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=82" />
+  <link rel="stylesheet" href="style.css?v=83" />
   <script type="importmap">
     {
       "imports": {
@@ -49,6 +49,7 @@
           <button id="inventory-btn" class="btn ghost" type="button">Inventory</button>
           <button id="shop-btn" class="btn ghost" type="button">Shop</button>
           <button id="craft-btn" class="btn ghost" type="button">Craft</button>
+          <button id="relic-btn" class="btn ghost relic-button" type="button" aria-haspopup="dialog" aria-controls="relic-modal">Relics</button>
           <button id="multi-btn" class="btn ghost" type="button">Multiplayer</button>
           <p id="multi-live" class="multi-live hidden"></p>
         </div>
@@ -86,7 +87,7 @@
       </div>
       <div id="giveaway-status" class="giveaway-status hidden" role="status"></div>
       <div id="touch-stick" class="touch-stick" aria-hidden="true"><div id="touch-knob" class="touch-knob"></div></div>
-      <div id="lobby-hint" class="lobby-hint">Blue circle: start a run · Gold pad: shop · Purple pad: craft</div>
+      <div id="lobby-hint" class="lobby-hint">Blue circle: start a run · Gold pad: shop · Purple pad: craft · Mint pad: relics</div>
       <div id="leaderboard" class="leaderboard hidden">
         <p class="leaderboard-title">Biggest in the arena</p>
         <ol id="leaderboard-list"></ol>
@@ -213,11 +214,34 @@
     </div>
   </div>
 
+  <div id="relic-modal" class="shop-modal hidden" aria-hidden="true">
+    <div class="shop-panel relic-panel" role="dialog" aria-modal="true" aria-labelledby="relic-title">
+      <div class="inv-header"><h2 id="relic-title">Relics</h2><button id="relic-close" class="btn ghost small" type="button">Close</button></div>
+      <div class="relic-intro"><p>Find fragments. Forge relics. Give your food a new edge.</p><strong id="relic-diamonds">0 diamonds</strong></div>
+      <p id="relic-run-note" class="relic-run-note hidden">Your run continues while this is open. Equip or remove relics at any time.</p>
+      <section class="relic-pack-card" aria-labelledby="relic-pack-title">
+        <div><h3 id="relic-pack-title">Basic Relic Pack</h3><p>3 fragments · 250 diamonds</p><p>Each fragment has a 1 in 7 chance of being any relic type. Repeats are possible.</p></div>
+        <button id="relic-pack" class="btn primary" type="button">Buy pack · 250 💎</button>
+      </section>
+      <p id="relic-status" class="relic-status" role="status" aria-live="polite"></p>
+      <section class="relic-attachment" aria-labelledby="relic-attachment-title">
+        <h3 id="relic-attachment-title">Equip to a food</h3>
+        <p>One relic per food. Equipping and removing are free. A relic only works while you use that exact food, including its Golden, Rainbow or Shadow version.</p>
+        <div class="relic-fields"><label>Food<select id="relic-food"></select></label><label>Relic<select id="relic-equip"></select></label></div>
+        <p id="relic-equipped-detail"></p>
+      </section>
+      <div class="relic-collection-heading"><h3>Your collection</h3><label>Tier<select id="relic-tier"><option value="basic">Basic</option><option value="advanced">Advanced</option><option value="godly">Godly</option></select></label></div>
+      <p class="relic-rules">3 matching fragments + 50 💎 → Basic · 5 matching Basic + 250 💎 → Advanced · 5 matching Advanced + 2,000 💎 → Godly. Each tier doubles both benefits and penalties. Unequip relics before combining them.</p>
+      <div id="relic-list" class="relic-grid"></div>
+    </div>
+  </div>
+
   <script src="foods.js?v=32783f4f1709"></script>
   <script src="music.js?v=2"></script>
   <script src="sfx.js?v=5"></script>
   <script src="weather.js?v=11"></script>
-  <script src="game.js?v=239"></script>
+  <script src="relics.js?v=1"></script>
+  <script src="game.js?v=240"></script>
   <script src="giveaway.js?v=1"></script>
   <script src="bento-fit.js?v=1"></script>
   <script src="tutorial.js?v=3"></script>

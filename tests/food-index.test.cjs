@@ -79,7 +79,7 @@ test('clipboard opens during an active run and clears held movement', () => {
   const ctx = vm.createContext({
     state, moveKeys: new Set(['w']),
     resetTouchControls() { reset = true; },
-    closeInventory() {}, closeShop() {}, closeCraft() {}, closeMulti() {},
+    closeRelics() {}, closeInventory() {}, closeShop() {}, closeCraft() {}, closeMulti() {},
     renderIndexButton() {}, renderFoodIndex() { rendered = true; },
     document: { activeElement: {}, body: { style: {} } },
     indexReturnFocus: null, indexScrollEl: { scrollTop: 100 },

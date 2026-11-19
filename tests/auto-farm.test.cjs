@@ -81,13 +81,13 @@ test('both local and confirmed guest run starts reset the clock',()=>{
  for(const name of ['startRun','guestBeginRun']){
   const noop=()=>{},el=()=>({classList:{add:noop,remove:noop}}),state={rivals:[],runStartedAt:1};
   const c={state,save:{inventory:{Peanut:1},equipped:'Peanut'},net:{role:null},window:{},performance:{now:()=>12345},view:null,ARENA:1800,
-   closeIndex:noop,closeInventory:noop,closeShop:noop,closeCraft:noop,closeMulti:noop,ensureWorld:noop,arenaHumans:()=>[],farArenaSpot:()=>({x:0,y:0}),createFood:()=>({}),equippedTier:()=>({}),restoreCarriedPoints:noop,clampToArena:noop,spawnBetterRival:noop,updateHud:noop,cancelAnimationFrame:noop,requestAnimationFrame:()=>1,loop:noop,lastTime:0,previewId:0};
+   closeRelics:noop,refreshPlayerRelics:noop,closeIndex:noop,closeInventory:noop,closeShop:noop,closeCraft:noop,closeMulti:noop,ensureWorld:noop,arenaHumans:()=>[],farArenaSpot:()=>({x:0,y:0}),createFood:()=>({}),equippedTier:()=>({}),restoreCarriedPoints:noop,clampToArena:noop,spawnBetterRival:noop,updateHud:noop,cancelAnimationFrame:noop,requestAnimationFrame:()=>1,loop:noop,lastTime:0,previewId:0};
   for(const key of ['pullResultsEl','lobbyHintEl','overlay','endBtn','inventoryBtn','shopBtn','craftBtn'])c[key]=el();
   vm.runInNewContext(declaration(name)+`\n${name}(8);`,c);assert.equal(state.runStartedAt,12345);assert.equal(state.running,true);
  }
 });
 test('host lobby snapshots recover guest deaths even when a death message was missed',()=>{
- const ends=[];const c={net:{role:'guest',id:'one',run:7,endedRun:0,humans:new Map()},state:{running:true,rivals:[]},performance:{now:()=>0},endRun:died=>{ends.push(died);c.state.running=false;},spawnLobbyPlayer(){c.state.player={tier:{}};},createFood(){},tierByName:{},FOOD_TIERS:[]};
+ const ends=[];const c={refreshPlayerRelics(){},net:{role:'guest',id:'one',run:7,endedRun:0,humans:new Map()},state:{running:true,rivals:[]},performance:{now:()=>0},endRun:died=>{ends.push(died);c.state.running=false;},spawnLobbyPlayer(){c.state.player={tier:{}};},createFood(){},tierByName:{},FOOD_TIERS:[]};
  vm.runInNewContext(declaration('applySnap')+'\nglobalThis.snap=applySnap;',c);
  c.snap({players:[{id:'one',zone:'lobby'}]});assert.deepEqual(ends,[true]);assert.equal(c.net.endedRun,7);
  c.snap({players:[{id:'one',zone:'arena',run:7}]});assert.deepEqual(ends,[true],'old snapshots cannot restart an ended run');

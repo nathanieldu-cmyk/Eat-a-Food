@@ -26,7 +26,7 @@ function boot() {
   const view = { yaw: 0, pitch: 0.8 };
   const document = {hidden: false, addEventListener(name, fn) { listeners[name] = fn; }};
   const ctx = vm.createContext({
-    canvas, moveStick, touchControl, view, touchStickEl: element(), touchKnobEl: element(),
+    state: {relicsOpen:false}, canvas, moveStick, touchControl, view, touchStickEl: element(), touchKnobEl: element(),
     document, window: {addEventListener(name, fn) { listeners[name] = fn; }},
     moveKeys: new Set(), blocked: false, lobbyBlocked: () => ctx.blocked,
   });

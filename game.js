@@ -32,6 +32,15 @@
   const craftCloseBtn = document.getElementById("craft-close");
   const craftBtn = document.getElementById("craft-btn");
   const overlayCraftBtn = document.getElementById("overlay-craft-btn");
+  const relicModal = document.getElementById("relic-modal");
+  const relicBtn = document.getElementById("relic-btn");
+  const relicCloseBtn = document.getElementById("relic-close");
+  const relicListEl = document.getElementById("relic-list");
+  const relicFoodEl = document.getElementById("relic-food");
+  const relicEquipEl = document.getElementById("relic-equip");
+  const relicTierEl = document.getElementById("relic-tier");
+  const relicStatusEl = document.getElementById("relic-status");
+  let relicReturnFocus = null;
   const indexModal = document.getElementById("index-modal");
   const indexRowsEl = document.getElementById("index-rows");
   const indexScrollEl = document.getElementById("index-scroll");
@@ -93,6 +102,8 @@
   const SHOP_STALL_RADIUS = 62;
   const CRAFT_PAD_RADIUS = 58;
   const CRAFT_STALL_RADIUS = 62;
+  const RELIC_PAD_RADIUS = 58;
+  const RELIC_STALL_RADIUS = 62;
   const RUN_CAMERA_DISTANCE = 480;
   const BASE_FOOD_DRAW_RADIUS = 10 + Math.sqrt(10) * 2.2;
   const MIN_CAMERA_DISTANCE = 240;
@@ -141,6 +152,7 @@
   // rarities are still generally faster on average.
   // odds = "1 in N" pull chance weight (higher N = rarer).
   if (!window.FOOD_LIST) throw new Error("foods.js failed to load");
+  if (!window.GameRelics) throw new Error("Relics failed to load. Please refresh the game.");
   const FOOD_TIERS = window.FOOD_LIST.map((food) => ({
     name: food.name,
     emoji: food.emoji,
@@ -453,6 +465,7 @@
       version: SAVE_VERSION,
       tutorial: { step: "start" },
       firstRunRewardClaimed: false,
+      relics: window.GameRelics.emptySave(),
       inventory: { Peanut: 1 },
       equipped: "Peanut",
       bestRun: 0,
@@ -512,6 +525,7 @@
         }
         if (Object.keys(next.inventory).length === 0) next.inventory = { Peanut: 1 };
       }
+      next.relics = window.GameRelics.normalize(parsed.relics, next.inventory);
       const equippedName = renameSheetFood(migrateFoodName(parsed.equipped || "", fromVersion));
       if (equippedName !== (parsed.equipped || "")) renamed = true;
       if (equippedName && next.inventory[equippedName]) {
@@ -636,6 +650,7 @@
   }
 
   function persistSave() {
+    window.GameRelics.cleanAssignments(save);
     renderIndexButton();
     save.version = SAVE_VERSION;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
@@ -720,12 +735,15 @@
     mode: "lobby",
     onShopPad: false,
     onCraftPad: false,
+    onRelicPad: false,
+    relicsOpen: false,
     autoFarm: false,
     runStartedAt: null,
     autoFarmRestartTimer: null,
     points: 0,
     foodsEarned: 0,
     foodWeather: [],
+    foodRelicLuck: [],
     player: null,
     rivals: [],
     sprinkles: [],
@@ -838,7 +856,7 @@
   }
 
   function displayedLuckPct(typeCount = ownedTypeCount()) {
-    return Math.round(totalLuckBonus(typeCount) * 100);
+    return Math.round((totalLuckBonus(typeCount) + (state.running ? state.player?.relicEffects?.luck || 0 : 0)) * 100);
   }
 
   function luckRewardText(beforeCount, afterCount) {
@@ -862,21 +880,21 @@
     luckNoticeEl.classList.remove("hidden");
   }
 
-  function pullWeight(food) {
+  function pullWeight(food, relicLuck = 0) {
     // Base weight is 1/odds. Luck boosts higher rarities more,
     // so the base and every-10 bonuses shift pulls toward rarer foods.
     const rank = rarityById[food.rarity].rank;
-    const bonus = totalLuckBonus();
+    const bonus = totalLuckBonus() + relicLuck;
     return (1 / food.odds) * (1 + bonus * rank);
   }
 
-  function pullFood(excludedName = null) {
+  function pullFood(excludedName = null, relicLuck = state.player?.relicEffects?.luck || 0) {
     const pool = excludedName ? FOOD_TIERS.filter(food => food.name !== excludedName) : FOOD_TIERS;
     let total = 0;
-    for (const food of pool) total += pullWeight(food);
+    for (const food of pool) total += pullWeight(food, relicLuck);
     let roll = Math.random() * total;
     for (const food of pool) {
-      roll -= pullWeight(food);
+      roll -= pullWeight(food, relicLuck);
       if (roll <= 0) return food;
     }
     return pool[pool.length - 1];
@@ -1009,10 +1027,13 @@
   const SHOP_STALL_SPOT = { x: ARENA / 2 + 335, y: ARENA / 2 };
   const CRAFT_PAD_SPOT = { x: ARENA / 2 - 240, y: ARENA / 2 };
   const CRAFT_STALL_SPOT = { x: ARENA / 2 - 335, y: ARENA / 2 };
+  const RELIC_PAD_SPOT = { x: ARENA / 2, y: ARENA / 2 + 235 };
+  const RELIC_STALL_SPOT = { x: ARENA / 2, y: ARENA / 2 + 335 };
   const LOBBY_SPAWN = { x: ARENA / 2, y: ARENA / 2 + 90 };
 
   function spawnLobbyPlayer(at = LOBBY_SPAWN) {
     state.player = createFood(equippedTier(), at.x, at.y, false);
+    refreshPlayerRelics();
   }
 
   function enterLobby() {
@@ -1025,6 +1046,7 @@
     }
     state.onShopPad = false;
     state.onCraftPad = false;
+    state.onRelicPad = false;
     spawnLobbyPlayer();
     if (net.role && state.player) state.player.netName = net.name;
     if (net.role === "host") {
@@ -1048,6 +1070,7 @@
     }
     pushOutOfSpot(food, SHOP_STALL_SPOT, SHOP_STALL_RADIUS);
     pushOutOfSpot(food, CRAFT_STALL_SPOT, CRAFT_STALL_RADIUS);
+    pushOutOfSpot(food, RELIC_STALL_SPOT, RELIC_STALL_RADIUS);
   }
 
   function pushOutOfSpot(food, spot, radius) {
@@ -1069,7 +1092,8 @@
       !craftModal.classList.contains("hidden") ||
       !inventoryModal.classList.contains("hidden") ||
       !indexModal.classList.contains("hidden") ||
-      !multiModal.classList.contains("hidden")
+      !multiModal.classList.contains("hidden") ||
+      state.relicsOpen
     );
   }
 
@@ -1139,6 +1163,9 @@
     const onCraft = dist(food, CRAFT_PAD_SPOT) < CRAFT_PAD_RADIUS;
     if (onCraft && !state.onCraftPad) openCraft();
     state.onCraftPad = onCraft;
+    const onRelic = dist(food, RELIC_PAD_SPOT) < RELIC_PAD_RADIUS;
+    if (onRelic && !state.onRelicPad) openRelics();
+    state.onRelicPad = onRelic;
   }
 
   // Host only: friends in the lobby walk around and enter the arena on their own.
@@ -1193,6 +1220,7 @@
     food.vy = 0;
     food.size = 10;
     food.foods = 0;
+    food.relicBuffUntil = 0;
     food.eaten = false;
     food.zone = "arena";
     food.run = nextRunId();
@@ -1213,6 +1241,7 @@
     food.vy = 0;
     food.size = 10;
     food.zone = "lobby";
+    food.relicBuffUntil = 0;
     food.run = 0;
     clampToLobby(food);
     markPlaced(food);
@@ -1240,6 +1269,8 @@
   function awardRunFood() {
     // Preserve the weather at earning time; food rolls still happen at run end.
     const weather = window.GameWeather?.current() || "clear";
+    if (!state.foodRelicLuck) state.foodRelicLuck = [];
+    state.foodRelicLuck[state.foodsEarned] = state.player?.relicEffects?.luck || 0;
     state.foodWeather[state.foodsEarned++] = weather;
     updateHud();
   }
@@ -1257,7 +1288,7 @@
   function bankPendingFoods() {
     const gained = [];
     for (let i = 0; i < state.foodsEarned; i++) {
-      const food = applyFoodWeather(pullFood(save.firstRunRewardClaimed ? null : "Peanut"), state.foodWeather[i]);
+      const food = applyFoodWeather(pullFood(save.firstRunRewardClaimed ? null : "Peanut", state.foodRelicLuck?.[i] || 0), state.foodWeather[i]);
       save.firstRunRewardClaimed = true;
       const copies = state.foodWeather[i] === "double-foods" ? 2 : 1;
       for (let copy = 0; copy < copies; copy++) gained.push(food.name);
@@ -1487,13 +1518,15 @@
   function eatSprinkle(food, sprinkle, index) {
     const pts = sprinkle.type.points;
     const growthBoost = food === state.player ? Math.pow(1.25, boostStacks("growth")) : food.growthBoost || 1;
-    const gain = pts * food.tier.growth * growthBoost;
+    const pepperGrowth = Date.now() < (food.relicBuffUntil || 0) ? 1 + (food.relicEffects?.pepperGrowth || 0) : 1;
+    const gain = pts * food.tier.growth * growthBoost * (food.relicEffects?.sprinkleGrowth || 1) * pepperGrowth;
+    const points = pts * (food.relicEffects?.points || 1) * (food.relicEffects?.sprinklePoints || 1);
     food.size += gain;
     if (food === state.player) {
       window.GameSfx?.play(`orb-${sprinkle.type.key}`);
-      addPoints(pts);
+      addPoints(points);
     }
-    else if (net.role === "host" && food.netId) netSend({ t: "ev", kind: "pts", id: food.netId, pts });
+    else if (net.role === "host" && food.netId) netSend({ t: "ev", kind: "pts", id: food.netId, pts: points });
     burst(sprinkle.x, sprinkle.y, sprinkle.type.color);
     state.sprinkles.splice(index, 1);
     setTimeout(() => {
@@ -1504,7 +1537,8 @@
   // Same size gain a player gets from eating a food: prey size × own growth.
   function growthForEat(eater) {
     const boost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : eater.growthBoost || 1;
-    return eater.tier.growth * boost;
+    const pepperGrowth = Date.now() < (eater.relicBuffUntil || 0) ? 1 + (eater.relicEffects?.pepperGrowth || 0) : 1;
+    return eater.tier.growth * boost * (eater.relicEffects?.rivalGrowth || 1) * pepperGrowth;
   }
 
   function tryEatFood(eater, prey, preyList, preyIndex) {
@@ -1515,10 +1549,11 @@
 
     const preySize = prey.size;
     eater.size += preySize * growthForEat(eater);
+    if (eater.relicEffects?.pepperSpeed) eater.relicBuffUntil = Date.now() + 5000;
     // Every 10 of their size → 1 point; foodGainFactor applies the points multiplier.
     // At most 10 foods from one eat. Guests apply that on their own save.
-    if (eater === state.player && (prey.isRival || prey.netId)) addEatPoints(preySize / 10);
-    if (net.role === "host" && eater.netId) netSend({ t: "ev", kind: "eat", id: eater.netId, preySize });
+    if (eater === state.player && (prey.isRival || prey.netId)) addEatPoints(preySize / 10 * (eater.relicEffects?.points || 1));
+    if (net.role === "host" && eater.netId) netSend({ t: "ev", kind: "eat", id: eater.netId, preySize, pts: preySize / 10 * (eater.relicEffects?.points || 1), buffUntil: eater.relicBuffUntil || 0 });
     burst(prey.x, prey.y, prey.tier.color);
     prey.eaten = true;
     if (prey.netId) {
@@ -1538,6 +1573,7 @@
   const moveKeys = new Set();
 
   function controlDirection() {
+    if (state.relicsOpen) return null;
     return view ? directionFromKeys([...moveKeys], view.yaw, moveStick) : null;
   }
 
@@ -1625,7 +1661,8 @@
 
   function moveSpeed(food) {
     const boost = food === state.player ? Math.pow(1.25, boostStacks("speed")) : food.speedBoost || 1;
-    const base = (food.tier.speed || 1) * SPEED_SCALE * boost;
+    const pepperSpeed = Date.now() < (food.relicBuffUntil || 0) ? 1 + (food.relicEffects?.pepperSpeed || 0) : 1;
+    const base = (food.tier.speed || 1) * SPEED_SCALE * boost * (food.relicEffects?.speed || 1) * pepperSpeed;
     // Slow down with visible body growth, rather than the faster-growing score.
     // Twice the starting radius retains ~71% speed; large bodies retain at least half.
     const radiusRatio = Math.max(1, food.drawRadius() / BASE_FOOD_DRAW_RADIUS);
@@ -1687,7 +1724,7 @@
     const spd = moveSpeed(food);
     const dir = remote ? directionFromKeys(remote.keys, remote.yaw, remote.stick) : controlDirection();
     const moving = remote ? keysAreMoving(remote.keys, remote.stick) : playerIsMoving();
-    const farming = remote ? !!remote.autoFarm : state.autoFarm;
+    const farming = remote ? !!remote.autoFarm : state.autoFarm && !state.relicsOpen;
     if (dir) {
       steerToward(food, { x: food.x + dir.x * 140, y: food.y + dir.y * 140 }, 0.9 * spd * dir.strength);
       const nearest = preferredSprinkle(food);
@@ -1766,7 +1803,7 @@
       let bestD = Infinity;
       for (const f of actors) {
         const d = dist(f, s);
-        const reach = ringReach(f) + s.type.radius;
+        const reach = ringReach(f) * (f.relicEffects?.pickup || 1) + s.type.radius;
         if (d < reach && d < bestD) {
           bestD = d;
           eater = f;
@@ -2442,6 +2479,7 @@
 
   function draw() {
     if (!view) return;
+    refreshPlayerRelics();
     const t = performance.now() / 1000;
     const alive = new Set();
     const zone = localZone();
@@ -2549,6 +2587,8 @@
     lobby.padRing.material.opacity = state.onShopPad ? 0.95 : 0.55 + Math.sin(t * 2.4) * 0.2;
     lobby.craftPadRing.material.opacity = state.onCraftPad ? 0.95 : 0.55 + Math.sin(t * 2.2) * 0.2;
     lobby.craftGem.rotation.y = t * 1.4;
+    lobby.relicPadRing.material.opacity = state.onRelicPad ? 0.95 : 0.55 + Math.sin(t * 2) * 0.2;
+    lobby.relicGem.rotation.y = -t * 1.2;
   }
 
   function buildLobby(THREE) {
@@ -2790,7 +2830,36 @@
     bench.add(craftLabel);
     group.add(bench);
 
-    return { group, portalRing, portalSwirl, portalGlow, padRing, craftPadRing, craftGem };
+    const relicPadRing = craftPadRing.clone();
+    relicPadRing.material = craftPadRing.material.clone();
+    relicPadRing.material.color.set(0x4de0be);
+    relicPadRing.position.set(worldX(RELIC_PAD_SPOT.x), 0.9, worldZ(RELIC_PAD_SPOT.y));
+    const relicPadFill = craftPadFill.clone();
+    relicPadFill.material = craftPadFill.material.clone();
+    relicPadFill.material.color.set(0x4de0be);
+    relicPadFill.position.set(worldX(RELIC_PAD_SPOT.x), 0.7, worldZ(RELIC_PAD_SPOT.y));
+    const relicStand = bench.clone(false);
+    for (const child of bench.children) {
+      if (!child.isSprite && child.geometry?.type !== "OctahedronGeometry") relicStand.add(child.clone());
+    }
+    relicStand.position.set(worldX(RELIC_STALL_SPOT.x), 0, worldZ(RELIC_STALL_SPOT.y));
+    relicStand.rotation.y = Math.PI / 2;
+    for (const child of [...relicStand.children]) {
+      if (child.isSprite || child.geometry?.type === "OctahedronGeometry") relicStand.remove(child);
+      else if (child.isMesh) {
+        child.material = child.material.clone();
+        if (child.material.color.getHex() === 0xc084fc) child.material.color.set(0x4de0be);
+      }
+    }
+    const relicGem = new THREE.Mesh(new THREE.OctahedronGeometry(18), new THREE.MeshStandardMaterial({color: 0x4de0be, emissive: 0x148a73, emissiveIntensity: .7, metalness: .4, roughness: .25}));
+    relicGem.position.set(8, 82, 24);
+    const relicLabel = makeLabelSprite(THREE);
+    writeLabel(relicLabel, "Relics");
+    relicLabel.scale.multiplyScalar(2);
+    relicLabel.position.y = 180;
+    relicStand.add(relicGem, relicLabel);
+    group.add(relicPadRing, relicPadFill, relicStand);
+    return { group, portalRing, portalSwirl, portalGlow, padRing, craftPadRing, craftGem, relicPadRing, relicGem };
   }
 
   function cameraDistanceForFood(food, zoomFactor = 1) {
@@ -3076,6 +3145,7 @@
     const shownPct = displayedLuckPct();
     equippedLineEl.innerHTML = `
       <div>Equipped: <span class="${rarityClass}">${pill}</span></div>
+      <div class="relic-equipped-line">Relic: ${save.relics?.equipped[tier.name] ? relicItemLabel(save.relics.equipped[tier.name]) : "None"}</div>
       <div class="type-count-line">Amount of food types: ${luck.typeCount} · Luck +${shownPct}% · ${luck.into}/${LUCK_EVERY} to next +50%</div>
     `;
     luckEl.textContent = `+${shownPct}%`;
@@ -3723,7 +3793,120 @@
     renderEquippedUi();
   }
 
+  function relicItemLabel(key) {
+    const api = window.GameRelics;
+    const parsed = api?.parseKey(key);
+    if (!parsed) return "No relic";
+    const item = api.definitions.find(item => item.id === parsed.id);
+    return `${item.icon} ${parsed.tier[0].toUpperCase() + parsed.tier.slice(1)} ${item.name}`;
+  }
+
+  function refreshPlayerRelics() {
+    if (!state.player || !window.GameRelics) return;
+    state.player.relicKey = save.relics?.equipped[state.player.tier.name] || null;
+    state.player.relicEffects = window.GameRelics.effectsForKey(state.player.relicKey);
+  }
+
+  function renderRelics() {
+    const api = window.GameRelics;
+    if (!api) return;
+    const selected = relicFoodEl.value;
+    relicFoodEl.innerHTML = "";
+    for (const tier of ALL_FOODS.filter(tier => ownedCount(tier.name) > 0)) {
+      const option = document.createElement("option");
+      option.value = tier.name;
+      option.textContent = `${tier.name}${tier.name === save.equipped ? " (using now)" : ""}`;
+      relicFoodEl.appendChild(option);
+    }
+    relicFoodEl.value = save.inventory[selected] > 0 ? selected : save.equipped;
+    const food = relicFoodEl.value;
+    const equipped = save.relics.equipped[food] || "";
+    relicEquipEl.innerHTML = "";
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "No relic / Unequip for free";
+    relicEquipEl.appendChild(empty);
+    for (const tier of api.tiers) for (const item of api.definitions) {
+      const key = api.keyFor(item.id, tier);
+      const available = api.available(save, key);
+      if (!available && equipped !== key) continue;
+      const option = document.createElement("option");
+      option.value = key;
+      option.textContent = `${relicItemLabel(key)}${equipped === key ? " (equipped)" : ` · ${available} available`}`;
+      relicEquipEl.appendChild(option);
+    }
+    relicEquipEl.value = equipped;
+    document.getElementById("relic-equipped-detail").textContent = equipped ? api.describe(equipped) : "This food has no relic. Combine fragments below to make your first one.";
+    document.getElementById("relic-diamonds").textContent = `${save.diamonds.toLocaleString()} diamonds`;
+    document.getElementById("relic-pack").disabled = save.diamonds < 250;
+    document.getElementById("relic-run-note").classList.toggle("hidden", !state.running);
+    const tier = relicTierEl.value || "basic";
+    const source = tier === "basic" ? "fragment" : tier === "advanced" ? "basic" : "advanced";
+    const needed = tier === "basic" ? 3 : 5;
+    const cost = api.costs[source];
+    relicListEl.innerHTML = api.definitions.map(item => {
+      const key = api.keyFor(item.id, tier);
+      const free = api.available(save, key);
+      const total = save.relics.items[key] || 0;
+      const have = source === "fragment" ? save.relics.fragments[item.id] || 0 : api.available(save, api.keyFor(item.id, source));
+      const sourceName = source === "fragment" ? "matching fragments" : `${source} relics`;
+      const canCombine = have >= needed && save.diamonds >= cost;
+      return `<article class="relic-card relic-${tier}">
+        <div class="relic-card-heading"><span class="relic-icon" aria-hidden="true">${item.icon}</span><h3>${item.name}</h3></div>
+        <p>${api.describe(key)}</p>
+        <p class="relic-count">${total} owned · ${free} available${total - free ? ` · ${total - free} equipped` : ""}</p>
+        <p class="relic-recipe">${have}/${needed} ${sourceName} + ${cost.toLocaleString()} 💎</p>
+        <button class="btn ghost small" type="button" data-relic-combine="${item.id}" data-source="${source}" ${canCombine ? "" : "disabled"} aria-label="Combine into one ${tier} ${item.name}">Make ${tier} relic</button>
+      </article>`;
+    }).join("");
+  }
+
+  function finishRelicAction(message) {
+    const active = document.activeElement;
+    const focusId = active?.id;
+    const combineId = active?.dataset?.relicCombine;
+    persistSave();
+    refreshPlayerRelics();
+    renderDiamonds();
+    renderRelics();
+    renderEquippedUi();
+    relicStatusEl.textContent = message;
+    if (focusId) document.getElementById(focusId)?.focus();
+    else if (combineId) {
+      const button = relicListEl.querySelector(`[data-relic-combine="${combineId}"]`);
+      if (button && !button.disabled) button.focus();
+      else relicTierEl.focus();
+    }
+  }
+
+  function openRelics() {
+    if (!window.GameRelics) return;
+    closeIndex();
+    closeInventory();
+    closeShop();
+    closeCraft();
+    closeMulti();
+    resetTouchControls();
+    moveKeys.clear();
+    relicReturnFocus = document.activeElement;
+    state.relicsOpen = true;
+    renderRelics();
+    relicStatusEl.textContent = "";
+    relicModal.classList.remove("hidden");
+    relicModal.setAttribute("aria-hidden", "false");
+    relicCloseBtn.focus();
+  }
+
+  function closeRelics() {
+    if (relicModal.classList.contains("hidden")) return;
+    state.relicsOpen = false;
+    relicModal.classList.add("hidden");
+    relicModal.setAttribute("aria-hidden", "true");
+    relicReturnFocus?.focus();
+  }
+
   function openShop() {
+    closeRelics();
     resetTouchControls();
     if (state.running) return;
     closeIndex();
@@ -3742,6 +3925,7 @@
   }
 
   function openCraft() {
+    closeRelics();
     resetTouchControls();
     if (state.running) return;
     closeIndex();
@@ -3782,6 +3966,7 @@
   }
 
   function openIndex() {
+    closeRelics();
     resetTouchControls();
     moveKeys.clear();
     closeInventory();
@@ -3807,6 +3992,7 @@
   }
 
   function openInventory() {
+    closeRelics();
     closeIndex();
     resetTouchControls();
     closeShop();
@@ -3945,6 +4131,7 @@
   }
 
   function startRun() {
+    closeRelics();
     if (!save.inventory[save.equipped]) {
       openInventory();
       return;
@@ -3963,13 +4150,16 @@
     window.GameSfx?.play("start");
     state.onShopPad = false;
     state.onCraftPad = false;
+    state.onRelicPad = false;
     lobbyHintEl.classList.add("hidden");
     state.foodsEarned = 0;
     state.foodWeather = [];
+    state.foodRelicLuck = [];
     state.player = null;
     ensureWorld();
     const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
     state.player = createFood(equippedTier(), spot.x, spot.y, false);
+    refreshPlayerRelics();
     restoreCarriedPoints();
     clampToArena(state.player);
     if (net.role) state.player.netName = net.name;
@@ -4032,6 +4222,7 @@
   }
 
   function endRun(wipedOut = false) {
+    closeRelics();
     resetTouchControls();
     if (!state.running) return;
     if (wipedOut) window.GameSfx?.play("death");
@@ -4327,6 +4518,8 @@
         x: Math.round(food.x),
         y: Math.round(food.y),
         size: Math.round(food.size),
+      relic: food.relicKey || null,
+      buffUntil: food.relicBuffUntil || 0,
       })),
     };
     // One update goes to the whole room. Sprinkles ride along twice a second while
@@ -4384,6 +4577,8 @@
       x: Math.round(food.x * 10) / 10,
       y: Math.round(food.y * 10) / 10,
       size: Math.round(food.size),
+      relic: food.relicKey || null,
+      buffUntil: food.relicBuffUntil || 0,
     };
   }
 
@@ -4397,7 +4592,7 @@
   // growth and points, so this only hides them until its next update agrees.
   function guestEatSprinkles() {
     const food = state.player;
-    const reach = ringReach(food);
+    const reach = ringReach(food) * (food.relicEffects?.pickup || 1);
     const now = performance.now();
     for (let i = state.sprinkles.length - 1; i >= 0; i--) {
       const s = state.sprinkles[i];
@@ -4424,7 +4619,8 @@
         y: food ? Math.round(food.y * 10) / 10 : 0,
         keys: [...moveKeys],
         stick: { x: moveStick.x, y: moveStick.y },
-        autoFarm: state.autoFarm,
+        autoFarm: state.autoFarm && !state.relicsOpen,
+        relic: food?.relicKey || null,
         yaw: view ? view.yaw : 0,
         food: equippedTier().name,
         foods: state.running ? state.foodsEarned : 0,
@@ -4493,6 +4689,8 @@
       food.tx = x;
       food.ty = y;
     }
+    food.relicKey = window.GameRelics?.parseKey(msg.relic) ? msg.relic : null;
+    food.relicEffects = window.GameRelics?.effectsForKey(food.relicKey);
     food.growthBoost = Number(msg.growth) > 0 ? Number(msg.growth) : 1;
     food.speedBoost = Number(msg.speed) > 0 ? Number(msg.speed) : 1;
     food.foods = Math.max(0, Number(msg.foods) || 0);
@@ -4564,6 +4762,7 @@
   }
 
   function openMulti() {
+    closeRelics();
     resetTouchControls();
     multiModal.classList.remove("hidden");
     multiModal.setAttribute("aria-hidden", "false");
@@ -4623,6 +4822,7 @@
   }
 
   function guestBeginRun(run) {
+    closeRelics();
     closeIndex();
     closeInventory();
     closeShop();
@@ -4640,6 +4840,7 @@
     restoreCarriedPoints();
     state.foodsEarned = 0;
     state.foodWeather = [];
+    state.foodRelicLuck = [];
     state.particles = [];
     lobbyHintEl.classList.add("hidden");
     overlay.classList.add("hidden");
@@ -4676,6 +4877,8 @@
         state.player.tier = tierByName[mine.food] || state.player.tier;
         state.player.netName = net.name;
         state.player.size = Math.max(10, mine.size || 10);
+        state.player.relicBuffUntil = Number(mine.buffUntil) || 0;
+        refreshPlayerRelics();
         // Your own food moves on your screen right away. Only take the host's
         // spot when it placed you somewhere new.
         if (mine.p !== net.place) {
@@ -4776,7 +4979,10 @@
     }
     if (msg.t === "snap" && net.role === "guest") applySnap(msg);
     if (msg.t === "ev" && net.role === "guest" && msg.id === net.id && state.running) {
-      if (msg.kind === "eat") addEatPoints(Number(msg.preySize) / 10);
+      if (msg.kind === "eat") {
+        addEatPoints(Number.isFinite(msg.pts) ? msg.pts : Number(msg.preySize) / 10);
+        if (state.player) state.player.relicBuffUntil = Number(msg.buffUntil) || 0;
+      }
       if (msg.kind === "pts") addPoints(Number(msg.pts) || 0);
       if (msg.kind === "dead") {
         net.endedRun = net.run;
@@ -5599,9 +5805,40 @@
     },
     { passive: true }
   );
+  relicModal.addEventListener("keydown", e => {
+    if (e.key !== "Tab") return;
+    const controls = [...relicModal.querySelectorAll("button:not([disabled]), select:not([disabled])")];
+    const first = controls[0], last = controls[controls.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+  });
+  relicBtn.addEventListener("click", openRelics);
+  relicCloseBtn.addEventListener("click", closeRelics);
+  relicModal.addEventListener("click", e => { if (e.target === relicModal) closeRelics(); });
+  relicModal.addEventListener("wheel", e => e.stopPropagation(), {passive: true});
+  relicFoodEl.addEventListener("change", renderRelics);
+  relicTierEl.addEventListener("change", renderRelics);
+  relicEquipEl.addEventListener("change", () => {
+    const api = window.GameRelics;
+    if (api.equip(save, relicFoodEl.value, relicEquipEl.value || null)) finishRelicAction(relicEquipEl.value ? "Relic equipped. No diamonds spent." : "Relic removed. No diamonds spent.");
+  });
+  document.getElementById("relic-pack").addEventListener("click", () => {
+    const api = window.GameRelics;
+    const result = api.buyPack(save);
+    if (!result) return;
+    const names = result.map(id => { const item = api.definitions.find(item => item.id === id); return `${item.icon} ${item.name}`; });
+    finishRelicAction(`Pack opened: ${names.join(" · ")}. 3 fragments added.`);
+  });
+  relicListEl.addEventListener("click", e => {
+    const button = e.target.closest("[data-relic-combine]");
+    if (!button || button.disabled) return;
+    const result = window.GameRelics.combine(save, button.dataset.relicCombine, button.dataset.source);
+    if (result) finishRelicAction(`Created ${relicItemLabel(result)}.`);
+  });
   const MOVE_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+        closeRelics();
       closeShop();
       closeCraft();
       closeIndex();
@@ -5609,10 +5846,10 @@
       closeMulti();
       return;
     }
-    if (!indexModal.classList.contains("hidden")) return;
+    if (!indexModal.classList.contains("hidden") || state.relicsOpen) return;
     const name = e.key.toLowerCase();
     if (!MOVE_KEYS.has(name)) return;
-    const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
+    const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT");
     if (typing) return;
     moveKeys.add(name);
     e.preventDefault();
