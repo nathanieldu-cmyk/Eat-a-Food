@@ -2190,7 +2190,7 @@
     const queue = [];
     let active = 0;
     function pump() {
-      while (active < 2 && queue.length) {
+      while (active < 4 && queue.length) {
         const file = queue.shift();
         active++;
         Promise.resolve().then(() => load(file)).then((model) => {
@@ -2229,7 +2229,9 @@
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 20000);
       try {
-        const response = await fetch(`models/${file}`, {signal: controller.signal, priority});
+        // Bump the asset revision when model files change. Reuse background downloads
+        // and models from earlier visits without another full network transfer.
+        const response = await fetch(`models/${file}?v=1`, {signal: controller.signal, priority, cache: "force-cache"});
         if (!response.ok) throw new Error(`Model request failed (${response.status})`);
         return await response.arrayBuffer();
       } finally {
@@ -2251,6 +2253,38 @@
       // Parsed templates own their buffers; don't retain a second copy of the GLB.
       foodModelDownloads.delete(file);
     }
+  }
+
+  function warmFoodModels(files, schedule = (work) => {
+    if (window.requestIdleCallback) window.requestIdleCallback(work, {timeout: 1000});
+    else setTimeout(work, 200);
+  }) {
+    const queue = [...new Set(files)];
+    let active = 0;
+    return new Promise((resolve) => {
+      function pump() {
+        // Only two low-priority background transfers; visible foods load separately.
+        while (active < 2 && queue.length) {
+          const file = queue.shift();
+          active++;
+          const download = fetchFoodModel(file, "low");
+          download.catch(() => {}).finally(() => {
+            // Keep downloaded bytes in the browser cache, not in the game's heap.
+            if (foodModelDownloads.get(file) === download) foodModelDownloads.delete(file);
+            active--;
+            schedule(pump);
+          });
+        }
+        if (!active && !queue.length) resolve();
+      }
+      schedule(pump);
+    });
+  }
+
+  function foodModelWarmupFiles() {
+    const owned = Object.keys(save.inventory).map((name) => tierByName[name]).filter(Boolean);
+    const commonFirst = [...FOOD_TIERS].sort((a, b) => a.odds - b.odds);
+    return [...new Set([companionTier(equippedTier()), ...owned, ...commonFirst].map(modelFileFor))];
   }
 
   function disposeFoodEntry(entry) {
@@ -2935,6 +2969,7 @@
     resizeView();
     window.addEventListener("resize", resizeView);
     startLobbyLoop();
+    warmFoodModels(foodModelWarmupFiles());
   }
 
   function formatOdds(odds) {

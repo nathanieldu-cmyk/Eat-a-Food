@@ -4,11 +4,15 @@ const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'g
 function declaration(name){const match=new RegExp('  (?:async )?function '+name+'\\(').exec(source);assert.ok(match,name);const rest=source.slice(match.index+match[0].length);const next=/\n  (?:async )?function /.exec(rest);return source.slice(match.index,next?match.index+match[0].length+next.index:source.length);}
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function modelLoader(load,now=()=>0){const templates=new Map(),ready=[];const ctx={Map,Set,Promise,Date,console:{warn(){}},now,templates,ready,load};vm.runInNewContext(declaration('createFoodModelLoader')+'\nglobalThis.request=createFoodModelLoader(load,templates,file=>ready.push(file),now);',ctx);return ctx;}
-test('model requests are lazy, deduplicated, capped at two, and cached after completion',async()=>{
+test('four distinct visible models load in parallel, with duplicates and templates reused',async()=>{
  const starts=[],resolvers=new Map();const g=modelLoader(file=>{starts.push(file);return new Promise(resolve=>resolvers.set(file,resolve));});
- assert.equal(starts.length,0);for(const name of ['peanut','peanut','pizza','ramen','peanut'])g.request(name);
- await flush();assert.deepEqual(starts,['peanut','pizza']);resolvers.get('peanut')({name:'peanut'});await flush();assert.deepEqual(starts,['peanut','pizza','ramen']);
- resolvers.get('pizza')({name:'pizza'});resolvers.get('ramen')({name:'ramen'});await flush();g.request('peanut');await flush();assert.equal(starts.length,3);assert.equal(g.templates.size,3);assert.equal(g.ready.length,3);
+ assert.equal(starts.length,0);
+ for(const name of ['peanut','peanut','pizza','ramen','apple','cookie','toast'])g.request(name);
+ await flush();assert.deepEqual(starts,['peanut','pizza','ramen','apple']);
+ resolvers.get('peanut')({name:'peanut'});await flush();assert.deepEqual(starts,['peanut','pizza','ramen','apple','cookie']);
+ resolvers.get('pizza')({});await flush();assert.equal(starts.at(-1),'toast');
+ for(const name of ['ramen','apple','cookie','toast'])resolvers.get(name)({name});
+ await flush();g.request('peanut');await flush();assert.equal(starts.length,6);assert.equal(g.templates.size,6);assert.equal(g.ready.length,6);
 });
 test('model failures do not block other foods and retry once after a cooldown',async()=>{
  let now=0,failures=0;const g=modelLoader(async file=>{if(file==='bad'){failures++;throw Error('offline');}return {file};},()=>now);
@@ -24,12 +28,12 @@ test('model fetches have an abort timeout and reject missing files without hangi
  let parsed;ctx.fetch=async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(8)});await ctx.load({parseAsync:async(data,base)=>{parsed=base;return {scene:{}};}},'good.glb');assert.equal(parsed,'https://example.test/models/');assert.equal(cleared,3);
 });
 test('renderer prioritizes the equipped model without waiting for its download',async()=>{
- const real=await import(pathToFileURL(path.join(root,'vendor/three.module.js')).href);let started=0,loads=0,warmed=0;
+ const real=await import(pathToFileURL(path.join(root,'vendor/three.module.js')).href);let started=0,loads=0,warmed=0,background=0;
  const THREE={...real,WebGLRenderer:class{setPixelRatio(){}setClearColor(){}}};
  let init=declaration('initView').replace('const THREE = await import("./vendor/three.module.js");','const THREE = testTHREE;').replace('const { GLTFLoader } = await import("./vendor/GLTFLoader.js?v=3");','const GLTFLoader = testLoader;');
  const ctx={testTHREE:THREE,testLoader:class{},canvas:{},window:{devicePixelRatio:1,addEventListener(){}},ARENA:2880,MAP_SCALE:4,MAX_SPRINKLES:4000,SPRINKLE_TYPES:[],state:{running:false},equippedTier:()=>({name:"Peanut"}),modelFileFor:()=>"peanut.glb",RUN_CAMERA_DISTANCE:480,LOBBY_CAMERA_DISTANCE:1150,view:null,Map,Set,Promise,Date,console,
- fetchFoodModel(file,priority){assert.equal(file,"peanut.glb");assert.equal(priority,"high");warmed++;return Promise.resolve();},buildLobby:()=>({group:new real.Group()}),makeFoodSparkleTexture:()=>new real.Texture(),resizeView(){},startLobbyLoop(){started++;},loadFoodModel(){loads++;return new Promise(()=>{});},normalizeModel:()=>new real.Group()};
- vm.runInNewContext(declaration('createFoodModelLoader')+'\n'+init+'\nglobalThis.start=initView;',ctx);await ctx.start();assert.equal(warmed,1);assert.equal(started,1);await flush();assert.equal(loads,1);assert.ok(ctx.view.scene);ctx.view.requestModel('peanut.glb');await flush();assert.equal(loads,1);
+ foodModelWarmupFiles:()=>["cookie.glb","ramen.glb"],warmFoodModels(files){assert.equal(started,1);assert.deepEqual(files,["cookie.glb","ramen.glb"]);background++;return new Promise(()=>{});},fetchFoodModel(file,priority){assert.equal(file,"peanut.glb");assert.equal(priority,"high");warmed++;return Promise.resolve();},buildLobby:()=>({group:new real.Group()}),makeFoodSparkleTexture:()=>new real.Texture(),resizeView(){},startLobbyLoop(){started++;},loadFoodModel(){loads++;return new Promise(()=>{});},normalizeModel:()=>new real.Group()};
+ vm.runInNewContext(declaration('createFoodModelLoader')+'\n'+init+'\nglobalThis.start=initView;',ctx);await ctx.start();assert.equal(warmed,1);assert.equal(started,1);assert.equal(background,1);await flush();assert.equal(loads,1);assert.ok(ctx.view.scene);ctx.view.requestModel('peanut.glb');await flush();assert.equal(loads,1);
 });
 test('temporary food shapes are replaced when their model arrives and their resources are released',async()=>{
  const THREE=await import(pathToFileURL(path.join(root,'vendor/three.module.js')).href),requests=[];
@@ -46,11 +50,12 @@ test('renderer modules resolve locally without requiring an import map',()=>{
 test('equipped food jumps ahead of queued rivals without duplicate requests',async()=>{
  const starts=[],resolvers=new Map();
  const g=modelLoader(file=>{starts.push(file);return new Promise(resolve=>resolvers.set(file,resolve));});
- for(const file of ['rival-a','rival-b','rival-c','player'])g.request(file);
+ for(const file of ['rival-a','rival-b','rival-c','rival-d','rival-e','player'])g.request(file);
  g.request('player',true);g.request('player',true);await flush();
- assert.deepEqual(starts,['rival-a','rival-b']);
- resolvers.get('rival-a')({});await flush();assert.deepEqual(starts,['rival-a','rival-b','player']);
- resolvers.get('rival-b')({});await flush();resolvers.get('player')({});resolvers.get('rival-c')({});await flush();
+ assert.deepEqual(starts,['rival-a','rival-b','rival-c','rival-d']);
+ resolvers.get('rival-a')({});await flush();assert.equal(starts.at(-1),'player');
+ resolvers.get('rival-b')({});await flush();assert.equal(starts.at(-1),'rival-e');
+ for(const file of ['rival-c','rival-d','player','rival-e'])resolvers.get(file)({});await flush();
  assert.equal(starts.filter(file=>file==='player').length,1);
 });
 test('early equipped download is reused for parsing and released afterward',async()=>{
@@ -58,7 +63,7 @@ test('early equipped download is reused for parsing and released afterward',asyn
  const ctx={foodModelDownloads:downloads,Map,AbortController,URL,setTimeout,clearTimeout,window:{location:{href:'https://example.test/'}},
   fetch(url,opts){requests++;options=opts;return new Promise(resolve=>finish=()=>resolve({ok:true,arrayBuffer:async()=>bytes}));}};
  vm.runInNewContext(declaration('fetchFoodModel')+'\n'+declaration('loadFoodModel')+'\nglobalThis.preload=fetchFoodModel;globalThis.load=loadFoodModel;',ctx);
- const early=ctx.preload('peanut.glb','high');assert.equal(requests,1);assert.equal(options.priority,'high');
+ const early=ctx.preload('peanut.glb','high');assert.equal(requests,1);assert.equal(options.priority,'high');assert.equal(options.cache,'force-cache');
  let parsed=0;const loading=ctx.load({parseAsync:async data=>{assert.equal(data,bytes);parsed++;return {scene:{}};}},'peanut.glb');
  assert.equal(requests,1);finish();await early;await loading;assert.equal(parsed,1);assert.equal(downloads.size,0);
 });
@@ -68,4 +73,26 @@ test('failed early downloads can retry when the renderer requests the model',asy
  vm.runInNewContext(declaration('fetchFoodModel')+'\n'+declaration('loadFoodModel')+'\nglobalThis.preload=fetchFoodModel;globalThis.load=loadFoodModel;',ctx);
  await assert.rejects(ctx.preload('peanut.glb','high'),/offline/);
  await ctx.load({parseAsync:async()=>({scene:{}})},'peanut.glb');assert.equal(requests,2);assert.equal(ctx.foodModelDownloads.size,0);
+});
+
+test('background downloads cover every unique model, start in idle time, stay capped at two and release bytes',async()=>{
+ const scheduled=[],starts=[],resolvers=new Map(),downloads=new Map();
+ const ctx={Set,Promise,foodModelDownloads:downloads,fetchFoodModel(file,priority){
+  assert.equal(priority,'low');starts.push(file);const p=new Promise((resolve,reject)=>resolvers.set(file,{resolve,reject}));downloads.set(file,p);return p;}};
+ vm.runInNewContext(declaration('warmFoodModels')+'\nglobalThis.warm=warmFoodModels;',ctx);
+ const done=ctx.warm(['peanut','cookie','peanut','apple','ramen'],work=>scheduled.push(work));
+ assert.equal(starts.length,0);scheduled.shift()();assert.deepEqual(starts,['peanut','cookie']);
+ resolvers.get('peanut').resolve(new ArrayBuffer(8));await flush();assert.equal(downloads.has('peanut'),false);assert.equal(starts.length,2);
+ scheduled.shift()();assert.deepEqual(starts,['peanut','cookie','apple']);
+ resolvers.get('cookie').reject(Error('offline'));await flush();scheduled.shift()();assert.equal(starts.at(-1),'ramen');
+ resolvers.get('apple').resolve(new ArrayBuffer(8));resolvers.get('ramen').resolve(new ArrayBuffer(8));await flush();
+ while(scheduled.length)scheduled.shift()();await done;assert.equal(downloads.size,0);assert.equal(starts.length,4);
+});
+test('warmup covers all base models once, starting with companion and owned foods',()=>{
+ const tiers=[{name:'Rare',model:'rare',odds:500},{name:'Peanut',model:'peanut',odds:5},{name:'Cookie',model:'cookie',odds:18}];
+ const ctx={Set,FOOD_TIERS:tiers,save:{inventory:{'Golden Cookie':1,Peanut:1}},tierByName:{'Golden Cookie':{baseName:'Cookie',model:'cookie'},Peanut:tiers[1]},
+  equippedTier:()=>tiers[1],companionTier:()=>tiers[2],modelFileFor:food=>food.model};
+ vm.runInNewContext(declaration('foodModelWarmupFiles')+'\nglobalThis.files=foodModelWarmupFiles();',ctx);
+ assert.deepEqual(Array.from(ctx.files),['cookie','peanut','rare']);
+ assert.deepEqual(tiers.map(food=>food.name),['Rare','Peanut','Cookie']);
 });
