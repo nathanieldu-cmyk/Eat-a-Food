@@ -104,5 +104,9 @@
       case 'wishbone': return `+${pct(.50 * scale)} food luck for run rewards earned while using this food. Does not affect Bento Boxes.`;
     }
   }
-  window.GameRelics = {definitions, tiers, costs, keyFor, parseKey, emptySave, normalize, cleanAssignments, available, buyPack, combine, equip, effectsForKey, describe};
+  function artHtml(id) {
+    const symbol = validId(id) ? id : 'crest';
+    return `<svg class="relic-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=1#${symbol}"></use></svg>`;
+  }
+  window.GameRelics = {definitions, tiers, costs, keyFor, parseKey, emptySave, normalize, cleanAssignments, available, buyPack, combine, equip, effectsForKey, describe, artHtml};
 })();

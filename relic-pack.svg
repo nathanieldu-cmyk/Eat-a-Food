@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="244" viewBox="0 0 180 244">
+<defs>
+ <linearGradient id="foil" x2="1" y2=".5"><stop stop-color="#93ebce"/><stop offset=".15" stop-color="#1d796e"/><stop offset=".45" stop-color="#123b48"/><stop offset=".75" stop-color="#277869"/><stop offset="1" stop-color="#91d4b6"/></linearGradient>
+ <linearGradient id="gold" x2=".7" y2="1"><stop stop-color="#fff1b1"/><stop offset=".4" stop-color="#e9be67"/><stop offset="1" stop-color="#98682d"/></linearGradient>
+ <linearGradient id="gem" x2="1" y2="1"><stop stop-color="#dffff0"/><stop offset=".4" stop-color="#8ff1cf"/><stop offset="1" stop-color="#3ba697"/></linearGradient>
+ <pattern id="seam" width="6" height="12" patternUnits="userSpaceOnUse"><path d="M1 0v12" stroke="#806433" stroke-width="2"/><path d="M4 0v12" stroke="#ffe6a5"/></pattern>
+ <radialGradient id="glow"><stop stop-color="#b0ffe1" stop-opacity=".3"/><stop offset="1" stop-color="#a5ffe3" stop-opacity="0"/></radialGradient>
+</defs>
+<path d="m14 5 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 2 226-7 4-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3Z" fill="url(#foil)" stroke="#edce8d" stroke-width="2"/>
+<path d="M15 9h150v16H15Zm1 211h149v14H16Z" fill="url(#gold)"/>
+<path d="M15 9h150v16H15Zm1 211h149v14H16Z" fill="url(#seam)" opacity=".65"/>
+<path d="M25 33h130v176H25Z" fill="none" stroke="#e4c387" stroke-width="1.5"/>
+<path d="M30 39h120v164H30Z" fill="none" stroke="#e4c387" stroke-opacity=".35"/>
+<path d="M25 53V33h20m90 0h20v20m0 136v20h-20M45 209H25v-20" fill="none" stroke="#ffe2a0" stroke-width="4"/>
+<circle cx="90" cy="104" r="66" fill="url(#glow)"/>
+<path d="m90 48 38 25-7 53-31 21-31-21-7-53Z" fill="#103039" stroke="url(#gold)" stroke-width="3"/>
+<path d="m90 62 25 30-25 43-25-43Z" fill="url(#gem)" stroke="#dcffe8" stroke-width="1.5"/>
+<path d="M90 62v73M65 92h50M90 62 77 92l13 43 13-43Z" fill="none" stroke="#efffe9" stroke-width="1.5" opacity=".8"/>
+<path d="m42 88 3 8 8 3-8 3-3 8-3-8-8-3 8-3Zm95 32 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#f8df9e"/>
+<text x="90" y="169" text-anchor="middle" fill="#ffebb5" font-family="Trebuchet MS,sans-serif" font-size="24" font-weight="bold" letter-spacing="3">RELICS</text>
+<path d="M44 179h92" stroke="#d7b673"/>
+<text x="90" y="194" text-anchor="middle" fill="#d7eedb" font-family="Trebuchet MS,sans-serif" font-size="9" font-weight="bold" letter-spacing="2">BASIC FRAGMENT PACK</text>
+</svg>

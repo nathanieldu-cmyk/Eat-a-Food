@@ -3852,10 +3852,10 @@
       const sourceName = source === "fragment" ? "matching fragments" : `${source} relics`;
       const canCombine = have >= needed && save.diamonds >= cost;
       return `<article class="relic-card relic-${tier}" tabindex="-1">
-        <div class="relic-card-heading"><span class="relic-icon relic-emblem" aria-hidden="true">${item.icon}</span><h3>${item.name}</h3></div>
+        <div class="relic-card-heading"><span class="relic-icon relic-emblem" aria-hidden="true">${api.artHtml(item.id)}</span><h3>${item.name}</h3></div>
         <p>${api.describe(key)}</p>
-        <p class="relic-count"><span class="relic-mini-emblem" aria-hidden="true">${item.icon}</span> ${total} owned · ${free} available${total - free ? ` · ${total - free} equipped` : ""}</p>
-        <p class="relic-recipe"><span class="${source === "fragment" ? "relic-fragment-icon" : "relic-mini-emblem"}" aria-hidden="true">${item.icon}</span> ${have}/${needed} ${sourceName} + ${cost.toLocaleString()} 💎</p>
+        <p class="relic-count"><span class="relic-mini-emblem" aria-hidden="true">${api.artHtml(item.id)}</span> ${total} owned · ${free} available${total - free ? ` · ${total - free} equipped` : ""}</p>
+        <p class="relic-recipe"><span class="${source === "fragment" ? "relic-fragment-icon" : "relic-mini-emblem"}" aria-hidden="true">${api.artHtml(item.id)}</span> ${have}/${needed} ${sourceName} + ${cost.toLocaleString()} 💎</p>
         <button class="btn ghost small" type="button" data-relic-combine="${item.id}" data-source="${source}" ${canCombine ? "" : "disabled"} aria-label="Combine into one ${tier} ${item.name} for ${cost.toLocaleString()} diamonds">Make ${tier} relic · ${cost.toLocaleString()} diamonds</button>
       </article>`;
     }).join("");
@@ -3903,6 +3903,7 @@
   }
 
   function closeRelics() {
+    window.GameRelicOpening?.close();
     if (relicModal.classList.contains("hidden")) return;
     state.relicsOpen = false;
     relicModal.classList.add("hidden");
@@ -5828,11 +5829,13 @@
     if (api.equip(save, relicFoodEl.value, relicEquipEl.value || null)) finishRelicAction(relicEquipEl.value ? "Relic equipped. No diamonds spent." : "Relic removed. No diamonds spent.");
   });
   document.getElementById("relic-pack").addEventListener("click", () => {
+    if (window.GameRelicOpening?.isOpen()) return;
     const api = window.GameRelics;
     const result = api.buyPack(save);
     if (!result) return;
     const names = result.map(id => { const item = api.definitions.find(item => item.id === id); return `${item.icon} ${item.name}`; });
     finishRelicAction(`Pack opened: ${names.join(" · ")}. 3 fragments added.`);
+    window.GameRelicOpening?.show(result);
   });
   relicListEl.addEventListener("click", e => {
     const button = e.target.closest("[data-relic-combine]");
