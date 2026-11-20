@@ -1090,8 +1090,8 @@ h1 {
   .stat { min-width: 0; }
   .stat .label { font-size: 0.56rem; letter-spacing: 0.03em; }
   .stat span:last-child { font-size: clamp(0.66rem, 2.6vw, 0.95rem); overflow-wrap: anywhere; }
-  .header-buttons { grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
-  .header-buttons .btn { font-size: 0.78rem; padding: 8px 3px; min-height: 40px; }
+  .header-buttons { grid-column: 1 / -1; grid-template-columns: minmax(0, 1.25fr) minmax(0, .8fr) minmax(0, .8fr) minmax(0, .9fr) minmax(0, 1.45fr); gap: 4px; }
+  .header-buttons .btn { min-width: 0; font-size: clamp(.65rem, 2.3vw, .78rem); white-space: nowrap; padding: 8px 3px; min-height: 40px; }
   .multi-live, .potion-status { grid-column: 1 / -1; font-size: 0.75rem; }
   .hud { grid-column: 1 / -1; grid-template-columns: 76px minmax(0, 1fr) 76px; align-items: center; gap: 6px; }
   .hud .btn { font-size: 0.8rem; padding: 10px 4px; min-height: 44px; }
