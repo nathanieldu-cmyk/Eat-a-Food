@@ -5,13 +5,14 @@
   const config = {
     schema: 2,
     combineCopies: 5,
+    relicsPerPack: 3,
     rarities: [
-      {id:'common', label:'Common', color:'#d7d7d7', price:100},
-      {id:'uncommon', label:'Uncommon', color:'#6dde8a', price:500},
-      {id:'rare', label:'Rare', color:'#6eb6ff', price:2000},
-      {id:'epic', label:'Epic', color:'#c089ff', price:5000},
-      {id:'legendary', label:'Legendary', color:'#ffb347', price:20000},
-      {id:'mythic', label:'Mythic', color:'#ff6b9d', price:100000},
+      {id:'common', label:'Common', color:'#d7d7d7', price:250},
+      {id:'uncommon', label:'Uncommon', color:'#6dde8a', price:1000},
+      {id:'rare', label:'Rare', color:'#6eb6ff', price:4000},
+      {id:'epic', label:'Epic', color:'#c089ff', price:15000},
+      {id:'legendary', label:'Legendary', color:'#ffb347', price:50000},
+      {id:'mythic', label:'Mythic', color:'#ff6b9d', price:200000},
       {id:'secret', label:'Secret', color:'#ffdb70'},
     ],
     packOdds: {
@@ -106,10 +107,13 @@
     return keyFor(family,rarity);
   }
   function award(save,key) {save.relics.items[key]=(save.relics.items[key]||0)+1;return key;}
+  function rollPack(packId,random) {
+    return Array.from({length:config.relicsPerPack},()=>roll(packId,random));
+  }
   function buyPack(save,packId,running=false,random=Math.random) {
     const pack=packs.find(pack=>pack.id===packId);
     if(running||!pack||!Number.isFinite(save.diamonds)||save.diamonds<pack.price)return null;
-    const key=roll(packId,random);save.diamonds-=pack.price;return award(save,key);
+    const results=rollPack(packId,random);save.diamonds-=pack.price;results.forEach(key=>award(save,key));return results;
   }
   function equip(save,key,running=false) {
     if(running)return false;
@@ -146,7 +150,7 @@
   function unlockTutorialGift(save) {save.relics.tutorialGiftEligible=true;}
   function claimTutorialPack(save,running=false,random=Math.random) {
     if(running||!save.relics.tutorialGiftEligible||save.relics.tutorialGiftClaimed)return null;
-    const key=roll('common',random);save.relics.tutorialGiftClaimed=true;return award(save,key);
+    const results=rollPack('common',random);save.relics.tutorialGiftClaimed=true;results.forEach(key=>award(save,key));return results;
   }
   function describe(key) {
     const relic=getRelic(key);if(!relic)return 'No relic equipped.';

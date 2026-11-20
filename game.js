@@ -3805,7 +3805,7 @@
   function relicGiftHtml() {
     if (save.relics.tutorialGiftClaimed) return "";
     const eligible = save.relics.tutorialGiftEligible;
-    return `<div class="relic-tutorial-gift" tabindex="-1"><div><h3>Free Common Pack</h3><p>${eligible ? "Tutorial complete! Claim your one-time reward: one permanent relic." : "Complete the tutorial to unlock one free Common Pack."}</p><p class="relic-pack-odds">${window.GameRelics.oddsText(window.GameRelics.packs[0])}</p></div><button class="btn ghost small" type="button" data-relic-gift ${!eligible || state.running ? "disabled" : ""}>Claim free pack</button></div>`;
+    return `<div class="relic-tutorial-gift" tabindex="-1"><div><h3>Free Common Pack</h3><p>${eligible ? "Tutorial complete! Claim your one-time reward: three permanent relics." : "Complete the tutorial to unlock one free Common Pack."}</p><p class="relic-pack-odds">${window.GameRelics.oddsText(window.GameRelics.packs[0])}</p></div><button class="btn ghost small" type="button" data-relic-gift ${!eligible || state.running ? "disabled" : ""}>Claim free pack</button></div>`;
   }
 
   function renderRelicPacks() {
@@ -3814,7 +3814,7 @@
       const rarity = api.rarities.find(rarity => rarity.id === pack.rarity);
       return `<article class="relic-shop-pack" tabindex="-1" style="--relic-rarity-color:${rarity.color}">
         <img class="relic-shop-pack-art" src="relic-pack.svg?v=2" width="180" height="244" alt="" />
-        <div><span class="relic-rarity-tag rarity-${rarity.id}">${rarity.label}</span><h3>${pack.name}</h3><p>One permanent relic · ${pack.price.toLocaleString()} diamonds</p><p class="relic-pack-odds">${api.oddsText(pack)}</p></div>
+        <div><span class="relic-rarity-tag rarity-${rarity.id}">${rarity.label}</span><h3>${pack.name}</h3><p>${api.config.relicsPerPack} permanent relics · ${pack.price.toLocaleString()} diamonds</p><p class="relic-pack-odds">${api.oddsText(pack)}</p></div>
         <div class="relic-pack-actions"><button class="btn primary small" type="button" aria-label="Buy ${pack.name} for ${pack.price.toLocaleString()} diamonds" data-relic-buy="${pack.id}" ${state.running || save.diamonds < pack.price ? "disabled" : ""}>Buy · ${pack.price.toLocaleString()} 💎</button></div>
       </article>`;
     }).join("");
@@ -3896,9 +3896,9 @@
       const api = window.GameRelics;
       const result = free ? api.claimTutorialPack(save, state.running) : api.buyPack(save, packId, state.running);
       if (!result) return null;
-      finishRelicAction(`${free ? "Tutorial reward" : "Pack opened"}: ${api.getRelic(result).name}. ${api.describe(result)}`);
+      finishRelicAction(`${free ? "Tutorial reward" : "Pack opened"}: ${result.map(key => api.getRelic(key).name).join(", ")}.`);
       window.GameSfx?.play("collect");
-      window.GameRelicOpening?.show(result, free ? "common" : packId, save.relics.items[result]);
+      window.GameRelicOpening?.show(result, free ? "common" : packId, result.map(key => save.relics.items[key]));
       return result;
     } finally { relicPurchaseBusy = false; }
   }

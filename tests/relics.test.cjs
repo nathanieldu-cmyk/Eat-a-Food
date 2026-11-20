@@ -23,7 +23,7 @@ test('all 65 unique relic definitions include the 60 standard relics with exact 
 });
 test('all six prices and coalesced rarity odds match the specification and sum to exactly 100%',()=>{
  const a=api(),odds=[[825,100,50,25,0,0,0],[0,824,100,50,25,0,1],[0,0,820,100,50,25,5],[0,0,0,820,100,70,10],[0,0,0,0,900,75,25],[0,0,0,0,0,900,100]];
- assert.deepEqual(Array.from(a.packs,pack=>pack.price),[100,500,2000,5000,20000,100000]);
+ assert.deepEqual(Array.from(a.packs,pack=>pack.price),[250,1000,4000,15000,50000,200000]);
  for(const [index,pack]of a.packs.entries()){
   assert.equal(pack.odds.reduce((sum,row)=>sum+row.weight,0),1000);near(pack.odds.reduce((sum,row)=>sum+row.chance,0),100);
   assert.deepEqual([...rarityNames,'secret'].map(rarity=>pack.odds.find(row=>row.rarity===rarity)?.weight||0),odds[index]);
@@ -44,11 +44,11 @@ test('every rarity has 8.2% Chef’s Badge and 10.2% for each of the other nine 
   assert.equal(Object.values(counts).reduce((sum,n)=>sum+n,0),500);
  }
 });
-test('purchases deduct exactly one price and award exactly one permanent result with two independent rolls',()=>{
+test('purchases deduct one price and award three independent permanent results, including repeats',()=>{
  const a=api();for(const pack of a.packs){const save=saveFor(a);save.diamonds=pack.price*2;let calls=0;
   save.luck=1e9;save.activePotions={luck:{stacks:5}};save.weather='gold';const key=a.buyPack(save,pack.id,false,()=>{calls++;return 0;});
-  assert.equal(save.diamonds,pack.price);assert.equal(calls,2);assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),1);assert.equal(save.relics.items[key],1);
-  a.buyPack(save,pack.id,false,()=>0);assert.equal(save.relics.items[key],2);assert.equal(save.relics.equipped,null);
+  assert.equal(save.diamonds,pack.price);assert.equal(calls,6);assert.equal(key.length,3);assert.equal(new Set(key).size,1);assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),3);assert.equal(save.relics.items[key[0]],3);
+  a.buyPack(save,pack.id,false,()=>0);assert.equal(save.relics.items[key[0]],6);assert.equal(save.relics.equipped,null);
  }
 });
 test('unaffordable, unknown and in-run purchases/equipment changes have no side effects or rolls',()=>{
@@ -73,8 +73,8 @@ test('Diamond Dish carries exact fractional bonus units across small runs and re
 });
 test('the free Common tutorial pack is claimable once, costs no diamonds, and cannot be claimed in a run',()=>{
  const a=api(),save=saveFor(a);save.diamonds=0;assert.equal(a.claimTutorialPack(save),null);a.unlockTutorialGift(save);
- assert.equal(a.claimTutorialPack(save,true,()=>assert.fail()),null);const key=a.claimTutorialPack(save,false,()=>0);assert.equal(key,'common:spoon');assert.equal(save.diamonds,0);assert.equal(save.relics.items[key],1);
- save.relics=a.normalize(plain(save.relics),{completedTutorial:true});a.unlockTutorialGift(save);assert.equal(a.claimTutorialPack(save,false,()=>assert.fail('cannot reroll')),null);assert.equal(save.relics.items[key],1);
+ assert.equal(a.claimTutorialPack(save,true,()=>assert.fail()),null);const key=a.claimTutorialPack(save,false,()=>0);assert.deepEqual(plain(key),['common:spoon','common:spoon','common:spoon']);assert.equal(save.diamonds,0);assert.equal(save.relics.items[key[0]],3);
+ save.relics=a.normalize(plain(save.relics),{completedTutorial:true});a.unlockTutorialGift(save);assert.equal(a.claimTutorialPack(save,false,()=>assert.fail('cannot reroll')),null);assert.equal(save.relics.items[key[0]],3);
 });
 test('old collections migrate once, preserve an archive and keep ownership independent of food inventory',()=>{
  const a=api(),raw={items:{'basic:chili':2,'advanced:apron':1,'godly:spoon':1},fragments:{magnet:6,spoon:2},equipped:{Peanut:'basic:chili'}};
@@ -179,4 +179,11 @@ test('Secret effects follow real source-specific growth, speed, reward caps and 
  }
  const g=game('secret:chopsticks');g.state.player.size=2e8;const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=1e8;assert.ok(g.tryEatFood(g.state.player,prey,[prey],0));assert.equal(g.state.foodsEarned,10);
  const t=game('secret:truffle');t.state.foodsEarned=3;t.state.foodWeather=['triple-diamonds','triple-diamonds','triple-diamonds'];t.state.player=null;t.endRun(true);assert.equal(t.save.diamonds,18);t.endRun(true);assert.equal(t.save.diamonds,18);
+});
+
+test('three results may have different rarities and families; a failed roll awards nothing and spends nothing',()=>{
+ const a=api(),save=saveFor(a),rolls=[0,0,.825,.11,.999,.45];
+ assert.deepEqual(plain(a.buyPack(save,'common',false,()=>rolls.shift())),['common:spoon','uncommon:fork','epic:badge']);
+ assert.equal(save.diamonds,99750);assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),3);
+ const before=JSON.stringify(save);let calls=0;assert.throws(()=>a.buyPack(save,'common',false,()=>++calls===4?NaN:0));assert.equal(JSON.stringify(save),before);
 });
