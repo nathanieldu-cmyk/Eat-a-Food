@@ -8,6 +8,7 @@
   let mode = "lobby";
   let unlocked = false;
   let muted = false;
+  let packOpening = false;
   try { muted = localStorage.getItem("eatAFoodMusicMuted") === "true"; } catch (_) {}
   for (const [name, track] of Object.entries(tracks)) {
     track.loop = true;
@@ -23,13 +24,13 @@
     button.setAttribute("aria-pressed", String(!muted));
     button.title = `${muted ? "Unmute" : "Mute"} music · ${titles[mode]}`;
     for (const [name, track] of Object.entries(tracks)) {
-      if (name !== mode || muted || !unlocked || document.hidden) {
+      if (name !== mode || muted || packOpening || !unlocked || document.hidden) {
         track.pause();
       } else if (track.paused) {
         // Browsers may reject playback before a user gesture or after an interruption.
         // Keep listening for gestures so playback can recover without affecting the game.
         track.play().then(() => {
-          if (name !== mode || muted || document.hidden) track.pause();
+          if (name !== mode || muted || packOpening || document.hidden) track.pause();
         }).catch(() => {});
       }
     }
@@ -57,6 +58,6 @@
   document.addEventListener("visibilitychange", sync);
   window.addEventListener("pagehide", () => Object.values(tracks).forEach(track => track.pause()));
   window.addEventListener("pageshow", sync);
-  window.GameMusic = { setMode };
+  window.GameMusic = { setMode, setPackOpening(active) { packOpening = !!active; sync(); } };
   sync();
 })();

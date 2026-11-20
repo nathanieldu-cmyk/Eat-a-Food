@@ -124,3 +124,11 @@ test('pack sound handles stop only their own voices; mute and hidden tabs silenc
  g.api.play('relic-tick-secret-3');g.button.click();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));const before=ctx.voices.length;g.api.play('relic-reveal-secret');assert.equal(ctx.voices.length,before);
  g.button.click();g.document.hidden=true;g.events.visibilitychange();g.api.play('relic-open');assert.equal(ctx.voices.length,before);
 });
+
+test('pack audio mode stops existing game effects and admits only pack cues until completion',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0];g.api.play('collect',.6);const existing=[...ctx.voices];g.api.setPackOpening(true);assert.ok(existing.every(v=>v.stops.includes('now')));
+ const before=ctx.voices.length;for(const name of ['start','collect','death','orb-xs','bento'])g.api.play(name);assert.equal(ctx.voices.length,before);
+ g.api.play('relic-open');g.api.play('relic-charge-secret');g.api.play('relic-tick-secret-1');g.api.play('relic-reveal-secret');assert.ok(ctx.voices.length>before);
+ g.api.setPackOpening(false);const complete=ctx.voices.length;g.api.play('collect');assert.equal(ctx.voices.length,complete+3);
+ const muted=boot(true);muted.events.pointerdown();muted.api.setPackOpening(true);muted.api.play('relic-open');assert.equal(muted.contexts.length,0);muted.api.setPackOpening(false);assert.equal(muted.storage.get('eatAFoodSfxMuted'),'true');
+});

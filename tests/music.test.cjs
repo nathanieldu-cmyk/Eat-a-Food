@@ -55,3 +55,16 @@ test('blocked playback retries on later gestures and a pending play cannot reviv
   const h = boot(); h.events.pointerdown({}); h.api.setMode('run');
   await Promise.resolve(); assert.equal(h.tracks[0].paused,true); assert.equal(h.tracks[1].paused,false);
 });
+
+test('pack openings pause music through gestures, mode changes and visibility, then resume the current track',async()=>{
+ const g=boot();const [lobby,run]=g.tracks;g.events.pointerdown({});await Promise.resolve();lobby.currentTime=31.25;
+ g.api.setPackOpening(true);assert.ok(g.tracks.every(t=>t.paused));
+ const plays=g.tracks.map(t=>t.plays);g.events.pointerdown({});g.events.keydown({});g.windowEvents.pageshow();g.api.setMode('run');g.document.hidden=true;g.events.visibilitychange();g.document.hidden=false;g.events.visibilitychange();await Promise.resolve();
+ assert.ok(g.tracks.every(t=>t.paused));assert.deepEqual(g.tracks.map(t=>t.plays),plays);assert.equal(g.storage.get('eatAFoodMusicMuted'),'false');
+ g.api.setPackOpening(false);await Promise.resolve();assert.equal(lobby.paused,true);assert.equal(run.paused,false);assert.equal(lobby.currentTime,31.25);
+});
+test('a pending music play cannot restart during a pack, and pack completion preserves muted preferences',async()=>{
+ const g=boot();g.events.pointerdown({});g.api.setPackOpening(true);await Promise.resolve();assert.ok(g.tracks.every(t=>t.paused));
+ g.api.setPackOpening(false);await Promise.resolve();assert.equal(g.tracks[0].paused,false);
+ const muted=boot('true');muted.events.pointerdown({});muted.api.setPackOpening(true);muted.api.setPackOpening(false);await Promise.resolve();assert.ok(muted.tracks.every(t=>t.paused));assert.equal(muted.storage.get('eatAFoodMusicMuted'),'true');
+});

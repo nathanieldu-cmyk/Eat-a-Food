@@ -57,12 +57,14 @@
   const status = root.querySelector('.reveal-status');
   const action = root.querySelector('.reveal-action');
   const swipeHint = root.querySelector('.reveal-swipe-hint');
-  const closeButton = root.querySelector('.reveal-close');
+  const dialog = root.querySelector('.reveal-dialog');
   let returnFocus = null, previousCount = 0, previousPulse = 0, previousPhase = 'closed', inerted = [], soundStops = [];
   const cue = name => { const stop = window.GameSfx?.play(name); if (typeof stop === 'function') soundStops.push(stop); };
   const controller = createController(state => {
     if (state.phase === 'closed') {
       root.hidden = true;
+      window.GameMusic?.setPackOpening?.(false);
+      window.GameSfx?.setPackOpening?.(false);
       for (const stop of soundStops) stop(); soundStops = [];
       for (const [element, previous] of inerted) element.inert = previous;
       inerted = []; previousPhase = 'closed';
@@ -70,6 +72,8 @@
     }
     const firstRender = root.hidden;
     if (firstRender) {
+      window.GameMusic?.setPackOpening?.(true);
+      window.GameSfx?.setPackOpening?.(true);
       returnFocus = document.activeElement; previousCount = 0; previousPulse = 0;
       cards.innerHTML = state.rewards.map((id, index) => {
         const item = api.getRelic(id);
@@ -109,7 +113,7 @@
     title.textContent = state.phase === 'sealed' ? 'Tap your pack to open' : state.phase === 'opening' ? 'Unsealing your pack…' : state.phase === 'complete' ? 'Your three permanent relics' : state.phase === 'revealing' ? 'Something is awakening…' : 'The next relic is stirring…';
     status.textContent = state.phase === 'sealed' ? 'Your three relics are waiting inside. Tap the pack to break the seal.' : state.phase === 'opening' ? 'Breaking the seal…' : state.phase === 'complete' ? 'All three relics were added permanently to your collection. Repeats count as extra copies. Only your equipped relic provides bonuses.' : state.phase === 'revealing' ? 'Hold on… your relic is emerging.' : `${state.revealed.length} / 3 revealed. The cards will reveal automatically, one at a time.`;
     if (firstRender) packButton.focus({preventScroll: true});
-    if (state.phase === 'opening' && previousPhase !== 'opening') { cue('relic-open'); closeButton.focus({preventScroll: true}); }
+    if (state.phase === 'opening' && previousPhase !== 'opening') { cue('relic-open'); dialog.focus({preventScroll: true}); }
     if (state.phase === 'cards' && previousPhase === 'opening') cue('relic-deal');
     if (state.phase === 'revealing' && previousPhase !== 'revealing') {
       cue(`relic-charge-${active.rarity}`);
@@ -126,13 +130,14 @@
   }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches});
   packButton.addEventListener('click', controller.openPack);
   action.addEventListener('click', () => { if (controller.snapshot().phase === 'complete') controller.close(); });
-  closeButton.addEventListener('click', controller.close);
-  root.addEventListener('click', event => { if (event.target === root) controller.close(); });
+  root.addEventListener('click', event => { if (event.target === root) dialog.focus({preventScroll:true}); });
   root.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); controller.close(); }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); }
     if (event.key === 'Tab') {
       const controls = [...root.querySelectorAll('button')].filter(button=>!button.disabled && button.getClientRects().length && !button.closest('[inert]'));
+      if (!controls.length) { event.preventDefault(); dialog.focus({preventScroll:true}); return; }
       const first = controls[0], last = controls[controls.length - 1];
+      if (!controls.includes(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); return; }
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }

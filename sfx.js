@@ -29,6 +29,7 @@
   let context = null;
   let unlocked = false;
   let muted = false;
+  let packOpening = false;
   try { muted = localStorage.getItem('eatAFoodSfxMuted') === 'true'; } catch (_) {}
 
   function stopVoice(voice) {
@@ -50,6 +51,7 @@
   }
 
   function play(name, delay = 0) {
+    if (packOpening && !name.startsWith('relic-')) return;
     const notes = sounds[name];
     if (!notes || !wake()) return;
     const now = context.currentTime;
@@ -108,6 +110,6 @@
     } else wake();
   });
   window.addEventListener('pagehide', stopAll);
-  window.GameSfx = {play};
+  window.GameSfx = {play, setPackOpening(active) { packOpening = !!active; if (packOpening) { stopAll(); lastOrb.clear(); } }};
   render();
 })();
