@@ -1573,7 +1573,7 @@ h1 {
   .relic-opening *, .relic-opening *::before { animation: none !important; transition: none !important; }
 }
 
-/* Permanent relic collection and the six shop packs. */
+/* Permanent relic collection and the six relic packs. */
 #shop-modal .shop-panel { width: min(520px, 96vw); max-height: 92dvh; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain; }
 .relic-shop-section { display: grid; gap: 12px; margin-bottom: 20px; }
 .relic-shop-section > h3 { font: 700 1.25rem "Fredoka", sans-serif; }
@@ -1594,7 +1594,6 @@ h1 {
 .relic-equipped-summary { display: flex; align-items: center; gap: 14px; }
 .relic-equipped-summary h3 { margin: 3px 0 7px; }
 .relic-diamond-carry { margin-top: 12px; color: #9cddde; }
-.relic-inspection { color: #ffe09e; }
 #relic-clear-inspection[hidden] { display: none; }
 .relic-collection-heading { flex-wrap: wrap; }
 .relic-card { border-color: var(--relic-rarity-color, #fff3e035); }
@@ -1641,3 +1640,7 @@ h1 {
 .relic-card-actions .btn { padding-inline: 8px; min-height: 40px; }
 .relic-card .relic-combine-recipe { color: #cfdeca; font-size: .85rem; }
 @media (max-width: 600px) { .relic-card-actions { grid-template-columns: 1fr; } }
+
+.rarity-secret { color: #ffdb70; }
+.relic-secret { background: linear-gradient(145deg, #49351f88, #302241aa); box-shadow: inset 0 0 20px #ffdb7012; }
+#shop-tabs { margin-bottom: 16px; }

@@ -40,8 +40,6 @@
   const relicStatusEl = document.getElementById("relic-status");
   let relicReturnFocus = null;
   let relicPurchaseBusy = false;
-  let relicInspectPack = null;
-  const relicViewEl = document.getElementById("relic-view");
   const relicPacksEl = document.getElementById("relic-packs");
   let relicActiveTab = "collection";
   const indexModal = document.getElementById("index-modal");
@@ -57,6 +55,7 @@
   const overlayInventoryBtn = document.getElementById("overlay-inventory-btn");
   const overlayShopBtn = document.getElementById("overlay-shop-btn");
   const shopModal = document.getElementById("shop-modal");
+  let shopActiveTab = "bento";
   const shopCloseBtn = document.getElementById("shop-close");
   const shopListEl = document.getElementById("shop-list");
   const shopDiamondsEl = document.getElementById("shop-diamonds");
@@ -3816,7 +3815,7 @@
       return `<article class="relic-shop-pack" tabindex="-1" style="--relic-rarity-color:${rarity.color}">
         <img class="relic-shop-pack-art" src="relic-pack.svg?v=2" width="180" height="244" alt="" />
         <div><span class="relic-rarity-tag rarity-${rarity.id}">${rarity.label}</span><h3>${pack.name}</h3><p>One permanent relic · ${pack.price.toLocaleString()} diamonds</p><p class="relic-pack-odds">${api.oddsText(pack)}</p></div>
-        <div class="relic-pack-actions"><button class="btn primary small" type="button" aria-label="Buy ${pack.name} for ${pack.price.toLocaleString()} diamonds" data-relic-buy="${pack.id}" ${state.running || save.diamonds < pack.price ? "disabled" : ""}>Buy · ${pack.price.toLocaleString()} 💎</button><button class="btn ghost small" type="button" aria-label="View possible relics in ${pack.name}" data-relic-browse="${pack.id}">View possible relics</button></div>
+        <div class="relic-pack-actions"><button class="btn primary small" type="button" aria-label="Buy ${pack.name} for ${pack.price.toLocaleString()} diamonds" data-relic-buy="${pack.id}" ${state.running || save.diamonds < pack.price ? "disabled" : ""}>Buy · ${pack.price.toLocaleString()} 💎</button></div>
       </article>`;
     }).join("");
   }
@@ -3832,12 +3831,8 @@
     summary.innerHTML = equipped ? `<span class="relic-emblem" aria-hidden="true">${api.artHtml(equipped.family)}</span><div><span class="relic-rarity-tag rarity-${equipped.rarity}">Equipped · ${equipped.rarity}</span><h3>${equipped.name}</h3><p>${api.describe(equipped.key)}</p></div>` : '<p>No relic equipped. Choose an owned relic below.</p>';
     document.getElementById("relic-unequip").disabled = state.running || !equipped;
     document.getElementById("relic-diamond-carry").textContent = `Diamond Dish bonus carried forward: ${(save.relics.diamondCarry / 100).toFixed(2)} diamond.`;
-    const pack = api.packs.find(pack => pack.id === relicInspectPack);
-    const inspection = document.getElementById("relic-inspection");
-    inspection.textContent = pack ? `Possible results in ${pack.name}: ${api.oddsText(pack)}.` : "";
-    document.getElementById("relic-clear-inspection").hidden = !pack;
-    const filter = relicTierEl.value || "all", ownedOnly = relicViewEl.value !== "all";
-    const rows = api.relics.filter(relic => (filter === "all" || relic.rarity === filter) && (!ownedOnly || save.relics.items[relic.key] > 0) && (!pack || pack.odds.some(row => row.rarity === relic.rarity)));
+    const filter = relicTierEl.value || "all";
+    const rows = api.relics.filter(relic => (filter === "all" || relic.rarity === filter) && save.relics.items[relic.key] > 0);
     document.getElementById("relic-collection-count").textContent = `${api.relics.filter(relic => save.relics.items[relic.key] > 0).length} / ${api.relics.length} collected`;
     relicListEl.innerHTML = rows.length ? rows.map(relic => {
       const count = save.relics.items[relic.key] || 0, selected = save.relics.equipped === relic.key;
@@ -3847,9 +3842,9 @@
         <p>${api.describe(relic.key)}</p><p class="relic-count">${count ? `Owned ×${count}` : "Not owned"}${selected ? " · Equipped" : ""}</p>
         <div class="relic-card-actions"><button class="btn ghost small" type="button" data-relic-equip="${relic.key}" aria-pressed="${selected}" ${state.running || !count || selected ? "disabled" : ""}>${selected ? "Equipped" : state.running ? "Locked during run" : count ? "Equip" : "Not owned"}</button>
         <button class="btn ghost small relic-combine" type="button" data-relic-combine="${relic.key}" ${state.running || !next || count < needed ? "disabled" : ""} aria-label="${next ? `Combine ${needed} ${relic.name} into one ${next.name}` : `${relic.name} is the highest rarity`}">${next ? `Combine ${needed} → ${api.rarities.find(rarity => rarity.id === next.rarity).label}` : "Highest rarity"}</button></div>
-        <p class="relic-combine-recipe">${next ? `${count}/${needed} matching copies · No diamond fee` : "Mythic is the highest rarity."}</p>
+        <p class="relic-combine-recipe">${next ? `${count}/${needed} matching copies · No diamond fee` : "This relic is at its highest rarity."}</p>
       </article>`;
-    }).join("") : '<p class="relic-empty">No relics match this filter. Open a pack in the Packs tab, or choose “All possible relics” to browse the collection.</p>';
+    }).join("") : '<p class="relic-empty">No owned relics match this filter. Open a pack in the Packs tab to add to your collection.</p>';
     renderRelicPacks();
     selectRelicTab(relicActiveTab);
   }
@@ -3935,6 +3930,18 @@
     relicReturnFocus?.focus();
   }
 
+  function selectShopTab(tab, resetScroll = false) {
+    shopActiveTab = tab === "potions" ? "potions" : "bento";
+    for (const name of ["bento", "potions"]) {
+      const selected = name === shopActiveTab;
+      const button = document.getElementById(`shop-tab-${name}`);
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      document.getElementById(`shop-${name}-panel`).hidden = !selected;
+    }
+    if (resetScroll) shopModal.querySelector(".shop-panel").scrollTop = 0;
+  }
+
   function openShop() {
     closeRelics();
     resetTouchControls();
@@ -3945,6 +3952,7 @@
     bentoResultsEl.innerHTML = "";
     bentoResultsEl.classList.add("hidden");
     renderShop();
+    selectShopTab(shopActiveTab);
     shopModal.classList.remove("hidden");
     shopModal.setAttribute("aria-hidden", "false");
   }
@@ -5802,6 +5810,14 @@
   shopBtn.addEventListener("click", openShop);
   overlayShopBtn.addEventListener("click", openShop);
   shopCloseBtn.addEventListener("click", closeShop);
+  for (const name of ["bento", "potions"]) document.getElementById(`shop-tab-${name}`).addEventListener("click", () => selectShopTab(name, true));
+  document.getElementById("shop-tabs").addEventListener("keydown", e => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    e.preventDefault(); e.stopPropagation();
+    const tab = e.key === "Home" ? "bento" : e.key === "End" ? "potions" : shopActiveTab === "bento" ? "potions" : "bento";
+    selectShopTab(tab, true);
+    document.getElementById(`shop-tab-${tab}`).focus({preventScroll: true});
+  });
   shopModal.addEventListener("click", (e) => {
     if (e.target === shopModal) closeShop();
   });
@@ -5848,8 +5864,6 @@
   relicModal.addEventListener("click", e => { if (e.target === relicModal) closeRelics(); });
   relicModal.addEventListener("wheel", e => e.stopPropagation(), {passive: true});
   relicTierEl.addEventListener("change", renderRelics);
-  relicViewEl.addEventListener("change", renderRelics);
-  document.getElementById("relic-clear-inspection").addEventListener("click", () => { relicInspectPack = null; renderRelics(); });
   document.getElementById("relic-open-packs").addEventListener("click", () => selectRelicTab("packs", true));
   for (const name of ["collection", "packs"]) document.getElementById(`relic-tab-${name}`).addEventListener("click", () => selectRelicTab(name, true));
   document.getElementById("relic-tabs").addEventListener("keydown", e => {
@@ -5875,8 +5889,6 @@
   const onRelicPackAction = e => {
     const buy = e.target.closest("[data-relic-buy]");
     if (buy && !buy.disabled) purchaseRelicPack(buy.dataset.relicBuy);
-    const browse = e.target.closest("[data-relic-browse]");
-    if (browse) { relicInspectPack = browse.dataset.relicBrowse; relicTierEl.value = "all"; relicViewEl.value = "all"; selectRelicTab("collection", true); renderRelics(); }
     const gift = e.target.closest("[data-relic-gift]");
     if (gift && !gift.disabled) purchaseRelicPack("common", true);
   };

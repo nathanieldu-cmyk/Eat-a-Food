@@ -1,6 +1,7 @@
 (() => {
   // All relic names, pack prices/odds, family chances and percentage stats live here.
-  // Stat sequences are always Common → Uncommon → Rare → Epic → Legendary → Mythic.
+  // Standard stat sequences: Common → Uncommon → Rare → Epic → Legendary → Mythic.
+  // Secret families define only their Secret stats and are available exclusively from pack drops.
   const config = {
     schema: 2,
     combineCopies: 5,
@@ -10,35 +11,48 @@
       {id:'rare', label:'Rare', color:'#6eb6ff', price:2000},
       {id:'epic', label:'Epic', color:'#c089ff', price:5000},
       {id:'legendary', label:'Legendary', color:'#ffb347', price:20000},
-      {id:'mythic', label:'Mythic', color:'#ff6b9d', price:50000},
+      {id:'mythic', label:'Mythic', color:'#ff6b9d', price:100000},
+      {id:'secret', label:'Secret', color:'#ffdb70'},
     ],
-    rarityWeights: [825,100,50,25],
+    packOdds: {
+      common:{common:825,uncommon:100,rare:50,epic:25},
+      uncommon:{uncommon:824,rare:100,epic:50,legendary:25,secret:1},
+      rare:{rare:820,epic:100,legendary:50,mythic:25,secret:5},
+      epic:{epic:820,legendary:100,mythic:70,secret:10},
+      legendary:{legendary:900,mythic:75,secret:25},
+      mythic:{mythic:900,secret:100},
+    },
     families: [
       {id:'spoon', name:'Spoon', icon:'🥄', weight:51, stats:{sprinklePoints:[5,8,12,17,23,30]}},
       {id:'fork', name:'Fork', icon:'🍴', weight:51, stats:{sprinkleGrowth:[5,8,12,17,23,30]}},
       {id:'chili', name:'Chili Charm', icon:'🌶️', weight:51, stats:{speed:[3,5,7,10,12,15]}},
-      {id:'dish', name:'Diamond Dish', icon:'💎', weight:51, stats:{diamonds:[5,8,12,17,23,30]}},
+      {id:'dish', name:'Diamond Dish', icon:'💎', weight:51, stats:{diamonds:[5,10,15,25,35,50]}},
       {id:'badge', name:'Chef’s Badge', icon:'🏅', weight:41, stats:{speed:[1,2,3,4,5,6],sprinkleGrowth:[2,4,6,8,12,15],sprinklePoints:[2,4,6,8,12,15]}},
       {id:'ladle', name:'Heavy Ladle', icon:'🥣', weight:51, stats:{sprinkleGrowth:[8,13,20,28,38,50],speed:[-2,-3,-5,-6,-8,-10]}},
       {id:'goblet', name:'Glass Goblet', icon:'🍷', weight:51, stats:{sprinklePoints:[5,8,13,20,30,40],sprinkleGrowth:[-3,-5,-8,-12,-15,-20]}},
       {id:'tooth', name:'Hunter’s Tooth', icon:'🦷', weight:51, stats:{rivalGrowth:[8,13,20,28,38,50]}},
       {id:'crown', name:'Crumb Crown', icon:'👑', weight:51, stats:{xsPoints:[10,20,35,50,75,100]}},
       {id:'medal', name:'Feast Medal', icon:'🎖️', weight:51, stats:{rivalPoints:[8,13,20,28,38,50]}},
+      {id:'dragon', name:'Dragon Pepper', icon:'🐉', weight:1, rarities:['secret'], stats:{speed:[30],sprinkleGrowth:[20]}},
+      {id:'hat', name:'Royal Chef’s Hat', icon:'👨‍🍳', weight:1, rarities:['secret'], stats:{speed:[15],sprinklePoints:[20]}},
+      {id:'chopsticks', name:'Phantom Chopsticks', icon:'🥢', weight:1, rarities:['secret'], stats:{rivalGrowth:[80],rivalPoints:[50]}},
+      {id:'truffle', name:'Diamond Truffle', icon:'💠', weight:1, rarities:['secret'], stats:{diamonds:[100]}},
+      {id:'forbidden', name:'Forbidden Fork', icon:'🔱', weight:1, rarities:['secret'], stats:{sprinkleGrowth:[50],sprinklePoints:[25],speed:[-15]}},
     ],
   };
   const labels = {speed:'movement speed',sprinkleGrowth:'growth from sprinkles',sprinklePoints:'points from sprinkles',diamonds:'diamonds when banking a run',rivalGrowth:'growth from eating rivals',xsPoints:'points from extra-small sprinkles only',rivalPoints:'points from eating rivals'};
   const keyFor = (family, rarity) => `${rarity}:${family}`;
   const count = raw => Number.isFinite(Number(raw)) ? Math.min(1e9,Math.max(0,Math.floor(Number(raw)))) : 0;
-  const rarityWeightTotal = config.rarityWeights.reduce((a,b)=>a+b,0);
-  const familyWeightTotal = config.families.reduce((sum,family)=>sum+family.weight,0);
-  const packs = config.rarities.map((rarity,index)=>{
-    const odds = config.rarities.map(()=>0);
-    config.rarityWeights.forEach((weight,offset)=>{odds[Math.min(index+offset,config.rarities.length-1)]+=weight;});
-    return {id:rarity.id,name:`${rarity.label} Pack`,rarity:rarity.id,price:rarity.price,odds:odds.map((weight,i)=>({rarity:config.rarities[i].id,label:config.rarities[i].label,weight,chance:weight/rarityWeightTotal*100})).filter(row=>row.weight)};
+  const familiesForRarity = rarity => config.families.filter(family => family.rarities ? family.rarities.includes(rarity) : rarity !== 'secret');
+  const familyWeightTotal = familiesForRarity('common').reduce((sum,family)=>sum+family.weight,0);
+  const packs = config.rarities.filter(rarity=>config.packOdds[rarity.id]).map(rarity=>{
+    const odds = config.rarities.map(result=>({rarity:result.id,label:result.label,weight:config.packOdds[rarity.id][result.id]||0})).filter(row=>row.weight);
+    const weightTotal=odds.reduce((sum,row)=>sum+row.weight,0);
+    return {id:rarity.id,name:`${rarity.label} Pack`,rarity:rarity.id,price:rarity.price,weightTotal,odds:odds.map(row=>({...row,chance:row.weight*100/weightTotal}))};
   });
-  const relics = config.rarities.flatMap((rarity,index)=>config.families.map(family=>({
+  const relics = config.rarities.flatMap((rarity,index)=>familiesForRarity(rarity.id).map(family=>({
     key:keyFor(family.id,rarity.id),family:family.id,rarity:rarity.id,name:`${rarity.label} ${family.name}`,icon:family.icon,color:rarity.color,
-    stats:Object.fromEntries(Object.entries(family.stats).map(([stat,values])=>[stat,values[index]])),
+    stats:Object.fromEntries(Object.entries(family.stats).map(([stat,values])=>[stat,values[family.rarities ? family.rarities.indexOf(rarity.id) : index]])),
   })));
   const byKey = new Map(relics.map(relic=>[relic.key,relic]));
   const getRelic = key => byKey.get(key) || null;
@@ -86,8 +100,9 @@
   }
   function roll(packId, random=Math.random) {
     const pack=packs.find(pack=>pack.id===packId);if(!pack)return null;
-    const rarity=weighted(pack.odds,rarityWeightTotal,random).rarity;
-    const family=weighted(config.families,familyWeightTotal,random).id;
+    const rarity=weighted(pack.odds,pack.weightTotal,random).rarity;
+    const families=familiesForRarity(rarity);
+    const family=weighted(families,families.reduce((sum,row)=>sum+row.weight,0),random).id;
     return keyFor(family,rarity);
   }
   function award(save,key) {save.relics.items[key]=(save.relics.items[key]||0)+1;return key;}
@@ -138,13 +153,13 @@
     let text=Object.entries(relic.stats).map(([stat,pct])=>`${pct<0?'−':'+'}${Math.abs(pct)}% ${labels[stat]}`).join('; ')+'.';
     if(relic.family==='tooth')text+=' Does not increase sprinkle growth.';
     if(relic.family==='medal')text+=' Does not increase sprinkle points. The 10-base-food cap per rival still applies.';
-    if(relic.family==='dish')text+=' Rounded down after weather rewards; fractional bonus diamonds carry between runs.';
+    if(relic.stats.diamonds)text+=' Rounded down after weather rewards; fractional bonus diamonds carry between runs.';
     return text;
   }
   function artHtml(id) {
     const family=config.families.find(family=>family.id===id);
     const symbol=family?family.id:'crest';
-    return `<svg class="relic-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=2#${symbol}"></use></svg>`;
+    return `<svg class="relic-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=3#${symbol}"></use></svg>`;
   }
   const oddsText = pack => pack.odds.map(row=>`${row.chance}% ${row.label}`).join(' · ');
   window.GameRelics={config,rarities:config.rarities,definitions:config.families,tiers:config.rarities.map(rarity=>rarity.id),packs,relics,getRelic,keyFor,parseKey,emptySave,normalize,cleanAssignments,roll,buyPack,equip,nextRelic,combine,effectsForKey,bankDiamonds,unlockTutorialGift,claimTutorialPack,describe,artHtml,oddsText,familyWeightTotal};
