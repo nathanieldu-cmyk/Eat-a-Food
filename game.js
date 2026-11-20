@@ -3815,7 +3815,7 @@
       return `<article class="relic-shop-pack" tabindex="-1" style="--relic-rarity-color:${rarity.color}">
         <img class="relic-shop-pack-art" src="relic-pack.svg?v=2" width="180" height="244" alt="" />
         <div><span class="relic-rarity-tag rarity-${rarity.id}">${rarity.label}</span><h3>${pack.name}</h3><p>${api.config.relicsPerPack} permanent relics · ${pack.price.toLocaleString()} diamonds</p><p class="relic-pack-odds">${api.oddsText(pack)}</p></div>
-        <div class="relic-pack-actions"><button class="btn primary small" type="button" aria-label="Buy ${pack.name} for ${pack.price.toLocaleString()} diamonds" data-relic-buy="${pack.id}" ${state.running || save.diamonds < pack.price ? "disabled" : ""}>Buy · ${pack.price.toLocaleString()} 💎</button></div>
+        <div class="relic-pack-actions"><button class="btn primary small" type="button" aria-label="Buy ${pack.name} for ${pack.price.toLocaleString()} diamonds" data-relic-buy="${pack.id}" data-relic-quantity="1" ${state.running || save.diamonds < pack.price ? "disabled" : ""}>Buy · ${pack.price.toLocaleString()} 💎</button><button class="btn ghost small" type="button" aria-label="Buy 3 ${pack.name}s for ${(pack.price*3).toLocaleString()} diamonds" data-relic-buy="${pack.id}" data-relic-quantity="3" ${state.running || save.diamonds < pack.price*3 ? "disabled" : ""}>Buy 3 · ${(pack.price*3).toLocaleString()} 💎</button></div>
       </article>`;
     }).join("");
   }
@@ -3867,6 +3867,7 @@
     const focusId = active?.id;
     const equipKey = active?.dataset?.relicEquip;
     const buyKey = active?.dataset?.relicBuy;
+    const buyQuantity = active?.dataset?.relicQuantity || "1";
     const combineKey = active?.dataset?.relicCombine;
     const isGift = active?.hasAttribute?.("data-relic-gift");
     persistSave();
@@ -3877,14 +3878,14 @@
     relicStatusEl.textContent = message;
     const scope = relicModal;
     const control = focusId ? document.getElementById(focusId) : equipKey ? scope.querySelector(`[data-relic-equip="${equipKey}"]`)
-      : combineKey ? scope.querySelector(`[data-relic-combine="${combineKey}"]`) : buyKey ? scope.querySelector(`[data-relic-buy="${buyKey}"]`) : isGift ? scope.querySelector('[data-relic-gift]') : null;
+      : combineKey ? scope.querySelector(`[data-relic-combine="${combineKey}"]`) : buyKey ? scope.querySelector(`[data-relic-buy="${buyKey}"][data-relic-quantity="${buyQuantity}"]`) : isGift ? scope.querySelector('[data-relic-gift]') : null;
     const target = control?.disabled ? control.closest(".relic-card, .relic-shop-pack, .relic-tutorial-gift") : control;
     target?.focus({preventScroll: true});
     for (const [panel, top, left] of scroll) { panel.scrollTop = top; panel.scrollLeft = left; }
   }
 
-  function purchaseRelicPack(packId, free = false) {
-    if (state.running || relicPurchaseBusy || window.GameRelicOpening?.isOpen()) return null;
+  function purchaseRelicPack(packId, free = false, quantity = 1) {
+    if (state.running || relicPurchaseBusy || window.GameRelicOpening?.isOpen() || (free && quantity !== 1)) return null;
     relicPurchaseBusy = true;
     try {
       // Check the saved gift ledger as well, so an older open tab cannot reclaim it.
@@ -3893,12 +3894,16 @@
         if (stored.relics?.tutorialGiftClaimed) { save.relics.tutorialGiftClaimed = true; finishRelicAction("Tutorial pack already claimed."); return null; }
       }
       const api = window.GameRelics;
-      const result = free ? api.claimTutorialPack(save, state.running) : api.buyPack(save, packId, state.running);
-      if (!result) return null;
-      finishRelicAction(`${free ? "Tutorial reward" : "Pack opened"}: ${result.map(key => api.getRelic(key).name).join(", ")}.`);
+      const gift = free ? api.claimTutorialPack(save, state.running) : null;
+      const packs = free ? (gift ? [gift] : null) : api.buyPacks(save, packId, quantity, state.running);
+      if (!packs) return null;
+      const result = packs.flat();
+      finishRelicAction(`${free ? "Tutorial reward" : quantity === 1 ? "Pack opened" : "3 packs purchased"}: ${result.length} permanent relics added to your collection.`);
       window.GameSfx?.play("collect");
-      window.GameRelicOpening?.show(result, free ? "common" : packId, result.map(key => save.relics.items[key]));
-      return result;
+      const counts = packs.map(keys => keys.map(key => save.relics.items[key]));
+      if (packs.length === 1) window.GameRelicOpening?.show(packs[0], free ? "common" : packId, counts[0]);
+      else window.GameRelicOpening?.showBatch(packs, packId, counts);
+      return quantity === 1 ? packs[0] : packs;
     } finally { relicPurchaseBusy = false; }
   }
 
@@ -5887,7 +5892,7 @@
   });
   const onRelicPackAction = e => {
     const buy = e.target.closest("[data-relic-buy]");
-    if (buy && !buy.disabled) purchaseRelicPack(buy.dataset.relicBuy);
+    if (buy && !buy.disabled) purchaseRelicPack(buy.dataset.relicBuy, false, Number(buy.dataset.relicQuantity || 1));
     const gift = e.target.closest("[data-relic-gift]");
     if (gift && !gift.disabled) purchaseRelicPack("common", true);
   };

@@ -195,3 +195,18 @@ test('three results may have different rarities and families; a failed roll awar
  assert.equal(save.diamonds,99750);assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),3);
  const before=JSON.stringify(save);let calls=0;assert.throws(()=>a.buyPack(save,'common',false,()=>++calls===4?NaN:0));assert.equal(JSON.stringify(save),before);
 });
+
+test('buying three of any pack charges the total once and awards nine independent relics with repeats',()=>{
+ const a=api();for(const pack of a.packs){const save=saveFor(a);save.diamonds=pack.price*3;let calls=0;const results=a.buyPacks(save,pack.id,3,false,()=>{calls++;return 0;});
+  assert.equal(save.diamonds,0);assert.equal(calls,18);assert.equal(results.length,3);assert.ok(results.every(keys=>keys.length===3));assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),9);assert.equal(save.relics.items[results[0][0]],9);
+  save.relics=a.normalize(plain(save.relics));assert.equal(save.relics.items[results[0][0]],9);assert.equal(save.relics.equipped,null);
+ }
+});
+test('triple purchases reject insufficient total funds, invalid quantities and active runs without partial awards',()=>{
+ const a=api(),save=saveFor(a);save.diamonds=749;const before=JSON.stringify(save);
+ for(const [quantity,running]of [[3,false],[3,true],[0,false],[2,false],[4,false],[1.5,false],['3',false]])assert.equal(a.buyPacks(save,'common',quantity,running,()=>assert.fail('must not roll')),null);
+ assert.equal(JSON.stringify(save),before);assert.equal(a.buyPacks(save,'missing',3),null);
+});
+test('a failed roll in the last pack leaves all diamonds and relics unchanged',()=>{
+ const a=api(),save=saveFor(a),before=JSON.stringify(save);let calls=0;assert.throws(()=>a.buyPacks(save,'common',3,false,()=>++calls===18?NaN:0));assert.equal(calls,18);assert.equal(JSON.stringify(save),before);
+});

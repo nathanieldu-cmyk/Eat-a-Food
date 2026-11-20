@@ -1739,3 +1739,7 @@ h1 {
   .secret-reveal .secret-nebula { opacity: .5; }
   .secret-reveal .secret-orbit, .secret-reveal .secret-sparks { display: none; }
 }
+
+@media (max-width: 600px) {
+  .relic-pack-actions .btn { min-width: 0; padding: 8px 6px; font-size: clamp(.72rem, 2.5vw, .9rem); }
+}

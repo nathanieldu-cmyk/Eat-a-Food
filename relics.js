@@ -109,10 +109,15 @@
   function rollPack(packId,random) {
     return Array.from({length:config.relicsPerPack},()=>roll(packId,random));
   }
-  function buyPack(save,packId,running=false,random=Math.random) {
+  function buyPacks(save,packId,quantity=1,running=false,random=Math.random) {
     const pack=packs.find(pack=>pack.id===packId);
-    if(running||!pack||!Number.isFinite(save.diamonds)||save.diamonds<pack.price)return null;
-    const results=rollPack(packId,random);save.diamonds-=pack.price;results.forEach(key=>award(save,key));return results;
+    if(running||!pack||![1,3].includes(quantity)||!Number.isFinite(save.diamonds)||save.diamonds<pack.price*quantity)return null;
+    // Roll all packs before mutating the save, then charge and award once.
+    const results=Array.from({length:quantity},()=>rollPack(packId,random));
+    save.diamonds-=pack.price*quantity;results.flat().forEach(key=>award(save,key));return results;
+  }
+  function buyPack(save,packId,running=false,random=Math.random) {
+    return buyPacks(save,packId,1,running,random)?.[0] || null;
   }
   function equip(save,key,running=false) {
     if(running)return false;
@@ -164,5 +169,5 @@
     return `<svg class="relic-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=3#${symbol}"></use></svg>`;
   }
   const oddsText = pack => pack.odds.map(row=>`${row.chance}% ${row.label}`).join(' · ');
-  window.GameRelics={config,rarities:config.rarities,definitions:config.families,tiers:config.rarities.map(rarity=>rarity.id),packs,relics,getRelic,keyFor,parseKey,emptySave,normalize,cleanAssignments,roll,buyPack,equip,nextRelic,combine,effectsForKey,bankDiamonds,unlockTutorialGift,claimTutorialPack,describe,artHtml,oddsText,familyWeightTotal};
+  window.GameRelics={config,rarities:config.rarities,definitions:config.families,tiers:config.rarities.map(rarity=>rarity.id),packs,relics,getRelic,keyFor,parseKey,emptySave,normalize,cleanAssignments,roll,buyPack,buyPacks,equip,nextRelic,combine,effectsForKey,bankDiamonds,unlockTutorialGift,claimTutorialPack,describe,artHtml,oddsText,familyWeightTotal};
 })();

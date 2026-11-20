@@ -72,3 +72,31 @@ test('every arrangement of zero, one, two or three Secrets places them in the la
   g.c.openPack();g.advance(30000);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);assert.equal(g.c.snapshot().phase,'complete');
  }
 });
+
+test('three-pack opening advances straight to the next sealed pack and requires one tap for each pack',()=>{
+ const g=boot(),packs=[['common:spoon','common:fork','common:spoon'],['secret:dragon','rare:spoon','rare:fork'],['secret:hat','secret:hat','secret:truffle']],counts=[[5,7,5],[1,2,3],[2,2,1]];
+ assert.ok(g.c.showBatch(packs,{packId:'rare',ownedCounts:counts}));packs[0][0]='mythic:spoon';counts[0][0]=99;
+ let s=g.c.snapshot();assert.equal(s.packNumber,1);assert.equal(s.packTotal,3);assert.deepEqual(plain(s.ownedCounts),[5,7,5]);assert.equal(s.rewards[0],'common:spoon');
+ for(let i=1;i<=3;i++){
+  s=g.c.snapshot();assert.equal(s.phase,'sealed');assert.equal(s.packNumber,i);assert.deepEqual(plain(s.revealed),[]);assert.ok(g.c.openPack());assert.equal(g.c.openPack(),false);g.advance(30000);
+ }
+ s=g.c.snapshot();assert.equal(s.phase,'complete');assert.equal(s.packNumber,3);assert.equal(s.packId,'rare');assert.deepEqual(plain(s.rewards),['secret:hat','secret:hat','secret:truffle']);assert.deepEqual(plain(s.ownedCounts),[2,2,1]);assert.equal(g.jobs.size,0);
+ assert.deepEqual(g.changes.filter(row=>row.phase==='sealed').map(row=>row.packNumber),[1,2,3]);
+});
+test('reduced-motion batches show each result before automatically preparing the next sealed pack',()=>{
+ const g=boot(true),pack=['common:spoon','common:fork','common:spoon'];g.c.showBatch([pack,pack,pack]);g.c.openPack();assert.equal(g.c.snapshot().phase,'complete');g.advance(1199);assert.equal(g.c.snapshot().packNumber,1);g.advance(1);assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().packNumber,2);assert.equal(g.c.snapshot().revealed.length,0);
+ const stale=g.history.at(-1);g.c.close();g.c.show(pack);stale.fn();g.advance(30000);assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().packTotal,1);
+});
+test('invalid batch contents and a second active purchase cannot replace an opening',()=>{
+ const g=boot(),pack=['common:spoon','common:fork','common:spoon'];for(const invalid of [[],[pack,pack],[pack,pack,['common:spoon']],null])assert.equal(g.c.showBatch(invalid),false);
+ assert.ok(g.c.showBatch([pack,pack,pack]));assert.equal(g.c.showBatch([pack,pack,pack]),false);assert.equal(g.c.snapshot().packNumber,1);
+});
+test('the triple-purchase handler saves all nine awards before opening, charges once and blocks repeated buys',()=>{
+ const window={};let rolls=0,open=false;const math=Object.create(Math);math.random=()=>{rolls++;return 0;};vm.runInNewContext(fs.readFileSync(path.join(root,'relics.js'),'utf8'),{window,Math:math});
+ const save={diamonds:1000,relics:window.GameRelics.emptySave()},saved=[],shown=[];
+ window.GameRelicOpening={isOpen:()=>open,showBatch(packs,packId,counts){assert.equal(saved.length,1);assert.equal(saved[0].diamonds,250);assert.equal(saved[0].relics.items['common:spoon'],9);shown.push(plain({packs,packId,counts}));open=true;}};
+ const game=fs.readFileSync(path.join(root,'game.js'),'utf8'),start=game.indexOf('  function purchaseRelicPack('),end=game.indexOf('\n  function ',start+1);
+ const context={window,save,state:{running:false},relicPurchaseBusy:false,finishRelicAction(){saved.push(plain(save));}};vm.runInNewContext(game.slice(start,end)+'\nglobalThis.buy=purchaseRelicPack;',context);
+ const results=context.buy('common',false,3);assert.equal(results.length,3);assert.equal(rolls,18);assert.equal(save.diamonds,250);assert.equal(shown.length,1);assert.deepEqual(shown[0].counts,[[9,9,9],[9,9,9],[9,9,9]]);
+ assert.equal(context.buy('common',false,3),null);assert.equal(rolls,18);open=false;assert.equal(context.buy('common',false,3),null);assert.equal(rolls,18);assert.equal(saved.length,1);
+});
