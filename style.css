@@ -1651,7 +1651,7 @@ h1 {
   .relic-opening[data-phase="opening"] .reveal-swipe-hint { visibility: hidden; }
 }
 
-/* Each purchase waits for a pack tap, then one tap per card. */
+/* A pack tap starts a sequence of increasingly dramatic automatic reveals. */
 .reveal-pack { padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
 .reveal-pack[hidden], .reveal-action[hidden], .reveal-swipe-hint[hidden] { display: none; }
 .relic-opening[data-phase="sealed"] .reveal-pack { animation: sealed-pack-breathe 2.3s ease-in-out infinite; }
@@ -1668,4 +1668,15 @@ h1 {
 @keyframes relic-suspense-ring { from { opacity: 0; transform: scale(.96); } 65% { opacity: .7; } to { opacity: 1; transform: scale(1.06); } }
 @media (prefers-reduced-motion: reduce) {
   .reveal-pack, .reveal-card.is-revealing .reveal-card-inner, .reveal-card.is-revealing::after { animation: none !important; }
+}
+
+.reveal-card { cursor: default; }
+.reveal-card.is-revealing .reveal-card-back svg { animation: relic-crest-charge var(--suspense-duration) ease-in forwards; }
+.reveal-card.is-fresh::after { content: ""; position: absolute; inset: -6px; border: 2px solid var(--relic-rarity-color); border-radius: 24px; pointer-events: none; animation: relic-reveal-burst .8s ease-out both; }
+.reveal-card.is-fresh .reveal-relic-art { animation: relic-reward-glow .9s ease-out both; }
+@keyframes relic-crest-charge { from { filter: drop-shadow(0 0 0 transparent); transform: scale(1); } to { filter: drop-shadow(0 0 20px var(--relic-rarity-color)); transform: scale(calc(1 + var(--suspense-strength) * .035)); } }
+@keyframes relic-reveal-burst { from { opacity: 1; transform: scale(.98); box-shadow: 0 0 calc(7px * var(--suspense-strength)) var(--relic-rarity-color); } to { opacity: 0; transform: scale(1.14); box-shadow: 0 0 0 transparent; } }
+@keyframes relic-reward-glow { from { filter: brightness(1.6) drop-shadow(0 0 20px var(--relic-rarity-color)); } to { filter: brightness(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-card.is-revealing .reveal-card-back svg, .reveal-card.is-fresh::after, .reveal-card.is-fresh .reveal-relic-art { animation: none !important; }
 }

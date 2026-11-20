@@ -107,3 +107,20 @@ test('both single-player and multiplayer run starts play one start cue; missing 
   }
   assert.deepEqual(run('startRun'),['start']);assert.deepEqual(run('guestBeginRun'),['start']);assert.deepEqual(run('startRun',false),[]);
 });
+
+test('relic openings have distinct tear, deal, rising charges, beats and increasingly rich rarity fanfares',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0],play=name=>{const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.ok(voices.length>0,name);stop();return voices;};
+ const tear=play('relic-open'),deal=play('relic-deal');assert.notDeepEqual(tear.map(v=>v.frequencyValue),deal.map(v=>v.frequencyValue));
+ let previousNotes=0,previousCharge=0;
+ for(const rarity of ['common','uncommon','rare','epic','legendary','mythic','secret']){
+  const charge=play(`relic-charge-${rarity}`);assert.ok(charge[0].stops[0]>previousCharge);previousCharge=charge[0].stops[0];
+  const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`)[1].frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
+  const reveal=play(`relic-reveal-${rarity}`);assert.ok(reveal.length>=previousNotes);previousNotes=reveal.length;
+ }
+ play('relic-finale');
+});
+test('pack sound handles stop only their own voices; mute and hidden tabs silence every relic cue',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0],stop=g.api.play('relic-charge-secret');const charge=[...ctx.voices];g.api.play('collect');stop();stop();assert.ok(charge.every(v=>v.stops.includes('now')));assert.ok(ctx.voices.slice(charge.length).every(v=>!v.stops.includes('now')));
+ g.api.play('relic-tick-secret-3');g.button.click();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));const before=ctx.voices.length;g.api.play('relic-reveal-secret');assert.equal(ctx.voices.length,before);
+ g.button.click();g.document.hidden=true;g.events.visibilitychange();g.api.play('relic-open');assert.equal(ctx.voices.length,before);
+});

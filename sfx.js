@@ -11,6 +11,18 @@
     bento: [[220, .09, 0, 'triangle', 880], [659.25, .25, .10], [830.61, .25, .10], [987.77, .3, .10]],
     collect: [[880, .08, 0], [1174.66, .09, .08], [1568, .17, .16]],
   };
+  // Original synthesized pack tear, card shuffle, rising tension, and rarity fanfares.
+  sounds['relic-open'] = [[92,.24,0,'triangle',370],[1700,.07,.04,'triangle',320],[2200,.08,.14,'triangle',460],[196,.4,.22,'sine',392]];
+  sounds['relic-deal'] = [[740,.09,0,'triangle',210],[880,.09,.13,'triangle',250],[1040,.1,.26,'triangle',300]];
+  sounds['relic-finale'] = [[523.25,.5,0],[659.25,.5,.08],[783.99,.6,.16],[1046.5,.7,.25]];
+  const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
+  const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
+  for (const [rank,rarity] of relicRarities.entries()) {
+    sounds[`relic-charge-${rarity}`] = [[70+rank*9,.3+rank*.4,0,'triangle',150+rank*30],[180+rank*22,.25+rank*.3,.08,'sine',350+rank*75]];
+    for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[95+rank*10,.13,0,'triangle',55],[360+rank*45+pulse*90,.10+pulse*.02,.025,'sine',430+rank*55+pulse*110]];
+    sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
+    if (rank>=4) sounds[`relic-reveal-${rarity}`].push([98,.65,0,'triangle',49]);
+  }
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();
@@ -19,14 +31,12 @@
   let muted = false;
   try { muted = localStorage.getItem('eatAFoodSfxMuted') === 'true'; } catch (_) {}
 
-  function stopAll() {
-    for (const voice of active) {
-      try { voice.osc.stop(); } catch (_) {}
-      voice.osc.disconnect();
-      voice.gain.disconnect();
-    }
-    active.clear();
+  function stopVoice(voice) {
+    if (!active.delete(voice)) return;
+    try { voice.osc.stop(); } catch (_) {}
+    voice.osc.disconnect(); voice.gain.disconnect();
   }
+  function stopAll() { for (const voice of [...active]) stopVoice(voice); }
 
   function wake() {
     if (!unlocked || muted || document.hidden) return false;
@@ -51,7 +61,8 @@
       if (name.startsWith('orb-')) return;
       stopAll();
     }
-    const volume = name.startsWith('orb-') ? 1.25 : 1;
+    const volume = name.startsWith('orb-') ? 1.25 : name.startsWith('relic-charge-') ? .55 : name.startsWith('relic-') ? .9 : 1;
+    const voices = [];
     for (const [frequency, duration, offset, wave = 'sine', end] of notes) {
       const start = now + Math.max(0, delay) + offset;
       const osc = context.createOscillator();
@@ -65,11 +76,12 @@
       osc.connect(gain);
       gain.connect(context.destination);
       const voice = {osc, gain};
-      active.add(voice);
+      active.add(voice); voices.push(voice);
       osc.onended = () => { active.delete(voice); osc.disconnect(); gain.disconnect(); };
       osc.start(start);
       osc.stop(start + duration + .015);
     }
+    return () => { for (const voice of voices) stopVoice(voice); };
   }
 
   function render() {
