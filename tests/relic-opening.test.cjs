@@ -25,7 +25,7 @@ test('each rarity increases suspense duration; the biggest reveal is saved for l
   const firstBeat=[...g.jobs.values()][0],delay=(firstBeat.at-1650)*4;assert.ok(delay>lastDelay);lastDelay=delay;
   g.advance(delay-1);assert.equal(g.c.snapshot().phase,'revealing');g.advance(1);assert.deepEqual(plain(g.c.snapshot().revealed),[0]);
  }
- const g=boot();g.c.show(['secret:dragon','common:spoon','rare:spoon']);g.c.openPack();g.advance(30000);assert.deepEqual(plain(g.c.snapshot().revealed),[1,2,0]);assert.deepEqual(plain(g.c.snapshot().rewards),['secret:dragon','common:spoon','rare:spoon']);
+ const g=boot();g.c.show(['secret:dragon','common:spoon','rare:spoon']);g.c.openPack();g.advance(30000);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);assert.deepEqual(plain(g.c.snapshot().rewards),['common:spoon','rare:spoon','secret:dragon']);
 });
 test('closing cancels all future beats and reveals; stale callbacks cannot affect a later pack',()=>{
  const g=boot();g.c.show(results);g.c.openPack();g.advance(1650);const stale=g.history.at(-1);g.c.close();assert.equal(g.c.isOpen(),false);assert.equal(g.jobs.size,0);
@@ -52,13 +52,23 @@ test('the purchase handler saves all three awards before animation, blocks dupli
 
 test('only Secret cards take over the screen, flip once, and hold before the next reveal',()=>{
  const g=boot();g.c.show(['secret:dragon','common:spoon','secret:hat']);g.c.openPack();g.advance(1650);
- assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(650+950);assert.equal(g.c.snapshot().spotlightIndex,0);assert.equal(g.c.snapshot().spotlightStage,'charging');
- g.advance(4799);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[1]);g.advance(1);assert.equal(g.c.snapshot().phase,'spotlight');assert.equal(g.c.snapshot().spotlightStage,'revealed');assert.deepEqual(plain(g.c.snapshot().revealed),[1,0]);
- g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,0);g.advance(1);assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.deepEqual(plain(g.c.snapshot().revealed),[1,0,2]);
+ assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(650+950);assert.equal(g.c.snapshot().spotlightIndex,1);assert.equal(g.c.snapshot().spotlightStage,'charging');
+ g.advance(4799);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(1);assert.equal(g.c.snapshot().phase,'spotlight');assert.equal(g.c.snapshot().spotlightStage,'revealed');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);
+ g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(1);assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
 });
 test('closing during a Secret cinematic clears the spotlight and all timers',()=>{
  const g=boot();g.c.show(['secret:dragon','secret:hat','secret:truffle']);g.c.openPack();g.advance(1650+4800);assert.equal(g.c.snapshot().phase,'spotlight');g.c.close();assert.equal(g.c.snapshot().spotlightIndex,null);assert.equal(g.jobs.size,0);g.advance(30000);assert.equal(g.c.snapshot().phase,'closed');
 });
 test('reduced motion without a Secret completes immediately with no cinematic timers',()=>{
  const g=boot(true);g.c.show(['common:spoon','rare:spoon','mythic:spoon']);g.c.openPack();assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.equal(g.jobs.size,0);
+});
+
+test('every arrangement of zero, one, two or three Secrets places them in the last card slots',()=>{
+ for(let mask=0;mask<8;mask++){
+  const g=boot(),input=[0,1,2].map(i=>mask&(1<<i)?['secret:dragon','secret:hat','secret:truffle'][i]:'common:spoon'),counts=[7,2,11];
+  const original=[...input],expected=input.map((key,i)=>({key,count:counts[i]})).filter(row=>!row.key.startsWith('secret:')).concat(input.map((key,i)=>({key,count:counts[i]})).filter(row=>row.key.startsWith('secret:')));
+  g.c.show(input,{ownedCounts:counts});const s=g.c.snapshot();assert.deepEqual(plain(s.rewards),expected.map(row=>row.key));assert.deepEqual(plain(s.ownedCounts),expected.map(row=>row.count));assert.deepEqual(input,original);
+  const secrets=input.filter(key=>key.startsWith('secret:')).length;assert.ok(s.rewards.slice(0,3-secrets).every(key=>!key.startsWith('secret:')));assert.ok(s.rewards.slice(3-secrets).every(key=>key.startsWith('secret:')));
+  g.c.openPack();g.advance(30000);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);assert.equal(g.c.snapshot().phase,'complete');
+ }
 });

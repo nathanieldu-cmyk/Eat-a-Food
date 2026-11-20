@@ -15,7 +15,7 @@
   sounds['relic-open'] = [[92,.24,0,'triangle',370],[1700,.07,.04,'triangle',320],[2200,.08,.14,'triangle',460],[196,.4,.22,'sine',392]];
   sounds['relic-deal'] = [[740,.09,0,'triangle',210],[880,.09,.13,'triangle',250],[1040,.1,.26,'triangle',300]];
   // A layered impact: fast crack, falling bass, sub-bass tail and quiet echoes.
-  const revealBoom = [[155,.65,0,'triangle',35,.9],[58,1.65,0,'sine',28,1.1,.012],[720,.12,0,'triangle',80,.30],[112,.4,.025,'triangle',42,.5],[75,1.1,.18,'sine',30,.35],[50,.9,.32,'sine',26,.22]];
+  const revealBoom = [[175,.85,0,'triangle',36,1.25,.004],[62,2.15,0,'sine',26,1.4,.01],[1100,.14,0,'triangle',90,.42,.003],[245,.28,.008,'triangle',48,.65,.004],[43,1.9,.03,'sine',24,.8,.015],[98,1.35,.16,'triangle',30,.45,.006],[71,1.4,.32,'sine',28,.35],[52,1.3,.52,'sine',25,.22]];
   sounds['relic-finale'] = revealBoom;
   const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
   const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
@@ -75,7 +75,7 @@
       if (name.startsWith('orb-')) return;
       stopAll();
     }
-    const volume = name.startsWith('orb-') ? 1.25 : name.startsWith('relic-charge-') ? .55 : name.startsWith('relic-') ? .9 : 1;
+    const volume = name.startsWith('orb-') ? 1.25 : name.startsWith('relic-charge-') ? .95 : name.startsWith('relic-') ? 1.5 : 1;
     const voices = [];
     for (const [frequency, duration, offset, wave = 'sine', end, level = 1, attack = .008] of notes) {
       const start = now + Math.max(0, delay) + offset;

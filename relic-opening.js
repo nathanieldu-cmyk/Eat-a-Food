@@ -45,10 +45,13 @@
     }
     function show(results, options = {}) {
       if (phase !== 'closed' || !Array.isArray(results) || results.length !== 3 || results.some(id => typeof id !== 'string' || !id)) return false;
-      packId = options.packId || 'common'; ownedCounts = results.map((_,index) => options.ownedCounts?.[index] || 1);
-      rewards = [...results]; revealed = new Set(); revealingIndex = null; pulse = 0; spotlightIndex = null; spotlightStage = null;
-      // Save the biggest reveal for last without changing the awarded results.
-      order = rewards.map((_,index)=>index).sort((a,b)=>rarityOrder.indexOf(rewards[a].split(':')[0])-rarityOrder.indexOf(rewards[b].split(':')[0]));
+      packId = options.packId || 'common';
+      // Sort the actual card slots, retaining each reward's ownership metadata.
+      const arranged = results.map((key,index)=>({key,ownedCount:options.ownedCounts?.[index] || 1}))
+        .sort((a,b)=>rarityOrder.indexOf(a.key.split(':')[0])-rarityOrder.indexOf(b.key.split(':')[0]));
+      rewards = arranged.map(item=>item.key); ownedCounts = arranged.map(item=>item.ownedCount);
+      revealed = new Set(); revealingIndex = null; pulse = 0; spotlightIndex = null; spotlightStage = null;
+      order = rewards.map((_,index)=>index);
       phase = 'sealed'; generation++; emit(); return true;
     }
     function close() {

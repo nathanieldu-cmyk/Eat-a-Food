@@ -135,7 +135,7 @@ test('pack audio mode stops existing game effects and admits only pack cues unti
 
 test('Secret cinematic rumble and impact have distinct layers and remain part of pack-only audio',()=>{
  const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const before=ctx.voices.length;const stop=g.api.play('relic-secret-blackout');const rumble=ctx.voices.slice(before);assert.equal(rumble.length,4);assert.ok(rumble.some(v=>v.frequencyValue<60));
- const impactStart=ctx.voices.length;g.api.play('relic-secret-impact');const impact=ctx.voices.slice(impactStart);assert.equal(impact.length,6);assert.ok(impact.some(v=>v.frequencyValue<60));stop();assert.ok(rumble.every(v=>v.stops.includes('now')));
+ const impactStart=ctx.voices.length;g.api.play('relic-secret-impact');const impact=ctx.voices.slice(impactStart);assert.equal(impact.length,8);assert.ok(impact.some(v=>v.frequencyValue<60));stop();assert.ok(rumble.every(v=>v.stops.includes('now')));
 });
 
 test('Secret blackout is immediate with a downward whoosh; the charge grows for several seconds',()=>{
@@ -155,9 +155,17 @@ test('Secret heartbeats accelerate across the three suspense pulses and leave a 
 test('the final reveal and Secret impact use the same deep boom with a sharp attack and bass tail',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0],signatures=[];
  for(const name of ['relic-finale','relic-secret-impact']){
-  const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.equal(voices.length,6);
+  const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
   assert.ok(voices.some(v=>v.frequencyValue>=600&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.end<v.frequencyValue));
   signatures.push(voices.map(v=>[v.frequencyValue,v.end,v.type,v.time,v.stops[0]]));stop();
  }
  assert.deepEqual(signatures[0],signatures[1]);
+});
+
+test('all pack cues are louder while ordinary game effects retain their existing volume',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
+ const peak=name=>{const before=ctx.voices.length,stop=g.api.play(name),voices=ctx.voices.slice(before);const result=voices[0].gainNode.events[1].value;stop();return result;};
+ assert.ok(Math.abs(peak('relic-open')-.135)<1e-10);assert.ok(Math.abs(peak('relic-deal')-.135)<1e-10);assert.ok(Math.abs(peak('relic-charge-common')-.0855)<1e-10);
+ assert.ok(Math.abs(peak('collect')-.09)<1e-10);assert.ok(Math.abs(peak('orb-small')-.1125)<1e-10);
+ const before=ctx.voices.length;g.api.play('relic-secret-impact');const boom=ctx.voices.slice(before);assert.equal(boom.length,8);assert.ok(boom.some(v=>v.frequencyValue<70&&v.stops[0]-v.time>2));assert.ok(boom.some(v=>v.gainNode.events[1].value>.18));
 });
