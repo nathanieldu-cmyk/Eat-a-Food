@@ -58,4 +58,41 @@
  <path d="m38 31 10 6 10-6-1 10-9 6-9-6Z" fill="url(#gold)" stroke="#aa7536" stroke-width="2"/>
  <path d="m72 14 3 8 8 3-8 3-3 8-3-8-8-3 8-3Zm-55 8 2 4 4 2-4 2-2 4-2-4-4-2 4-2Z" fill="#d0ee9c" stroke="#79905a" stroke-width="1"/>
 </symbol>
+<symbol id="dish" viewBox="0 0 96 96">
+ <ellipse cx="48" cy="65" rx="39" ry="16" fill="url(#gold)" stroke="#8e6534" stroke-width="3"/><ellipse cx="48" cy="61" rx="31" ry="10" fill="#437b81" stroke="#fff0bb" stroke-width="2"/>
+ <path d="m48 13 22 18-22 32-22-32Z" fill="url(#mint)" stroke="#e7ffe9" stroke-width="3"/><path d="m26 31 44 0M48 13l-8 18 8 32 9-32Z" fill="none" stroke="#e9ffec" stroke-width="2"/>
+ <path d="m76 29 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z" fill="#fff0bc"/>
+</symbol>
+<symbol id="badge" viewBox="0 0 96 96">
+ <path d="m28 52-6 35 20-10 8 8 6-33m1 0 17 32-2-23 14-1-23-26" fill="url(#red)" stroke="#773d43" stroke-width="3"/>
+ <path d="m48 7 12 8 14 3 3 14 8 12-8 12-3 14-14 3-12 8-12-8-14-3-3-14-8-12 8-12 3-14 14-3Z" fill="url(#gold)" stroke="#94662f" stroke-width="3"/>
+ <circle cx="48" cy="44" r="23" fill="#276858" stroke="#fff2b6" stroke-width="2"/>
+ <path d="M35 42c-11-4-8-17 2-17 2-12 20-12 23 0 12-1 15 13 2 17v15H35Z" fill="#fff2d1" stroke="#c6a569" stroke-width="2"/><path d="M36 48h25" stroke="#d4b577" stroke-width="3"/>
+</symbol>
+<symbol id="ladle" viewBox="0 0 96 96">
+ <path d="M66 10c17-7 21 5 13 12L55 49" fill="none" stroke="#765a36" stroke-width="11" stroke-linecap="round"/><path d="M66 10c17-7 21 5 13 12L55 49" fill="none" stroke="url(#gold)" stroke-width="6" stroke-linecap="round"/>
+ <path d="M16 49h50c7 40-42 49-50 0Z" fill="url(#silver)" stroke="#557889" stroke-width="3"/><ellipse cx="41" cy="49" rx="25" ry="12" fill="#568c94" stroke="#c7e7e5" stroke-width="3"/><ellipse cx="41" cy="47" rx="18" ry="7" fill="#efbf71"/><path d="M24 61c3 9 10 15 17 14" fill="none" stroke="#effff2" stroke-width="4" stroke-linecap="round"/>
+</symbol>
+<symbol id="goblet" viewBox="0 0 96 96">
+ <path d="M28 11h40l-3 27c-2 14-11 20-17 20s-15-6-17-20Z" fill="#a2dbd1" fill-opacity=".55" stroke="#e4fff2" stroke-width="3"/>
+ <path d="M31 32h34l-2 8c-2 11-10 16-15 16s-13-5-15-16Z" fill="#a44565" stroke="#dc9a9b" stroke-width="2"/>
+ <path d="M48 58v21M30 83h36" fill="none" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/><path d="M35 17v12" stroke="#fff9e5" stroke-width="4" stroke-linecap="round"/>
+ <path d="m78 16 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#ffecb0"/>
+</symbol>
+<symbol id="tooth" viewBox="0 0 96 96">
+ <path d="M24 22c7-14 16-9 24-9s19-6 26 9c7 14-3 31-7 43-7 22-16 22-19 5-3 17-12 17-19-5-4-12-12-29-5-43Z" fill="#f8ebca" stroke="#b89d6b" stroke-width="3"/>
+ <path d="M31 24c-3 12 1 23 5 31" fill="none" stroke="#fffef0" stroke-width="5" stroke-linecap="round"/><path d="m24 37 23 10 25-10-4 15-21 7-19-7Z" fill="url(#gold)" stroke="#a87d3a" stroke-width="2"/>
+ <path d="m48 37 8 9-8 9-8-9Z" fill="#ad4b50"/>
+</symbol>
+<symbol id="crown" viewBox="0 0 96 96">
+ <path d="M15 27 34 45 48 19l14 26 19-18-7 48H22Z" fill="url(#gold)" stroke="#93622c" stroke-width="3"/><path d="M23 65h50v11H23Z" fill="#c98837" stroke="#f1d47f" stroke-width="2"/>
+ <circle cx="15" cy="25" r="5" fill="#fff0b1"/><circle cx="48" cy="16" r="5" fill="#fff0b1"/><circle cx="81" cy="25" r="5" fill="#fff0b1"/>
+ <path d="m48 43 7 10-7 10-7-10Z" fill="#86d7af" stroke="#e2ffe5" stroke-width="2"/><circle cx="31" cy="55" r="3" fill="#ad4b50"/><circle cx="65" cy="55" r="3" fill="#ad4b50"/>
+ <path d="m12 77 2 4 4 2-4 2-2 4-2-4-4-2 4-2Z" fill="#f0dc9b"/>
+</symbol>
+<symbol id="medal" viewBox="0 0 96 96">
+ <path d="M24 9h16l8 27-14 10Zm32 0h16L62 46 48 36Z" fill="url(#red)" stroke="#86404a" stroke-width="3"/>
+ <circle cx="48" cy="58" r="29" fill="url(#gold)" stroke="#91622c" stroke-width="3"/><circle cx="48" cy="58" r="21" fill="#c68a3a" stroke="#fff1ba" stroke-width="2"/>
+ <path d="m48 41 5 10 12 2-9 8 2 12-10-6-10 6 2-12-9-8 12-2Z" fill="#ffefb1"/>
+</symbol>
 </svg>

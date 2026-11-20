@@ -16,7 +16,7 @@ function boot(step='start', query='') {
    };
  }
  function node(name){if(!elements.has(name))elements.set(name,el(name));return elements.get(name);}
- for(const id of ['inventory-modal','shop-modal','craft-modal','multi-modal','index-modal'])node('#'+id).classList.add('hidden');
+ for(const id of ['inventory-modal','shop-modal','craft-modal','multi-modal','index-modal','relic-modal'])node('#'+id).classList.add('hidden');
  const api={snapshot:()=>({...state}),setStep:s=>{state.step=s;},prepare(){prepared++;node('#overlay').classList.add('hidden');},portalBounds:()=>({left:820,top:150,width:130,height:80}),closeMultiplayer(){node('#multi-modal').classList.add('hidden');}};
  const document={body,hidden:false,createElement:()=>node('root'),getElementById:id=>node('#'+id),querySelector:node,addEventListener(k,fn){listeners[k]=fn;},removeEventListener(){}};
  const location={href:'https://eat-a-food-eta.vercel.app/'+query};

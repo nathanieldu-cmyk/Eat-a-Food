@@ -36,11 +36,13 @@
   const relicBtn = document.getElementById("relic-btn");
   const relicCloseBtn = document.getElementById("relic-close");
   const relicListEl = document.getElementById("relic-list");
-  const relicFoodEl = document.getElementById("relic-food");
-  const relicEquipEl = document.getElementById("relic-equip");
   const relicTierEl = document.getElementById("relic-tier");
   const relicStatusEl = document.getElementById("relic-status");
   let relicReturnFocus = null;
+  let relicPurchaseBusy = false;
+  let relicInspectPack = null;
+  const relicViewEl = document.getElementById("relic-view");
+  const relicShopEl = document.getElementById("relic-shop-packs");
   const indexModal = document.getElementById("index-modal");
   const indexRowsEl = document.getElementById("index-rows");
   const indexScrollEl = document.getElementById("index-scroll");
@@ -463,7 +465,7 @@
   function defaultSave() {
     return {
       version: SAVE_VERSION,
-      tutorial: { step: "start" },
+      tutorial: { step: "start", completed: false },
       firstRunRewardClaimed: false,
       relics: window.GameRelics.emptySave(),
       inventory: { Peanut: 1 },
@@ -510,7 +512,8 @@
       const parsed = JSON.parse(raw);
       const next = defaultSave();
       // Saves from before the tutorial belong to returning players.
-      next.tutorial = {step: TUTORIAL_STEPS.includes(parsed.tutorial?.step) ? parsed.tutorial.step : "done"};
+      next.tutorial = {step: TUTORIAL_STEPS.includes(parsed.tutorial?.step) ? parsed.tutorial.step : "done",
+        completed: parsed.tutorial?.completed === true || (parsed.relics?.schema !== 2 && parsed.tutorial?.step === "done")};
       next.firstRunRewardClaimed = parsed.firstRunRewardClaimed !== false;
       const fromVersion = Number(parsed.version || 1);
       let renamed = false;
@@ -525,7 +528,7 @@
         }
         if (Object.keys(next.inventory).length === 0) next.inventory = { Peanut: 1 };
       }
-      next.relics = window.GameRelics.normalize(parsed.relics, next.inventory);
+      next.relics = window.GameRelics.normalize(parsed.relics, {completedTutorial: next.tutorial.completed, food: parsed.equipped});
       const equippedName = renameSheetFood(migrateFoodName(parsed.equipped || "", fromVersion));
       if (equippedName !== (parsed.equipped || "")) renamed = true;
       if (equippedName && next.inventory[equippedName]) {
@@ -563,8 +566,9 @@
       for (const [name, count] of Object.entries(next.inventory)) {
         if (count > 0 && tierByName[name]) next.discovered[name] = true;
       }
-      if (fromVersion < SAVE_VERSION || hadReady || renamed || bentoOverflow) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      if (fromVersion < SAVE_VERSION || hadReady || renamed || bentoOverflow || parsed.relics?.schema !== window.GameRelics.config.schema) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); }
+        catch (error) { console.warn("Save migration could not be persisted:", error); }
       }
       return next;
     } catch {
@@ -743,7 +747,7 @@
     points: 0,
     foodsEarned: 0,
     foodWeather: [],
-    foodRelicLuck: [],
+    runRelicKey: null,
     player: null,
     rivals: [],
     sprinkles: [],
@@ -856,7 +860,7 @@
   }
 
   function displayedLuckPct(typeCount = ownedTypeCount()) {
-    return Math.round((totalLuckBonus(typeCount) + (state.running ? state.player?.relicEffects?.luck || 0 : 0)) * 100);
+    return Math.round(totalLuckBonus(typeCount) * 100);
   }
 
   function luckRewardText(beforeCount, afterCount) {
@@ -880,21 +884,21 @@
     luckNoticeEl.classList.remove("hidden");
   }
 
-  function pullWeight(food, relicLuck = 0) {
+  function pullWeight(food) {
     // Base weight is 1/odds. Luck boosts higher rarities more,
     // so the base and every-10 bonuses shift pulls toward rarer foods.
     const rank = rarityById[food.rarity].rank;
-    const bonus = totalLuckBonus() + relicLuck;
+    const bonus = totalLuckBonus();
     return (1 / food.odds) * (1 + bonus * rank);
   }
 
-  function pullFood(excludedName = null, relicLuck = state.player?.relicEffects?.luck || 0) {
+  function pullFood(excludedName = null) {
     const pool = excludedName ? FOOD_TIERS.filter(food => food.name !== excludedName) : FOOD_TIERS;
     let total = 0;
-    for (const food of pool) total += pullWeight(food, relicLuck);
+    for (const food of pool) total += pullWeight(food);
     let roll = Math.random() * total;
     for (const food of pool) {
-      roll -= pullWeight(food, relicLuck);
+      roll -= pullWeight(food);
       if (roll <= 0) return food;
     }
     return pool[pool.length - 1];
@@ -1220,9 +1224,10 @@
     food.vy = 0;
     food.size = 10;
     food.foods = 0;
-    food.relicBuffUntil = 0;
     food.eaten = false;
     food.zone = "arena";
+    food.runRelicKey = food.relicKey || null;
+    food.relicEffects = window.GameRelics.effectsForKey(food.runRelicKey);
     food.run = nextRunId();
     clampToArena(food);
     markPlaced(food);
@@ -1241,7 +1246,6 @@
     food.vy = 0;
     food.size = 10;
     food.zone = "lobby";
-    food.relicBuffUntil = 0;
     food.run = 0;
     clampToLobby(food);
     markPlaced(food);
@@ -1269,8 +1273,6 @@
   function awardRunFood() {
     // Preserve the weather at earning time; food rolls still happen at run end.
     const weather = window.GameWeather?.current() || "clear";
-    if (!state.foodRelicLuck) state.foodRelicLuck = [];
-    state.foodRelicLuck[state.foodsEarned] = state.player?.relicEffects?.luck || 0;
     state.foodWeather[state.foodsEarned++] = weather;
     updateHud();
   }
@@ -1288,7 +1290,7 @@
   function bankPendingFoods() {
     const gained = [];
     for (let i = 0; i < state.foodsEarned; i++) {
-      const food = applyFoodWeather(pullFood(save.firstRunRewardClaimed ? null : "Peanut", state.foodRelicLuck?.[i] || 0), state.foodWeather[i]);
+      const food = applyFoodWeather(pullFood(save.firstRunRewardClaimed ? null : "Peanut"), state.foodWeather[i]);
       save.firstRunRewardClaimed = true;
       const copies = state.foodWeather[i] === "double-foods" ? 2 : 1;
       for (let copy = 0; copy < copies; copy++) gained.push(food.name);
@@ -1518,9 +1520,8 @@
   function eatSprinkle(food, sprinkle, index) {
     const pts = sprinkle.type.points;
     const growthBoost = food === state.player ? Math.pow(1.25, boostStacks("growth")) : food.growthBoost || 1;
-    const pepperGrowth = Date.now() < (food.relicBuffUntil || 0) ? 1 + (food.relicEffects?.pepperGrowth || 0) : 1;
-    const gain = pts * food.tier.growth * growthBoost * (food.relicEffects?.sprinkleGrowth || 1) * pepperGrowth;
-    const points = pts * (food.relicEffects?.points || 1) * (food.relicEffects?.sprinklePoints || 1);
+    const gain = pts * food.tier.growth * growthBoost * (food.relicEffects?.sprinkleGrowth || 1);
+    const points = pts * (food.relicEffects?.sprinklePoints || 1) * (sprinkle.type.key === "xs" ? food.relicEffects?.xsPoints || 1 : 1);
     food.size += gain;
     if (food === state.player) {
       window.GameSfx?.play(`orb-${sprinkle.type.key}`);
@@ -1537,8 +1538,7 @@
   // Same size gain a player gets from eating a food: prey size × own growth.
   function growthForEat(eater) {
     const boost = eater === state.player ? Math.pow(1.25, boostStacks("growth")) : eater.growthBoost || 1;
-    const pepperGrowth = Date.now() < (eater.relicBuffUntil || 0) ? 1 + (eater.relicEffects?.pepperGrowth || 0) : 1;
-    return eater.tier.growth * boost * (eater.relicEffects?.rivalGrowth || 1) * pepperGrowth;
+    return eater.tier.growth * boost * (eater.relicEffects?.rivalGrowth || 1);
   }
 
   function tryEatFood(eater, prey, preyList, preyIndex) {
@@ -1549,11 +1549,10 @@
 
     const preySize = prey.size;
     eater.size += preySize * growthForEat(eater);
-    if (eater.relicEffects?.pepperSpeed) eater.relicBuffUntil = Date.now() + 5000;
     // Every 10 of their size → 1 point; foodGainFactor applies the points multiplier.
     // At most 10 foods from one eat. Guests apply that on their own save.
-    if (eater === state.player && (prey.isRival || prey.netId)) addEatPoints(preySize / 10 * (eater.relicEffects?.points || 1));
-    if (net.role === "host" && eater.netId) netSend({ t: "ev", kind: "eat", id: eater.netId, preySize, pts: preySize / 10 * (eater.relicEffects?.points || 1), buffUntil: eater.relicBuffUntil || 0 });
+    if (eater === state.player && (prey.isRival || prey.netId)) addEatPoints(preySize / 10 * (eater.relicEffects?.rivalPoints || 1));
+    if (net.role === "host" && eater.netId) netSend({ t: "ev", kind: "eat", id: eater.netId, preySize, pts: preySize / 10 * (eater.relicEffects?.rivalPoints || 1) });
     burst(prey.x, prey.y, prey.tier.color);
     prey.eaten = true;
     if (prey.netId) {
@@ -1661,8 +1660,7 @@
 
   function moveSpeed(food) {
     const boost = food === state.player ? Math.pow(1.25, boostStacks("speed")) : food.speedBoost || 1;
-    const pepperSpeed = Date.now() < (food.relicBuffUntil || 0) ? 1 + (food.relicEffects?.pepperSpeed || 0) : 1;
-    const base = (food.tier.speed || 1) * SPEED_SCALE * boost * (food.relicEffects?.speed || 1) * pepperSpeed;
+    const base = (food.tier.speed || 1) * SPEED_SCALE * boost * (food.relicEffects?.speed || 1);
     // Slow down with visible body growth, rather than the faster-growing score.
     // Twice the starting radius retains ~71% speed; large bodies retain at least half.
     const radiusRatio = Math.max(1, food.drawRadius() / BASE_FOOD_DRAW_RADIUS);
@@ -1803,7 +1801,7 @@
       let bestD = Infinity;
       for (const f of actors) {
         const d = dist(f, s);
-        const reach = ringReach(f) * (f.relicEffects?.pickup || 1) + s.type.radius;
+        const reach = ringReach(f) + s.type.radius;
         if (d < reach && d < bestD) {
           bestD = d;
           eater = f;
@@ -3145,9 +3143,13 @@
     const shownPct = displayedLuckPct();
     equippedLineEl.innerHTML = `
       <div>Equipped: <span class="${rarityClass}">${pill}</span></div>
-      <div class="relic-equipped-line">Relic: ${save.relics?.equipped[tier.name] ? relicItemLabel(save.relics.equipped[tier.name]) : "None"}</div>
+      <div class="relic-equipped-line">Relic: ${relicItemLabel(state.running ? state.runRelicKey : save.relics?.equipped)}${state.running ? " · Locked for this run" : ""}</div>
       <div class="type-count-line">Amount of food types: ${luck.typeCount} · Luck +${shownPct}% · ${luck.into}/${LUCK_EVERY} to next +50%</div>
     `;
+    const activeRelic = window.GameRelics.getRelic(state.running ? state.runRelicKey : save.relics.equipped);
+    const loadout = document.getElementById("relic-loadout");
+    const loadoutHtml = `<span>${foodIconHtml(tier)} ${tier.name}</span><span class="${activeRelic ? `rarity-${activeRelic.rarity}` : ""}">${activeRelic ? `${activeRelic.icon} ${activeRelic.name}` : "No relic equipped"}</span>`;
+    if (loadout.innerHTML !== loadoutHtml) loadout.innerHTML = loadoutHtml;
     luckEl.textContent = `+${shownPct}%`;
     luckLabelEl.textContent = `Luck · ${luck.into}/${LUCK_EVERY}`;
     const bentoLuck = Math.round(bentoLuckBonus() * 100);
@@ -3447,6 +3449,7 @@
       shopListEl.appendChild(row);
     }
     renderBento();
+    renderRelicShop();
   }
 
   function formatLongRemaining(ms) {
@@ -3794,94 +3797,105 @@
   }
 
   function relicItemLabel(key) {
-    const api = window.GameRelics;
-    const parsed = api?.parseKey(key);
-    if (!parsed) return "No relic";
-    const item = api.definitions.find(item => item.id === parsed.id);
-    return `${item.icon} ${parsed.tier[0].toUpperCase() + parsed.tier.slice(1)} ${item.name}`;
+    const relic = window.GameRelics.getRelic(key);
+    return relic ? `${relic.icon} ${relic.name}` : "None";
   }
 
   function refreshPlayerRelics() {
     if (!state.player || !window.GameRelics) return;
-    state.player.relicKey = save.relics?.equipped[state.player.tier.name] || null;
+    state.player.relicKey = state.running ? state.runRelicKey || null : save.relics.equipped;
     state.player.relicEffects = window.GameRelics.effectsForKey(state.player.relicKey);
+  }
+
+  function relicGiftHtml() {
+    const claimed = save.relics.tutorialGiftClaimed;
+    const eligible = save.relics.tutorialGiftEligible;
+    return `<div class="relic-tutorial-gift" tabindex="-1"><div><h3>Free Common Pack</h3><p>${claimed ? "Tutorial reward claimed. Your relic is yours permanently." : eligible ? "Tutorial complete! Claim your one-time reward: one permanent relic." : "Complete the tutorial to unlock one free Common Pack."}</p><p class="relic-pack-odds">${window.GameRelics.oddsText(window.GameRelics.packs[0])}</p></div><button class="btn ghost small" type="button" data-relic-gift ${claimed || !eligible || state.running ? "disabled" : ""}>${claimed ? "Claimed" : "Claim free pack"}</button></div>`;
+  }
+
+  function renderRelicShop() {
+    const api = window.GameRelics;
+    document.getElementById("shop-relic-gift").innerHTML = relicGiftHtml();
+    relicShopEl.innerHTML = api.packs.map(pack => {
+      const rarity = api.rarities.find(rarity => rarity.id === pack.rarity);
+      return `<article class="relic-shop-pack" tabindex="-1" style="--relic-rarity-color:${rarity.color}">
+        <img class="relic-shop-pack-art" src="relic-pack.svg?v=2" width="180" height="244" alt="" />
+        <div><span class="relic-rarity-tag rarity-${rarity.id}">${rarity.label}</span><h3>${pack.name}</h3><p>One permanent relic · ${pack.price.toLocaleString()} diamonds</p><p class="relic-pack-odds">${api.oddsText(pack)}</p></div>
+        <div class="relic-pack-actions"><button class="btn primary small" type="button" aria-label="Buy ${pack.name} for ${pack.price.toLocaleString()} diamonds" data-relic-buy="${pack.id}" ${state.running || save.diamonds < pack.price ? "disabled" : ""}>Buy · ${pack.price.toLocaleString()} 💎</button><button class="btn ghost small" type="button" aria-label="View possible relics in ${pack.name}" data-relic-browse="${pack.id}">View possible relics</button></div>
+      </article>`;
+    }).join("");
   }
 
   function renderRelics() {
     const api = window.GameRelics;
     if (!api) return;
-    const selected = relicFoodEl.value;
-    relicFoodEl.innerHTML = "";
-    for (const tier of ALL_FOODS.filter(tier => ownedCount(tier.name) > 0)) {
-      const option = document.createElement("option");
-      option.value = tier.name;
-      option.textContent = `${tier.name}${tier.name === save.equipped ? " (using now)" : ""}`;
-      relicFoodEl.appendChild(option);
-    }
-    relicFoodEl.value = save.inventory[selected] > 0 ? selected : save.equipped;
-    const food = relicFoodEl.value;
-    const equipped = save.relics.equipped[food] || "";
-    relicEquipEl.innerHTML = "";
-    const empty = document.createElement("option");
-    empty.value = "";
-    empty.textContent = "No relic / Unequip for free";
-    relicEquipEl.appendChild(empty);
-    for (const tier of api.tiers) for (const item of api.definitions) {
-      const key = api.keyFor(item.id, tier);
-      const available = api.available(save, key);
-      if (!available && equipped !== key) continue;
-      const option = document.createElement("option");
-      option.value = key;
-      option.textContent = `${relicItemLabel(key)}${equipped === key ? " (equipped)" : ` · ${available} available`}`;
-      relicEquipEl.appendChild(option);
-    }
-    relicEquipEl.value = equipped;
-    document.getElementById("relic-equipped-detail").textContent = equipped ? api.describe(equipped) : "This food has no relic. Combine fragments below to make your first one.";
+    const equipped = api.getRelic(save.relics.equipped);
     document.getElementById("relic-diamonds").textContent = `${save.diamonds.toLocaleString()} diamonds`;
-    document.getElementById("relic-pack").disabled = save.diamonds < 250;
     document.getElementById("relic-run-note").classList.toggle("hidden", !state.running);
-    const tier = relicTierEl.value || "basic";
-    const source = tier === "basic" ? "fragment" : tier === "advanced" ? "basic" : "advanced";
-    const needed = tier === "basic" ? 3 : 5;
-    const cost = api.costs[source];
-    relicListEl.innerHTML = api.definitions.map(item => {
-      const key = api.keyFor(item.id, tier);
-      const free = api.available(save, key);
-      const total = save.relics.items[key] || 0;
-      const have = source === "fragment" ? save.relics.fragments[item.id] || 0 : api.available(save, api.keyFor(item.id, source));
-      const sourceName = source === "fragment" ? "matching fragments" : `${source} relics`;
-      const canCombine = have >= needed && save.diamonds >= cost;
-      return `<article class="relic-card relic-${tier}" tabindex="-1">
-        <div class="relic-card-heading"><span class="relic-icon relic-emblem" aria-hidden="true">${api.artHtml(item.id)}</span><h3>${item.name}</h3></div>
-        <p>${api.describe(key)}</p>
-        <p class="relic-count"><span class="relic-mini-emblem" aria-hidden="true">${api.artHtml(item.id)}</span> ${total} owned · ${free} available${total - free ? ` · ${total - free} equipped` : ""}</p>
-        <p class="relic-recipe"><span class="${source === "fragment" ? "relic-fragment-icon" : "relic-mini-emblem"}" aria-hidden="true">${api.artHtml(item.id)}</span> ${have}/${needed} ${sourceName} + ${cost.toLocaleString()} 💎</p>
-        <button class="btn ghost small" type="button" data-relic-combine="${item.id}" data-source="${source}" ${canCombine ? "" : "disabled"} aria-label="Combine into one ${tier} ${item.name} for ${cost.toLocaleString()} diamonds">Make ${tier} relic · ${cost.toLocaleString()} diamonds</button>
+    document.getElementById("relic-gift").innerHTML = relicGiftHtml();
+    const summary = document.getElementById("relic-equipped-summary");
+    summary.innerHTML = equipped ? `<span class="relic-emblem" aria-hidden="true">${api.artHtml(equipped.family)}</span><div><span class="relic-rarity-tag rarity-${equipped.rarity}">Equipped · ${equipped.rarity}</span><h3>${equipped.name}</h3><p>${api.describe(equipped.key)}</p></div>` : '<p>No relic equipped. Choose an owned relic below.</p>';
+    document.getElementById("relic-unequip").disabled = state.running || !equipped;
+    document.getElementById("relic-open-shop").disabled = state.running;
+    document.getElementById("relic-diamond-carry").textContent = `Diamond Dish bonus carried forward: ${(save.relics.diamondCarry / 100).toFixed(2)} diamond.`;
+    const pack = api.packs.find(pack => pack.id === relicInspectPack);
+    const inspection = document.getElementById("relic-inspection");
+    inspection.textContent = pack ? `Possible results in ${pack.name}: ${api.oddsText(pack)}.` : "";
+    document.getElementById("relic-clear-inspection").hidden = !pack;
+    const filter = relicTierEl.value || "all", ownedOnly = relicViewEl.value !== "all";
+    const rows = api.relics.filter(relic => (filter === "all" || relic.rarity === filter) && (!ownedOnly || save.relics.items[relic.key] > 0) && (!pack || pack.odds.some(row => row.rarity === relic.rarity)));
+    document.getElementById("relic-collection-count").textContent = `${api.relics.filter(relic => save.relics.items[relic.key] > 0).length} / ${api.relics.length} collected`;
+    relicListEl.innerHTML = rows.length ? rows.map(relic => {
+      const count = save.relics.items[relic.key] || 0, selected = save.relics.equipped === relic.key;
+      return `<article class="relic-card relic-${relic.rarity}${selected ? " relic-is-equipped" : ""}" tabindex="-1" style="--relic-rarity-color:${relic.color}">
+        <div class="relic-card-heading"><span class="relic-icon relic-emblem" aria-hidden="true">${api.artHtml(relic.family)}</span><div><span class="relic-rarity-tag rarity-${relic.rarity}">${relic.rarity}</span><h3>${relic.name}</h3></div></div>
+        <p>${api.describe(relic.key)}</p><p class="relic-count">${count ? `Owned ×${count}` : "Not owned"}${selected ? " · Equipped" : ""}</p>
+        <button class="btn ghost small" type="button" data-relic-equip="${relic.key}" aria-pressed="${selected}" ${state.running || !count || selected ? "disabled" : ""}>${selected ? "Equipped" : state.running ? "Locked during run" : count ? "Equip" : "Not owned"}</button>
       </article>`;
-    }).join("");
+    }).join("") : '<p class="relic-empty">No relics match this filter. Open a pack in Shop, or choose “All possible relics” to browse the collection.</p>';
   }
 
   function finishRelicAction(message) {
-    const panel = relicModal.querySelector(".relic-panel");
-    const scrollTop = panel?.scrollTop || 0;
-    const scrollLeft = panel?.scrollLeft || 0;
+    const panels = [relicModal.querySelector(".relic-panel"), shopModal.querySelector(".shop-panel")].filter(Boolean);
+    const scroll = panels.map(panel => [panel, panel.scrollTop, panel.scrollLeft]);
     const active = document.activeElement;
     const focusId = active?.id;
-    const combineId = active?.dataset?.relicCombine;
+    const equipKey = active?.dataset?.relicEquip;
+    const buyKey = active?.dataset?.relicBuy;
+    const isGift = active?.hasAttribute?.("data-relic-gift");
     persistSave();
     refreshPlayerRelics();
     renderDiamonds();
-    renderRelics();
+    if (state.relicsOpen) renderRelics();
+    if (!shopModal.classList.contains("hidden")) renderShop();
     renderEquippedUi();
     relicStatusEl.textContent = message;
-    const control = focusId ? document.getElementById(focusId)
-      : combineId ? relicListEl.querySelector(`[data-relic-combine="${combineId}"]`) : null;
-    const focusTarget = control?.disabled ? control.closest(".relic-card, .relic-pack-card") : control;
-    focusTarget?.focus({preventScroll: true});
-    if (panel) {
-      panel.scrollTop = scrollTop;
-      panel.scrollLeft = scrollLeft;
-    }
+    document.getElementById("shop-relic-status").textContent = message;
+    const scope = state.relicsOpen ? relicModal : shopModal;
+    const control = focusId ? document.getElementById(focusId) : equipKey ? scope.querySelector(`[data-relic-equip="${equipKey}"]`)
+      : buyKey ? scope.querySelector(`[data-relic-buy="${buyKey}"]`) : isGift ? scope.querySelector('[data-relic-gift]') : null;
+    const target = control?.disabled ? control.closest(".relic-card, .relic-shop-pack, .relic-tutorial-gift") : control;
+    target?.focus({preventScroll: true});
+    for (const [panel, top, left] of scroll) { panel.scrollTop = top; panel.scrollLeft = left; }
+  }
+
+  function purchaseRelicPack(packId, free = false) {
+    if (state.running || relicPurchaseBusy || window.GameRelicOpening?.isOpen()) return null;
+    relicPurchaseBusy = true;
+    try {
+      // Check the saved gift ledger as well, so an older open tab cannot reclaim it.
+      if (free) {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        if (stored.relics?.tutorialGiftClaimed) { save.relics.tutorialGiftClaimed = true; finishRelicAction("Tutorial pack already claimed."); return null; }
+      }
+      const api = window.GameRelics;
+      const result = free ? api.claimTutorialPack(save, state.running) : api.buyPack(save, packId, state.running);
+      if (!result) return null;
+      finishRelicAction(`${free ? "Tutorial reward" : "Pack opened"}: ${api.getRelic(result).name}. ${api.describe(result)}`);
+      window.GameSfx?.play("collect");
+      window.GameRelicOpening?.show(result, free ? "common" : packId, save.relics.items[result]);
+      return result;
+    } finally { relicPurchaseBusy = false; }
   }
 
   function openRelics() {
@@ -4150,6 +4164,7 @@
     pullResultsEl.classList.add("hidden");
     pullResultsEl.innerHTML = "";
     state.running = true;
+    state.runRelicKey = save.relics?.equipped || null;
     state.runStartedAt = performance.now();
     state.mode = "run";
     window.GameMusic?.setMode("run");
@@ -4160,7 +4175,6 @@
     lobbyHintEl.classList.add("hidden");
     state.foodsEarned = 0;
     state.foodWeather = [];
-    state.foodRelicLuck = [];
     state.player = null;
     ensureWorld();
     const spot = farArenaSpot([...arenaHumans(), ...state.rivals], ARENA * 0.22);
@@ -4252,8 +4266,9 @@
     for (const name of banked) rememberFood(name);
     renderPullResults(banked, seenBefore);
 
-    const diamondsEarned = earned + state.foodWeather.slice(0, earned).filter(type => type === "triple-diamonds").length * 2;
-    save.diamonds += diamondsEarned;
+    const baseDiamonds = earned + state.foodWeather.slice(0, earned).filter(type => type === "triple-diamonds").length * 2;
+    const diamondReward = window.GameRelics.bankDiamonds(save, baseDiamonds, state.runRelicKey);
+    const diamondsEarned = diamondReward.total;
     if (earned > save.bestRun) {
       save.bestRun = earned;
       bestRunEl.textContent = `${save.bestRun} foods`;
@@ -4358,7 +4373,9 @@
 
   function setTutorialStep(step) {
     if (!TUTORIAL_STEPS.includes(step)) return;
-    save.tutorial = {step};
+    const completed = save.tutorial.completed === true || (save.tutorial.step === "finish" && step === "done");
+    save.tutorial = {step, completed};
+    if (completed) window.GameRelics.unlockTutorialGift(save);
     persistSave();
   }
 
@@ -4525,7 +4542,6 @@
         y: Math.round(food.y),
         size: Math.round(food.size),
       relic: food.relicKey || null,
-      buffUntil: food.relicBuffUntil || 0,
       })),
     };
     // One update goes to the whole room. Sprinkles ride along twice a second while
@@ -4584,7 +4600,6 @@
       y: Math.round(food.y * 10) / 10,
       size: Math.round(food.size),
       relic: food.relicKey || null,
-      buffUntil: food.relicBuffUntil || 0,
     };
   }
 
@@ -4598,7 +4613,7 @@
   // growth and points, so this only hides them until its next update agrees.
   function guestEatSprinkles() {
     const food = state.player;
-    const reach = ringReach(food) * (food.relicEffects?.pickup || 1);
+    const reach = ringReach(food);
     const now = performance.now();
     for (let i = state.sprinkles.length - 1; i >= 0; i--) {
       const s = state.sprinkles[i];
@@ -4695,8 +4710,10 @@
       food.tx = x;
       food.ty = y;
     }
-    food.relicKey = window.GameRelics?.parseKey(msg.relic) ? msg.relic : null;
-    food.relicEffects = window.GameRelics?.effectsForKey(food.relicKey);
+    if (food.zone !== "arena") {
+      food.relicKey = window.GameRelics.parseKey(msg.relic) ? msg.relic : null;
+      food.relicEffects = window.GameRelics.effectsForKey(food.relicKey);
+    }
     food.growthBoost = Number(msg.growth) > 0 ? Number(msg.growth) : 1;
     food.speedBoost = Number(msg.speed) > 0 ? Number(msg.speed) : 1;
     food.foods = Math.max(0, Number(msg.foods) || 0);
@@ -4827,7 +4844,7 @@
     renderLeaderboard();
   }
 
-  function guestBeginRun(run) {
+  function guestBeginRun(run, relicKey = save.relics?.equipped || null) {
     closeRelics();
     closeIndex();
     closeInventory();
@@ -4837,6 +4854,7 @@
     pullResultsEl.classList.add("hidden");
     pullResultsEl.innerHTML = "";
     state.running = true;
+    state.runRelicKey = relicKey;
     state.runStartedAt = performance.now();
     state.mode = "run";
     window.GameMusic?.setMode("run");
@@ -4846,7 +4864,6 @@
     restoreCarriedPoints();
     state.foodsEarned = 0;
     state.foodWeather = [];
-    state.foodRelicLuck = [];
     state.particles = [];
     lobbyHintEl.classList.add("hidden");
     overlay.classList.add("hidden");
@@ -4871,7 +4888,7 @@
     const mine = players.find((person) => person.id === net.id);
     if (mine) {
       const inArena = mine.zone === "arena";
-      if (inArena && !state.running && mine.run && mine.run !== net.endedRun) guestBeginRun(mine.run);
+      if (inArena && !state.running && mine.run && mine.run !== net.endedRun) guestBeginRun(mine.run, mine.relic || null);
       else if (!inArena && state.running) {
         net.endedRun = net.run;
         endRun(true);
@@ -4883,7 +4900,6 @@
         state.player.tier = tierByName[mine.food] || state.player.tier;
         state.player.netName = net.name;
         state.player.size = Math.max(10, mine.size || 10);
-        state.player.relicBuffUntil = Number(mine.buffUntil) || 0;
         refreshPlayerRelics();
         // Your own food moves on your screen right away. Only take the host's
         // spot when it placed you somewhere new.
@@ -4987,7 +5003,6 @@
     if (msg.t === "ev" && net.role === "guest" && msg.id === net.id && state.running) {
       if (msg.kind === "eat") {
         addEatPoints(Number.isFinite(msg.pts) ? msg.pts : Number(msg.preySize) / 10);
-        if (state.player) state.player.relicBuffUntil = Number(msg.buffUntil) || 0;
       }
       if (msg.kind === "pts") addPoints(Number(msg.pts) || 0);
       if (msg.kind === "dead") {
@@ -5813,7 +5828,7 @@
   );
   relicModal.addEventListener("keydown", e => {
     if (e.key !== "Tab") return;
-    const controls = [...relicModal.querySelectorAll("button:not([disabled]), select:not([disabled])")];
+    const controls = [...relicModal.querySelectorAll("button:not([disabled]):not([hidden]), select:not([disabled])")];
     const first = controls[0], last = controls[controls.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -5822,27 +5837,27 @@
   relicCloseBtn.addEventListener("click", closeRelics);
   relicModal.addEventListener("click", e => { if (e.target === relicModal) closeRelics(); });
   relicModal.addEventListener("wheel", e => e.stopPropagation(), {passive: true});
-  relicFoodEl.addEventListener("change", renderRelics);
   relicTierEl.addEventListener("change", renderRelics);
-  relicEquipEl.addEventListener("change", () => {
-    const api = window.GameRelics;
-    if (api.equip(save, relicFoodEl.value, relicEquipEl.value || null)) finishRelicAction(relicEquipEl.value ? "Relic equipped. No diamonds spent." : "Relic removed. No diamonds spent.");
-  });
-  document.getElementById("relic-pack").addEventListener("click", () => {
-    if (window.GameRelicOpening?.isOpen()) return;
-    const api = window.GameRelics;
-    const result = api.buyPack(save);
-    if (!result) return;
-    const names = result.map(id => { const item = api.definitions.find(item => item.id === id); return `${item.icon} ${item.name}`; });
-    finishRelicAction(`Pack opened: ${names.join(" · ")}. 3 fragments added.`);
-    window.GameRelicOpening?.show(result);
+  relicViewEl.addEventListener("change", renderRelics);
+  document.getElementById("relic-clear-inspection").addEventListener("click", () => { relicInspectPack = null; renderRelics(); });
+  document.getElementById("relic-open-shop").addEventListener("click", openShop);
+  document.getElementById("relic-unequip").addEventListener("click", () => {
+    if (window.GameRelics.equip(save, null, state.running)) finishRelicAction("Relic unequipped.");
   });
   relicListEl.addEventListener("click", e => {
-    const button = e.target.closest("[data-relic-combine]");
-    if (!button || button.disabled) return;
-    const result = window.GameRelics.combine(save, button.dataset.relicCombine, button.dataset.source);
-    if (result) finishRelicAction(`Created ${relicItemLabel(result)}.`);
+    const button = e.target.closest("[data-relic-equip]");
+    if (button && !button.disabled && window.GameRelics.equip(save, button.dataset.relicEquip, state.running)) finishRelicAction(`${window.GameRelics.getRelic(button.dataset.relicEquip).name} equipped.`);
   });
+  const onRelicShopAction = e => {
+    const buy = e.target.closest("[data-relic-buy]");
+    if (buy && !buy.disabled) purchaseRelicPack(buy.dataset.relicBuy);
+    const browse = e.target.closest("[data-relic-browse]");
+    if (browse) { relicInspectPack = browse.dataset.relicBrowse; relicTierEl.value = "all"; relicViewEl.value = "all"; openRelics(); }
+    const gift = e.target.closest("[data-relic-gift]");
+    if (gift && !gift.disabled) purchaseRelicPack("common", true);
+  };
+  document.getElementById("shop-modal").addEventListener("click", onRelicShopAction);
+  relicModal.addEventListener("click", onRelicShopAction);
   const MOVE_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {

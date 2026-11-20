@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=85" />
+  <link rel="stylesheet" href="style.css?v=86" />
   <script type="importmap">
     {
       "imports": {
@@ -53,6 +53,7 @@
           <button id="multi-btn" class="btn ghost" type="button">Multiplayer</button>
           <p id="multi-live" class="multi-live hidden"></p>
         </div>
+        <div id="relic-loadout" class="relic-loadout" aria-label="Equipped food and relic"></div>
         <p id="potion-status" class="potion-status hidden"></p>
         <footer class="hud">
           <button id="auto-farm-btn" class="btn ghost" type="button" aria-pressed="false" title="Automatically farm orbs, restart after death, and collect run rewards every 10 minutes.">Auto Farm</button>
@@ -185,6 +186,14 @@
         <button id="shop-close" class="btn ghost small" type="button">Close</button>
       </div>
       <p id="shop-diamonds" class="shop-diamonds"></p>
+      <section class="relic-shop-section" aria-labelledby="relic-shop-title">
+        <h3 id="relic-shop-title">Relic Packs</h3>
+        <p>Open immediately for one permanent relic. Fixed odds: food luck, potions and weather never change these rolls.</p>
+        <p>Rarity rolls first. Within every rarity: Chef’s Badge 8.2%; each of the other nine families 10.2%.</p>
+        <div id="shop-relic-gift"></div>
+        <p id="shop-relic-status" class="relic-status" role="status" aria-live="polite"></p>
+        <div id="relic-shop-packs" class="relic-shop-packs"></div>
+      </section>
       <div class="inv-hint bento-shop-description">
         <span>1,000 💎 per box · 5-box limit</span>
         <span>2h unlock · One box at a time</span>
@@ -216,23 +225,21 @@
 
   <div id="relic-modal" class="shop-modal hidden" aria-hidden="true">
     <div class="shop-panel relic-panel" role="dialog" aria-modal="true" aria-labelledby="relic-title">
-      <div class="inv-header"><h2 id="relic-title"><svg class="relic-title-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=1#crest"></use></svg> Relics</h2><button id="relic-close" class="btn ghost small" type="button">Close</button></div>
-      <div class="relic-intro"><p>Find fragments. Forge relics. Give your food a new edge.</p><strong id="relic-diamonds">0 diamonds</strong></div>
-      <p id="relic-run-note" class="relic-run-note hidden">Your run continues while this is open. Equip or remove relics at any time.</p>
-      <section class="relic-pack-card" tabindex="-1" aria-labelledby="relic-pack-title">
-        <img class="relic-pack-art" src="relic-pack.svg?v=1" width="180" height="244" alt="" />
-        <div><h3 id="relic-pack-title">Basic Relic Pack</h3><p><span class="relic-fragment-icon" aria-hidden="true"><svg class="relic-glyph" viewBox="0 0 96 96"><use href="relic-art.svg?v=1#crest"></use></svg></span> 3 fragments · 250 diamonds</p><p>Each fragment has a 1 in 7 chance of being any relic type. Repeats are possible.</p></div>
-        <button id="relic-pack" class="btn primary" type="button">Buy pack · 250 💎</button>
+      <div class="inv-header"><h2 id="relic-title"><svg class="relic-title-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=2#crest"></use></svg> Relics</h2><button id="relic-close" class="btn ghost small" type="button">Close</button></div>
+      <div class="relic-intro"><p>60 permanent relics. One equipped at a time.</p><strong id="relic-diamonds">0 diamonds</strong></div>
+      <p class="relic-rules">Only your equipped relic works. Switch outside a run; ownership survives death and food changes. Extra copies never stack bonuses.</p>
+      <p id="relic-run-note" class="relic-run-note hidden">Your run continues. Purchases and relic changes unlock after the run.</p>
+      <div id="relic-gift"></div>
+      <section class="relic-attachment" aria-labelledby="relic-attachment-title">
+        <div class="relic-equipped-heading"><h3 id="relic-attachment-title">Equipped relic</h3><button id="relic-unequip" class="btn ghost small" type="button">Unequip</button></div>
+        <div id="relic-equipped-summary" class="relic-equipped-summary"></div>
+        <p id="relic-diamond-carry" class="relic-diamond-carry"></p>
       </section>
       <p id="relic-status" class="relic-status" role="status" aria-live="polite"></p>
-      <section class="relic-attachment" aria-labelledby="relic-attachment-title">
-        <h3 id="relic-attachment-title">Equip to a food</h3>
-        <p>One relic per food. Equipping and removing are free. A relic only works while you use that exact food, including its Golden, Rainbow or Shadow version.</p>
-        <div class="relic-fields"><label>Food<select id="relic-food"></select></label><label>Relic<select id="relic-equip"></select></label></div>
-        <p id="relic-equipped-detail"></p>
-      </section>
-      <div class="relic-collection-heading"><h3>Your collection</h3><label>Tier<select id="relic-tier"><option value="basic">Basic</option><option value="advanced">Advanced</option><option value="godly">Godly</option></select></label></div>
-      <p class="relic-rules">3 matching fragments + 50 💎 → Basic · 5 matching Basic + 250 💎 → Advanced · 5 matching Advanced + 2,000 💎 → Godly. Each tier doubles both benefits and penalties. Unequip relics before combining them.</p>
+      <div class="relic-collection-heading"><div><h3>Your relic inventory</h3><p id="relic-collection-count">0 / 60 collected</p></div><button id="relic-open-shop" class="btn primary small" type="button">Buy packs in Shop</button></div>
+      <div class="relic-fields"><label>Rarity<select id="relic-tier"><option value="all">All rarities</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="epic">Epic</option><option value="legendary">Legendary</option><option value="mythic">Mythic</option></select></label><label>Show<select id="relic-view"><option value="owned">Owned relics</option><option value="all">All possible relics</option></select></label></div>
+      <p id="relic-inspection" class="relic-inspection"></p><button id="relic-clear-inspection" class="btn ghost small" type="button" hidden>Show the full collection</button>
+      <p class="relic-rules">Ten families are available at every rarity. Inspect any relic’s exact stats below, including bonuses and penalties.</p>
       <div id="relic-list" class="relic-grid"></div>
     </div>
   </div>
@@ -240,11 +247,11 @@
   <div id="relic-reveal" class="relic-opening" hidden>
     <section class="reveal-dialog" role="dialog" aria-modal="true" aria-labelledby="relic-reveal-title">
       <button class="reveal-close" type="button" aria-label="Close pack opening">×</button>
-      <p class="reveal-eyebrow">BASIC RELIC PACK</p>
+      <p class="reveal-eyebrow">RELIC PACK</p>
       <h2 id="relic-reveal-title">Unsealing your pack…</h2>
       <div class="reveal-stage">
         <div class="reveal-aura" aria-hidden="true"></div>
-        <div class="reveal-pack" aria-hidden="true"><div class="reveal-pack-body"><img src="relic-pack.svg?v=1" alt="" /></div><div class="reveal-pack-lid"><img src="relic-pack.svg?v=1" alt="" /></div></div>
+        <div class="reveal-pack" aria-hidden="true"><div class="reveal-pack-body"><img src="relic-pack.svg?v=2" alt="" /></div><div class="reveal-pack-lid"><img src="relic-pack.svg?v=2" alt="" /></div></div>
         <div class="reveal-cards"></div>
       </div>
       <p class="reveal-status" role="status" aria-live="polite"></p>
@@ -256,11 +263,11 @@
   <script src="music.js?v=2"></script>
   <script src="sfx.js?v=5"></script>
   <script src="weather.js?v=11"></script>
-  <script src="relics.js?v=2"></script>
-  <script src="relic-opening.js?v=1"></script>
-  <script src="game.js?v=242"></script>
+  <script src="relics.js?v=3"></script>
+  <script src="relic-opening.js?v=2"></script>
+  <script src="game.js?v=243"></script>
   <script src="giveaway.js?v=1"></script>
   <script src="bento-fit.js?v=1"></script>
-  <script src="tutorial.js?v=3"></script>
+  <script src="tutorial.js?v=4"></script>
 </body>
 </html>

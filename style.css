@@ -1572,3 +1572,63 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   .relic-opening *, .relic-opening *::before { animation: none !important; transition: none !important; }
 }
+
+/* Permanent relic collection and the six shop packs. */
+#shop-modal .shop-panel { width: min(860px, 96vw); max-height: 92dvh; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain; }
+.relic-shop-section { display: grid; gap: 12px; margin-bottom: 20px; }
+.relic-shop-section > h3 { font: 700 1.25rem "Fredoka", sans-serif; }
+.relic-shop-section > p { font-size: .9rem; line-height: 1.5; color: #eadac4; }
+.relic-shop-packs { display: grid; gap: 14px; }
+.relic-shop-pack { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 16px; border: 1px solid var(--relic-rarity-color); border-radius: 16px; background: #ffffff06; }
+.relic-shop-pack h3 { font-family: "Fredoka", sans-serif; margin: 3px 0 7px; }
+.relic-shop-pack p { font-size: .9rem; line-height: 1.5; }
+.relic-shop-pack-art { display: block; width: 76px; height: 104px; object-fit: contain; filter: drop-shadow(2px 5px 3px #0006); }
+.relic-pack-actions { display: grid; gap: 10px; }
+.relic-pack-actions .btn { min-height: 40px; }
+.relic-pack-odds { margin-top: 7px; color: #ead9be; }
+.relic-rarity-tag { display: inline-block; text-transform: uppercase; letter-spacing: .1em; font-size: 12px; line-height: 1.5; font-weight: 900; }
+.relic-tutorial-gift { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 15px; border: 1px solid #dcca8544; border-radius: 14px; background: #e7bf4d0b; }
+.relic-tutorial-gift p { font-size: .9rem; line-height: 1.45; }
+.relic-tutorial-gift button { flex-shrink: 0; }
+.relic-equipped-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.relic-equipped-summary { display: flex; align-items: center; gap: 14px; }
+.relic-equipped-summary h3 { margin: 3px 0 7px; }
+.relic-diamond-carry { margin-top: 12px; color: #9cddde; }
+.relic-inspection { color: #ffe09e; }
+#relic-clear-inspection[hidden] { display: none; }
+.relic-collection-heading { flex-wrap: wrap; }
+.relic-card { border-color: var(--relic-rarity-color, #fff3e035); }
+.relic-is-equipped { background: #7ce8c514; box-shadow: inset 0 0 0 2px #a7f5d455; }
+.relic-card .relic-emblem { border-color: var(--relic-rarity-color, #cde8cd); background: radial-gradient(ellipse at 30% 10%, #4d6765, #20383f 70%); }
+.relic-card .relic-count { color: var(--relic-rarity-color, #9af0da); }
+.relic-empty { grid-column: 1/-1; padding: 20px; border: 1px dashed #a9d4c255; border-radius: 14px; }
+.relic-loadout { display: grid; gap: 5px; padding: 12px; border: 1px solid #8ed8c733; border-radius: 13px; background: #102b2733; font-size: .85rem; }
+.relic-loadout > span:first-child { font-weight: 800; }
+.relic-loadout .food-icon { display: inline-block; }
+.relic-panel .relic-fields { margin: 0; }
+.relic-opening .reveal-cards { grid-template-columns: minmax(0, 1fr); width: min(320px, 100%); }
+.relic-opening .reveal-stage { min-height: 418px; }
+.relic-opening .reveal-card { height: 390px; --card-index: 0; }
+.relic-opening .reveal-card-front { gap: 6px; border-color: var(--relic-rarity-color); }
+.reveal-relic-art { display: grid; place-items: center; width: 120px; height: 120px; margin: 5px auto; border: 3px solid var(--relic-rarity-color); border-radius: 25px; background: radial-gradient(ellipse at 30% 10%, #6c918a, #204c51 70%); box-shadow: inset 0 0 0 5px #e5f0ca22, 0 5px 6px #25464933; }
+.reveal-relic-art .relic-glyph { width: 108px; height: 108px; filter: drop-shadow(0 3px 2px #132f3a77); }
+.relic-opening .reveal-card-front strong { min-height: 0; padding: 0 6px; margin: 4px 0; }
+.reveal-card-stats { color: #214540; font-size: .85rem; line-height: 1.45; padding: 0 10px; }
+.relic-opening .reveal-card-front .reveal-card-type { color: #365a52; }
+.relic-opening .reveal-dialog { border-color: var(--relic-rarity-color, #cce5b3); }
+@media (max-width: 600px) {
+  #shop-modal .shop-panel, .relic-panel { width: 100%; max-height: calc(100dvh - 20px); }
+  .relic-shop-pack { grid-template-columns: 58px minmax(0, 1fr); gap: 12px; padding: 13px; }
+  .relic-shop-pack-art { width: 58px; height: 80px; }
+  .relic-pack-actions { grid-column: 1/-1; grid-template-columns: 1fr 1fr; }
+  .relic-tutorial-gift { align-items: stretch; flex-direction: column; }
+  .relic-equipped-summary { align-items: flex-start; }
+  .relic-opening .reveal-card { height: 370px; }
+  .relic-opening .reveal-stage { min-height: 394px; }
+  .relic-opening .reveal-cards { width: min(300px, 100%); }
+  .relic-opening .reveal-card-front strong { font-size: 1.15rem; }
+  .relic-opening .reveal-card-type { font-size: 12px; }
+  .relic-opening .reveal-card-count { font-size: .85rem; }
+}
+
+.relic-opening .reveal-card-front .reveal-card-type { color: var(--relic-rarity-color); background: #15323a; padding: 4px 9px; border-radius: 5px; }

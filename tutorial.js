@@ -47,7 +47,7 @@
     'close-craft': {title: 'Back to the lobby', text: 'Close Craft to learn about playing with friends.', target: '#craft-close'},
     multiplayer: {title: 'Play with friends', text: 'Open Multiplayer to see how to invite a friend.', target: '#multi-btn'},
     'multiplayer-info': {title: 'Multiplayer', text: 'Create a room and share its code with friends. To join a friend, enter their code and press Join. You can keep collecting foods together!', target: '#multi-setup', next: 'finish'},
-    finish: {title: 'Continue collecting new foods', text: 'You’re ready! Try stronger foods, open Bento Boxes, and work toward Golden, Rainbow, and Shadow foods.', next: 'done'},
+    finish: {title: 'Continue collecting new foods', text: 'You’re ready! Finish to unlock a free Common Relic Pack in Shop. Try stronger foods, permanent relics, and Golden, Rainbow, and Shadow foods.', next: 'done'},
   };
   const root = document.createElement('div');
   root.className = 'tutorial-root';
@@ -169,7 +169,7 @@
     const unexpected = [
       ['inventory-modal', '#inv-close', 'Inventory'], ['shop-modal', '#shop-close', 'Shop'],
       ['craft-modal', '#craft-close', 'Craft'], ['multi-modal', '#multi-close', 'Multiplayer'],
-      ['index-modal', '#index-close', 'Food Index'],
+      ['index-modal', '#index-close', 'Food Index'], ['relic-modal', '#relic-close', 'Relics'],
     ].find(([id]) => id !== expected && open(id));
     const config = unexpected ? {title: `Close ${unexpected[2]}`, text: `Close ${unexpected[2]} to continue your tutorial.`, target: unexpected[1]} : steps[state.step];
     const key = state.step + (unexpected?.[0] || '');

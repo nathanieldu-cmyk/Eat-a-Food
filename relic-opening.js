@@ -1,7 +1,7 @@
 (() => {
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false} = {}) {
-    let phase = 'closed', rewards = [], revealed = new Set(), timers = [], generation = 0;
-    const snapshot = () => ({phase, rewards: [...rewards], revealed: [...revealed]});
+    let phase = 'closed', rewards = [], revealed = new Set(), timers = [], generation = 0, packId = 'common', ownedCount = 1;
+    const snapshot = () => ({phase, rewards: [...rewards], revealed: [...revealed], packId, ownedCount});
     const emit = () => onChange(snapshot());
     function clear() { for (const timer of timers) cancel(timer); timers = []; }
     function reveal(index) {
@@ -18,15 +18,16 @@
       phase = 'complete';
       emit();
     }
-    function show(results) {
-      if (phase !== 'closed' || !Array.isArray(results) || results.length !== 3 || results.some(id => typeof id !== 'string' || !id)) return false;
+    function show(results, options = {}) {
+      if (phase !== 'closed' || !Array.isArray(results) || results.length !== 1 || results.some(id => typeof id !== 'string' || !id)) return false;
+      packId = options.packId || "common"; ownedCount = options.ownedCount || 1;
       rewards = [...results]; revealed = new Set(); phase = 'opening'; generation++;
       emit();
       if (reducedMotion) { revealAll(); return true; }
       const current = generation;
       const later = (delay, work) => timers.push(schedule(() => { if (generation === current && phase !== 'closed') work(); }, delay));
       later(800, () => { if (phase === 'opening') { phase = 'cards'; emit(); } });
-      [1200, 1750, 2300].forEach((delay, index) => later(delay, () => reveal(index)));
+      [1200].forEach((delay, index) => later(delay, () => reveal(index)));
       return true;
     }
     function close() {
@@ -57,16 +58,16 @@
       returnFocus = document.activeElement;
       previousCount = 0;
       cards.innerHTML = state.rewards.map((id, index) => {
-        const item = api.definitions.find(item => item.id === id);
-        return `<button class="reveal-card" type="button" data-card-index="${index}" style="--card-index:${index}" aria-label="Reveal fragment ${index + 1}">
+        const item = api.getRelic(id);
+        return `<button class="reveal-card relic-${item.rarity}" style="--relic-rarity-color:${item.color}" type="button" data-card-index="${index}" aria-label="Reveal your relic">
           <span class="reveal-card-inner">
-            <span class="reveal-card-back" aria-hidden="true"><svg viewBox="0 0 96 96"><use href="relic-art.svg?v=1#crest"></use></svg><span>RELICS</span><span class="reveal-back-number">${index + 1}</span></span>
-            <span class="reveal-card-front" aria-hidden="true"><span class="reveal-card-type">RELIC FRAGMENT</span><span class="reveal-fragment">${api.artHtml(id)}</span><strong>${item.name}</strong><span class="reveal-card-count">+1 fragment</span></span>
+            <span class="reveal-card-back" aria-hidden="true"><svg viewBox="0 0 96 96"><use href="relic-art.svg?v=2#crest"></use></svg><span>RELICS</span><span class="reveal-back-number">${index + 1}</span></span>
+            <span class="reveal-card-front" aria-hidden="true"><span class="reveal-card-type rarity-${item.rarity}">${item.rarity} RELIC</span><span class="reveal-relic-art">${api.artHtml(item.family)}</span><strong>${item.name}</strong><span class="reveal-card-stats">${api.describe(id)}</span><span class="reveal-card-count">Permanent · Owned ×${state.ownedCount}</span></span>
           </span>
         </button>`;
       }).join('');
       root.hidden = false;
-      inerted = ['app', 'relic-modal'].map(id => document.getElementById(id)).filter(Boolean).map(element => [element, element.inert]);
+      inerted = ['app', 'shop-modal', 'relic-modal'].map(id => document.getElementById(id)).filter(Boolean).map(element => [element, element.inert]);
       for (const [element] of inerted) element.inert = true;
       action.focus({preventScroll: true});
       window.GameSfx?.play('bento');
@@ -77,12 +78,15 @@
       const revealed = state.revealed.includes(index);
       card.classList.toggle('is-revealed', revealed);
       card.querySelector('.reveal-card-front').setAttribute('aria-hidden', String(!revealed));
-      const item = api.definitions.find(item => item.id === state.rewards[index]);
-      card.setAttribute('aria-label', revealed ? `${item.name}, 1 fragment, revealed` : `Reveal fragment ${index + 1}`);
+      const item = api.getRelic(state.rewards[index]);
+      card.setAttribute('aria-label', revealed ? `${item.name}, ${api.describe(item.key)}, revealed` : "Reveal your relic");
     }
-    title.textContent = state.phase === 'opening' ? 'Unsealing your pack…' : state.phase === 'complete' ? 'Your fragments' : 'What’s inside?';
-    const names = state.revealed.map(index => api.definitions.find(item => item.id === state.rewards[index]).name);
-    status.textContent = state.phase === 'complete' ? `3 fragments added to your collection: ${names.join(', ')}.` : names.length ? `${names.length} of 3 revealed: ${names.join(', ')}.` : 'Three fragments. Seven possibilities.';
+    const pack = api.packs.find(pack => pack.id === state.packId) || api.packs[0];
+    root.querySelector('.reveal-eyebrow').textContent = pack.name;
+    const result = api.getRelic(state.rewards[0]);
+    root.style.setProperty('--relic-rarity-color', state.phase === 'complete' ? result.color : api.rarities.find(rarity => rarity.id === pack.rarity).color);
+    title.textContent = state.phase === 'opening' ? 'Unsealing your pack…' : state.phase === 'complete' ? 'Your permanent relic' : 'What’s inside?';
+    status.textContent = state.phase === 'complete' ? `${result.name} added permanently to your collection. Only your equipped relic provides bonuses.` : 'One permanent relic. Roll rarity first, then family.';
     action.textContent = state.phase === 'complete' ? 'Continue' : 'Reveal all';
     if (state.revealed.length > previousCount) window.GameSfx?.play(state.phase === 'complete' ? 'collect' : 'orb-medium');
     previousCount = state.revealed.length;
@@ -104,7 +108,7 @@
     }
   });
   window.GameRelicOpening = {
-    show(results) { return Array.isArray(results) && results.every(id => api.definitions.some(item => item.id === id)) && controller.show(results); },
+    show(key, packId = 'common', ownedCount = 1) { return !!api.getRelic(key) && controller.show([key], {packId, ownedCount}); },
     close: controller.close,
     isOpen: controller.isOpen,
   };
