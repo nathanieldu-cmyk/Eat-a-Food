@@ -14,7 +14,9 @@
   // Original synthesized pack tear, card shuffle, rising tension, and rarity fanfares.
   sounds['relic-open'] = [[92,.24,0,'triangle',370],[1700,.07,.04,'triangle',320],[2200,.08,.14,'triangle',460],[196,.4,.22,'sine',392]];
   sounds['relic-deal'] = [[740,.09,0,'triangle',210],[880,.09,.13,'triangle',250],[1040,.1,.26,'triangle',300]];
-  sounds['relic-finale'] = [[523.25,.5,0],[659.25,.5,.08],[783.99,.6,.16],[1046.5,.7,.25]];
+  // A layered impact: fast crack, falling bass, sub-bass tail and quiet echoes.
+  const revealBoom = [[155,.65,0,'triangle',35,.9],[58,1.65,0,'sine',28,1.1,.012],[720,.12,0,'triangle',80,.30],[112,.4,.025,'triangle',42,.5],[75,1.1,.18,'sine',30,.35],[50,.9,.32,'sine',26,.22]];
+  sounds['relic-finale'] = revealBoom;
   const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
   const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
   for (const [rank,rarity] of relicRarities.entries()) {
@@ -32,7 +34,7 @@
     sounds[`relic-tick-secret-${pulse}`] = beats.map((offset,index)=>[index%2?65:84,.16,offset,'sine',34,index%2?.75:1]);
     sounds[`relic-tick-secret-${pulse}`].push([280+pulse*120,.25,beats.at(-1)+.03,'triangle',620+pulse*220,.22,.12]);
   }
-  sounds['relic-secret-impact'] = [[84,1,0,'triangle',28,1.1],[523.25,1.1,.04,'sine',1046.5,.7,.04],[1568,1.5,.13,'sine',undefined,.4,.02],[2349.32,1.8,.21,'sine',undefined,.3,.03]];
+  sounds['relic-secret-impact'] = revealBoom;
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();

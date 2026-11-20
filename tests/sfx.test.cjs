@@ -135,7 +135,7 @@ test('pack audio mode stops existing game effects and admits only pack cues unti
 
 test('Secret cinematic rumble and impact have distinct layers and remain part of pack-only audio',()=>{
  const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const before=ctx.voices.length;const stop=g.api.play('relic-secret-blackout');const rumble=ctx.voices.slice(before);assert.equal(rumble.length,4);assert.ok(rumble.some(v=>v.frequencyValue<60));
- const impactStart=ctx.voices.length;g.api.play('relic-secret-impact');const impact=ctx.voices.slice(impactStart);assert.equal(impact.length,4);assert.ok(impact.some(v=>v.frequencyValue>2000));stop();assert.ok(rumble.every(v=>v.stops.includes('now')));
+ const impactStart=ctx.voices.length;g.api.play('relic-secret-impact');const impact=ctx.voices.slice(impactStart);assert.equal(impact.length,6);assert.ok(impact.some(v=>v.frequencyValue<60));stop();assert.ok(rumble.every(v=>v.stops.includes('now')));
 });
 
 test('Secret blackout is immediate with a downward whoosh; the charge grows for several seconds',()=>{
@@ -150,4 +150,14 @@ test('Secret heartbeats accelerate across the three suspense pulses and leave a 
   counts.push(heartbeats.length);intervals.push(heartbeats[1].time-heartbeats[0].time);assert.ok(voices.every(v=>v.stops[0]-ctx.currentTime<1.1));stop();
  }
  assert.deepEqual(counts,[2,4,6]);assert.ok(intervals[0]>intervals[1]&&intervals[1]>intervals[2]);
+});
+
+test('the final reveal and Secret impact use the same deep boom with a sharp attack and bass tail',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0],signatures=[];
+ for(const name of ['relic-finale','relic-secret-impact']){
+  const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.equal(voices.length,6);
+  assert.ok(voices.some(v=>v.frequencyValue>=600&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.end<v.frequencyValue));
+  signatures.push(voices.map(v=>[v.frequencyValue,v.end,v.type,v.time,v.stops[0]]));stop();
+ }
+ assert.deepEqual(signatures[0],signatures[1]);
 });

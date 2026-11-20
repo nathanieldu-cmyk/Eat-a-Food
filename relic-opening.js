@@ -155,10 +155,11 @@
     }
     if (state.phase === 'revealing' && state.pulse > previousPulse) cue(`relic-tick-${active.rarity}-${state.pulse}`);
     if (state.revealed.length > previousCount) {
-      if (state.spotlightIndex !== null) cue('relic-secret-impact');
-      const item = api.getRelic(state.rewards[state.revealed.at(-1)]); cue(`relic-reveal-${item.rarity}`);
+      const item = api.getRelic(state.rewards[state.revealed.at(-1)]);
+      const lastCard = state.revealed.length === state.rewards.length;
+      cue(item.rarity === 'secret' ? 'relic-secret-impact' : lastCard ? 'relic-finale' : `relic-reveal-${item.rarity}`);
     }
-    if (state.phase === 'complete' && previousPhase !== 'complete') { cue('relic-finale'); action.focus({preventScroll: true}); }
+    if (state.phase === 'complete' && previousPhase !== 'complete') { action.focus({preventScroll: true}); }
     previousPulse = state.pulse;
     previousCount = state.revealed.length; previousPhase = state.phase;
   }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches});
