@@ -3804,9 +3804,9 @@
   }
 
   function relicGiftHtml() {
-    const claimed = save.relics.tutorialGiftClaimed;
+    if (save.relics.tutorialGiftClaimed) return "";
     const eligible = save.relics.tutorialGiftEligible;
-    return `<div class="relic-tutorial-gift" tabindex="-1"><div><h3>Free Common Pack</h3><p>${claimed ? "Tutorial reward claimed. Your relic is yours permanently." : eligible ? "Tutorial complete! Claim your one-time reward: one permanent relic." : "Complete the tutorial to unlock one free Common Pack."}</p><p class="relic-pack-odds">${window.GameRelics.oddsText(window.GameRelics.packs[0])}</p></div><button class="btn ghost small" type="button" data-relic-gift ${claimed || !eligible || state.running ? "disabled" : ""}>${claimed ? "Claimed" : "Claim free pack"}</button></div>`;
+    return `<div class="relic-tutorial-gift" tabindex="-1"><div><h3>Free Common Pack</h3><p>${eligible ? "Tutorial complete! Claim your one-time reward: one permanent relic." : "Complete the tutorial to unlock one free Common Pack."}</p><p class="relic-pack-odds">${window.GameRelics.oddsText(window.GameRelics.packs[0])}</p></div><button class="btn ghost small" type="button" data-relic-gift ${!eligible || state.running ? "disabled" : ""}>Claim free pack</button></div>`;
   }
 
   function renderRelicPacks() {

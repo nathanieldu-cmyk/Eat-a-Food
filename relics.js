@@ -6,11 +6,11 @@
     combineCopies: 5,
     rarities: [
       {id:'common', label:'Common', color:'#d7d7d7', price:100},
-      {id:'uncommon', label:'Uncommon', color:'#6dde8a', price:400},
-      {id:'rare', label:'Rare', color:'#6eb6ff', price:1000},
-      {id:'epic', label:'Epic', color:'#c089ff', price:3000},
-      {id:'legendary', label:'Legendary', color:'#ffb347', price:10000},
-      {id:'mythic', label:'Mythic', color:'#ff6b9d', price:30000},
+      {id:'uncommon', label:'Uncommon', color:'#6dde8a', price:500},
+      {id:'rare', label:'Rare', color:'#6eb6ff', price:2000},
+      {id:'epic', label:'Epic', color:'#c089ff', price:5000},
+      {id:'legendary', label:'Legendary', color:'#ffb347', price:20000},
+      {id:'mythic', label:'Mythic', color:'#ff6b9d', price:50000},
     ],
     rarityWeights: [825,100,50,25],
     families: [

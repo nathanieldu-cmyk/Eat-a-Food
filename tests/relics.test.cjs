@@ -23,7 +23,7 @@ test('all 60 unique relic definitions match every specified stat at every rarity
 });
 test('all six prices and coalesced rarity odds match the specification and sum to exactly 100%',()=>{
  const a=api(),odds=[[825,100,50,25,0,0],[0,825,100,50,25,0],[0,0,825,100,50,25],[0,0,0,825,100,75],[0,0,0,0,825,175],[0,0,0,0,0,1000]];
- assert.deepEqual(Array.from(a.packs,pack=>pack.price),[100,400,1000,3000,10000,30000]);
+ assert.deepEqual(Array.from(a.packs,pack=>pack.price),[100,500,2000,5000,20000,50000]);
  for(const [index,pack]of a.packs.entries()){
   assert.equal(pack.odds.reduce((sum,row)=>sum+row.weight,0),1000);near(pack.odds.reduce((sum,row)=>sum+row.chance,0),100);
   assert.deepEqual(rarityNames.map(rarity=>pack.odds.find(row=>row.rarity===rarity)?.weight||0),odds[index]);
