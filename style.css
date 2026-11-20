@@ -1527,9 +1527,9 @@ h1 {
 .reveal-pack-lid { clip-path: polygon(0 0,100% 0,100% 12%,80% 14%,60% 12%,40% 15%,20% 12%,0 14%); }
 .relic-opening[data-phase="opening"] .reveal-pack { animation: relic-pack-wake .65s ease both; }
 .relic-opening[data-phase="opening"] .reveal-pack-lid { animation: relic-pack-tear .65s .2s cubic-bezier(.18,.65,.3,1) both; }
-.relic-opening:not([data-phase="opening"]) .reveal-pack { opacity: 0; transform: translateY(45px) rotate(10deg) scale(.8); transition: opacity .28s, transform .4s; }
+.relic-opening:not([data-phase="opening"]):not([data-phase="sealed"]) .reveal-pack { opacity: 0; transform: translateY(45px) rotate(10deg) scale(.8); transition: opacity .28s, transform .4s; }
 .reveal-cards { position: relative; z-index: 3; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; width: min(680px,100%); margin: auto; }
-.relic-opening[data-phase="opening"] .reveal-cards { visibility: hidden; pointer-events: none; }
+.relic-opening[data-phase="opening"] .reveal-cards, .relic-opening[data-phase="sealed"] .reveal-cards { visibility: hidden; pointer-events: none; }
 .relic-opening:not([data-phase="opening"]) .reveal-card { animation: relic-card-arrive .45s calc(var(--card-index) * 90ms) ease both; }
 .reveal-card { position: relative; display: block; width: 100%; height: 286px; padding: 0; border: 0; border-radius: 18px; color: inherit; background: transparent; cursor: pointer; perspective: 1000px; font: inherit; }
 .reveal-card-inner { position: absolute; inset: 0; display: block; transition: transform .65s cubic-bezier(.2,.7,.2,1); transform-style: preserve-3d; }
@@ -1649,4 +1649,23 @@ h1 {
 @media (max-width: 600px) {
   .reveal-swipe-hint { display: block; margin-top: 8px; color: #dae9d2; font-size: .8rem; }
   .relic-opening[data-phase="opening"] .reveal-swipe-hint { visibility: hidden; }
+}
+
+/* Each purchase waits for a pack tap, then one tap per card. */
+.reveal-pack { padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
+.reveal-pack[hidden], .reveal-action[hidden], .reveal-swipe-hint[hidden] { display: none; }
+.relic-opening[data-phase="sealed"] .reveal-pack { animation: sealed-pack-breathe 2.3s ease-in-out infinite; }
+.relic-opening[data-phase="sealed"] .reveal-pack:hover { filter: drop-shadow(0 0 18px #f5e1a588); }
+.reveal-card-back > span { font-size: .75rem; letter-spacing: .08em; }
+.reveal-card-back .reveal-back-number { width: 45px; }
+.reveal-card.is-revealing { z-index: 5; }
+.reveal-card.is-revealing .reveal-card-inner { animation: relic-suspense-shiver .18s ease-in-out infinite; }
+.reveal-card.is-revealing .reveal-card-back { border-color: var(--relic-rarity-color); box-shadow: 0 0 calc(7px * var(--suspense-strength)) var(--relic-rarity-color), inset 0 0 30px #fff2; }
+.reveal-card.is-revealing::after { content: ""; position: absolute; inset: -5px; border: 2px solid var(--relic-rarity-color); border-radius: 22px; pointer-events: none; animation: relic-suspense-ring var(--suspense-duration) ease-in forwards; }
+.relic-opening[data-phase="revealing"] .reveal-aura { background: radial-gradient(circle, var(--relic-rarity-color), transparent 68%); opacity: .3; transform: translate(-50%, -50%) scale(calc(1 + var(--suspense-strength) * .1)); transition: transform .6s, background .6s; }
+@keyframes sealed-pack-breathe { 50% { transform: rotate(2deg) translateY(-7px); } }
+@keyframes relic-suspense-shiver { 25% { transform: translateX(calc(-.4px * var(--suspense-strength))) rotate(-.4deg); } 75% { transform: translateX(calc(.4px * var(--suspense-strength))) rotate(.4deg); } }
+@keyframes relic-suspense-ring { from { opacity: 0; transform: scale(.96); } 65% { opacity: .7; } to { opacity: 1; transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-pack, .reveal-card.is-revealing .reveal-card-inner, .reveal-card.is-revealing::after { animation: none !important; }
 }

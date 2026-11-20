@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=90" />
+  <link rel="stylesheet" href="style.css?v=91" />
   <script type="importmap">
     {
       "imports": {
@@ -247,7 +247,7 @@
       </div>
       <section id="relic-packs-panel" class="relic-shop-section relic-tab-panel" role="tabpanel" aria-labelledby="relic-tab-packs" hidden>
         <h3 id="relic-packs-title">Relic Packs</h3>
-        <p>Open immediately for three permanent relics. Repeats are allowed. Odds apply independently to each relic: food luck, potions and weather never change these rolls.</p>
+        <p>Three permanent relics per pack. Tap the pack to open, then tap each card. Repeats are allowed. Odds apply independently to each relic: food luck, potions and weather never change these rolls.</p>
         <div id="relic-gift"></div>
         <div id="relic-packs" class="relic-shop-packs"></div>
       </section>
@@ -258,15 +258,15 @@
     <section class="reveal-dialog" role="dialog" aria-modal="true" aria-labelledby="relic-reveal-title">
       <button class="reveal-close" type="button" aria-label="Close pack opening">×</button>
       <p class="reveal-eyebrow">RELIC PACK</p>
-      <h2 id="relic-reveal-title">Unsealing your pack…</h2>
+      <h2 id="relic-reveal-title">Tap your pack to open</h2>
       <p class="reveal-swipe-hint">Swipe sideways to see all three relics.</p>
       <div class="reveal-stage">
         <div class="reveal-aura" aria-hidden="true"></div>
-        <div class="reveal-pack" aria-hidden="true"><div class="reveal-pack-body"><img src="relic-pack.svg?v=2" alt="" /></div><div class="reveal-pack-lid"><img src="relic-pack.svg?v=2" alt="" /></div></div>
+        <button class="reveal-pack" type="button" aria-label="Tap to open pack"><span class="reveal-pack-body" aria-hidden="true"><img src="relic-pack.svg?v=2" alt="" /></span><span class="reveal-pack-lid" aria-hidden="true"><img src="relic-pack.svg?v=2" alt="" /></span></button>
         <div class="reveal-cards"></div>
       </div>
       <p class="reveal-status" role="status" aria-live="polite"></p>
-      <button class="btn primary reveal-action" type="button">Reveal all</button>
+      <button class="btn primary reveal-action" type="button" hidden>Continue</button>
     </section>
   </div>
 
@@ -275,7 +275,7 @@
   <script src="sfx.js?v=5"></script>
   <script src="weather.js?v=11"></script>
   <script src="relics.js?v=7"></script>
-  <script src="relic-opening.js?v=3"></script>
+  <script src="relic-opening.js?v=4"></script>
   <script src="game.js?v=247"></script>
   <script src="giveaway.js?v=1"></script>
   <script src="bento-fit.js?v=1"></script>
