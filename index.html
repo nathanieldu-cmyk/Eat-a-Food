@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=86" />
+  <link rel="stylesheet" href="style.css?v=87" />
   <script type="importmap">
     {
       "imports": {
@@ -53,7 +53,6 @@
           <button id="multi-btn" class="btn ghost" type="button">Multiplayer</button>
           <p id="multi-live" class="multi-live hidden"></p>
         </div>
-        <div id="relic-loadout" class="relic-loadout" aria-label="Equipped food and relic"></div>
         <p id="potion-status" class="potion-status hidden"></p>
         <footer class="hud">
           <button id="auto-farm-btn" class="btn ghost" type="button" aria-pressed="false" title="Automatically farm orbs, restart after death, and collect run rewards every 10 minutes.">Auto Farm</button>
@@ -186,14 +185,7 @@
         <button id="shop-close" class="btn ghost small" type="button">Close</button>
       </div>
       <p id="shop-diamonds" class="shop-diamonds"></p>
-      <section class="relic-shop-section" aria-labelledby="relic-shop-title">
-        <h3 id="relic-shop-title">Relic Packs</h3>
-        <p>Open immediately for one permanent relic. Fixed odds: food luck, potions and weather never change these rolls.</p>
-        <p>Rarity rolls first. Within every rarity: Chef’s Badge 8.2%; each of the other nine families 10.2%.</p>
-        <div id="shop-relic-gift"></div>
-        <p id="shop-relic-status" class="relic-status" role="status" aria-live="polite"></p>
-        <div id="relic-shop-packs" class="relic-shop-packs"></div>
-      </section>
+
       <div class="inv-hint bento-shop-description">
         <span>1,000 💎 per box · 5-box limit</span>
         <span>2h unlock · One box at a time</span>
@@ -229,18 +221,30 @@
       <div class="relic-intro"><p>60 permanent relics. One equipped at a time.</p><strong id="relic-diamonds">0 diamonds</strong></div>
       <p class="relic-rules">Only your equipped relic works. Switch outside a run; ownership survives death and food changes. Extra copies never stack bonuses.</p>
       <p id="relic-run-note" class="relic-run-note hidden">Your run continues. Purchases and relic changes unlock after the run.</p>
-      <div id="relic-gift"></div>
+      <p id="relic-status" class="relic-status" role="status" aria-live="polite"></p>
+      <div id="relic-tabs" class="relic-tabs" role="tablist" aria-label="Relics area">
+        <button id="relic-tab-collection" class="btn ghost" type="button" role="tab" aria-selected="true" aria-controls="relic-collection-panel">Collection</button>
+        <button id="relic-tab-packs" class="btn ghost" type="button" role="tab" aria-selected="false" aria-controls="relic-packs-panel" tabindex="-1">Packs</button>
+      </div>
+      <div id="relic-collection-panel" class="relic-tab-panel" role="tabpanel" aria-labelledby="relic-tab-collection">
       <section class="relic-attachment" aria-labelledby="relic-attachment-title">
         <div class="relic-equipped-heading"><h3 id="relic-attachment-title">Equipped relic</h3><button id="relic-unequip" class="btn ghost small" type="button">Unequip</button></div>
         <div id="relic-equipped-summary" class="relic-equipped-summary"></div>
         <p id="relic-diamond-carry" class="relic-diamond-carry"></p>
       </section>
-      <p id="relic-status" class="relic-status" role="status" aria-live="polite"></p>
-      <div class="relic-collection-heading"><div><h3>Your relic inventory</h3><p id="relic-collection-count">0 / 60 collected</p></div><button id="relic-open-shop" class="btn primary small" type="button">Buy packs in Shop</button></div>
+      <div class="relic-collection-heading"><div><h3>Your relic inventory</h3><p id="relic-collection-count">0 / 60 collected</p></div><button id="relic-open-packs" class="btn primary small" type="button">Open relic packs</button></div>
       <div class="relic-fields"><label>Rarity<select id="relic-tier"><option value="all">All rarities</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="epic">Epic</option><option value="legendary">Legendary</option><option value="mythic">Mythic</option></select></label><label>Show<select id="relic-view"><option value="owned">Owned relics</option><option value="all">All possible relics</option></select></label></div>
       <p id="relic-inspection" class="relic-inspection"></p><button id="relic-clear-inspection" class="btn ghost small" type="button" hidden>Show the full collection</button>
-      <p class="relic-rules">Ten families are available at every rarity. Inspect any relic’s exact stats below, including bonuses and penalties.</p>
+      <p class="relic-rules">Combine 5 identical relics of the same rarity for 1 of the next rarity, with no diamond fee. Mythic is the highest rarity. If your last equipped copy is used, its upgrade is equipped automatically.</p>
       <div id="relic-list" class="relic-grid"></div>
+      </div>
+      <section id="relic-packs-panel" class="relic-shop-section relic-tab-panel" role="tabpanel" aria-labelledby="relic-tab-packs" hidden>
+        <h3 id="relic-packs-title">Relic Packs</h3>
+        <p>Open immediately for one permanent relic. Fixed odds: food luck, potions and weather never change these rolls.</p>
+        <p>Rarity rolls first. Within every rarity: Chef’s Badge 8.2%; each of the other nine families 10.2%.</p>
+        <div id="relic-gift"></div>
+        <div id="relic-packs" class="relic-shop-packs"></div>
+      </section>
     </div>
   </div>
 
@@ -263,11 +267,11 @@
   <script src="music.js?v=2"></script>
   <script src="sfx.js?v=5"></script>
   <script src="weather.js?v=11"></script>
-  <script src="relics.js?v=3"></script>
+  <script src="relics.js?v=4"></script>
   <script src="relic-opening.js?v=2"></script>
-  <script src="game.js?v=243"></script>
+  <script src="game.js?v=244"></script>
   <script src="giveaway.js?v=1"></script>
   <script src="bento-fit.js?v=1"></script>
-  <script src="tutorial.js?v=4"></script>
+  <script src="tutorial.js?v=5"></script>
 </body>
 </html>

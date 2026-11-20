@@ -138,3 +138,24 @@ test('a confirmed guest run locks the host relic even if the lobby selection cha
  for(const name of ['pullResultsEl','lobbyHintEl','overlay','endBtn','inventoryBtn','shopBtn','craftBtn'])c[name]=element();
  vm.runInNewContext(source.slice(start,end)+'\nguestBeginRun(7,"rare:fork");',c);assert.equal(state.running,true);assert.equal(state.runRelicKey,'rare:fork');
 });
+test('five identical copies upgrade every family by exactly one rarity without spending diamonds',()=>{
+ const a=api();for(const family of a.definitions)for(let rank=0;rank<a.rarities.length-1;rank++){
+  const source=a.keyFor(family.id,a.rarities[rank].id),target=a.keyFor(family.id,a.rarities[rank+1].id),save=saveFor(a);save.relics.items[source]=5;save.relics.items[target]=2;save.relics.diamondCarry=37;
+  assert.equal(a.nextRelic(source).key,target);assert.equal(a.combine(save,source),target);assert.equal(save.relics.items[source],0);assert.equal(save.relics.items[target],3);assert.equal(save.diamonds,100000);assert.equal(save.relics.diamondCarry,37);
+  assert.equal(a.combine(save,source),null);assert.equal(save.relics.items[target],3);
+ }
+});
+test('combining rejects mixed families/rarities, insufficient copies, Mythic and in-run actions',()=>{
+ const a=api(),save=saveFor(a);save.relics.items={'common:spoon':3,'uncommon:spoon':2,'common:fork':2,'mythic:chili':5,'rare:badge':10};
+ const before=JSON.stringify(save);for(const [key,running]of [['common:spoon',false],['uncommon:spoon',false],['common:fork',false],['mythic:chili',false],['missing',false],['rare:badge',true]])assert.equal(a.combine(save,key,running),null);
+ assert.equal(JSON.stringify(save),before);assert.equal(a.nextRelic('mythic:chili'),null);
+});
+test('using the last equipped copy equips the upgrade; remaining copies and other equipped families stay selected',()=>{
+ const a=api(),save=saveFor(a);save.relics.items={'common:spoon':5,'common:chili':6,'rare:fork':1};a.equip(save,'common:spoon');a.combine(save,'common:spoon');assert.equal(save.relics.equipped,'uncommon:spoon');near(a.effectsForKey(save.relics.equipped).sprinklePoints,1.08);
+ a.equip(save,'common:chili');a.combine(save,'common:chili');assert.equal(save.relics.items['common:chili'],1);assert.equal(save.relics.equipped,'common:chili');
+ save.relics.items['uncommon:spoon']=5;a.equip(save,'rare:fork');a.combine(save,'uncommon:spoon');assert.equal(save.relics.equipped,'rare:fork');
+});
+test('combined ownership and the upgraded equipped relic persist across reloads',()=>{
+ const a=api(),save=saveFor(a);save.relics.items['legendary:ladle']=5;save.relics.tutorialGiftClaimed=true;a.equip(save,'legendary:ladle');a.combine(save,'legendary:ladle');
+ const reloaded=a.normalize(plain(save.relics));assert.equal(reloaded.items['mythic:ladle'],1);assert.equal(reloaded.items['legendary:ladle']||0,0);assert.equal(reloaded.equipped,'mythic:ladle');assert.equal(reloaded.tutorialGiftClaimed,true);
+});

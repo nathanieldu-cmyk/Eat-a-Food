@@ -47,7 +47,7 @@
     'close-craft': {title: 'Back to the lobby', text: 'Close Craft to learn about playing with friends.', target: '#craft-close'},
     multiplayer: {title: 'Play with friends', text: 'Open Multiplayer to see how to invite a friend.', target: '#multi-btn'},
     'multiplayer-info': {title: 'Multiplayer', text: 'Create a room and share its code with friends. To join a friend, enter their code and press Join. You can keep collecting foods together!', target: '#multi-setup', next: 'finish'},
-    finish: {title: 'Continue collecting new foods', text: 'You’re ready! Finish to unlock a free Common Relic Pack in Shop. Try stronger foods, permanent relics, and Golden, Rainbow, and Shadow foods.', next: 'done'},
+    finish: {title: 'Continue collecting new foods', text: 'You’re ready! Finish to unlock a free Common Relic Pack in Relics. Try stronger foods, permanent relics, and Golden, Rainbow, and Shadow foods.', next: 'done'},
   };
   const root = document.createElement('div');
   root.className = 'tutorial-root';

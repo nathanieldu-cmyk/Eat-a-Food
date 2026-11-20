@@ -3,6 +3,7 @@
   // Stat sequences are always Common → Uncommon → Rare → Epic → Legendary → Mythic.
   const config = {
     schema: 2,
+    combineCopies: 5,
     rarities: [
       {id:'common', label:'Common', color:'#d7d7d7', price:100},
       {id:'uncommon', label:'Uncommon', color:'#6dde8a', price:400},
@@ -101,6 +102,19 @@
     if(!getRelic(key)||!(save.relics.items[key]>0))return false;
     save.relics.equipped=key;return true;
   }
+  function nextRelic(key) {
+    const relic=getRelic(key);if(!relic)return null;
+    const index=config.rarities.findIndex(rarity=>rarity.id===relic.rarity);
+    const next=config.rarities[index+1];return next?getRelic(keyFor(relic.family,next.id)):null;
+  }
+  function combine(save,key,running=false) {
+    const next=nextRelic(key),needed=config.combineCopies;
+    if(running||!next||!(save.relics.items[key]>=needed))return null;
+    save.relics.items[key]-=needed;
+    award(save,next.key);
+    if(save.relics.equipped===key&&save.relics.items[key]===0)save.relics.equipped=next.key;
+    return next.key;
+  }
   function effectsForKey(key) {
     const effects={speed:1,sprinkleGrowth:1,sprinklePoints:1,rivalGrowth:1,rivalPoints:1,xsPoints:1,diamonds:0};
     const relic=getRelic(key);if(!relic)return effects;
@@ -133,5 +147,5 @@
     return `<svg class="relic-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=2#${symbol}"></use></svg>`;
   }
   const oddsText = pack => pack.odds.map(row=>`${row.chance}% ${row.label}`).join(' · ');
-  window.GameRelics={config,rarities:config.rarities,definitions:config.families,tiers:config.rarities.map(rarity=>rarity.id),packs,relics,getRelic,keyFor,parseKey,emptySave,normalize,cleanAssignments,roll,buyPack,equip,effectsForKey,bankDiamonds,unlockTutorialGift,claimTutorialPack,describe,artHtml,oddsText,familyWeightTotal};
+  window.GameRelics={config,rarities:config.rarities,definitions:config.families,tiers:config.rarities.map(rarity=>rarity.id),packs,relics,getRelic,keyFor,parseKey,emptySave,normalize,cleanAssignments,roll,buyPack,equip,nextRelic,combine,effectsForKey,bankDiamonds,unlockTutorialGift,claimTutorialPack,describe,artHtml,oddsText,familyWeightTotal};
 })();

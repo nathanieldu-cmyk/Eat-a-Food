@@ -1574,7 +1574,7 @@ h1 {
 }
 
 /* Permanent relic collection and the six shop packs. */
-#shop-modal .shop-panel { width: min(860px, 96vw); max-height: 92dvh; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain; }
+#shop-modal .shop-panel { width: min(520px, 96vw); max-height: 92dvh; overflow-y: auto; overflow-anchor: none; overscroll-behavior: contain; }
 .relic-shop-section { display: grid; gap: 12px; margin-bottom: 20px; }
 .relic-shop-section > h3 { font: 700 1.25rem "Fredoka", sans-serif; }
 .relic-shop-section > p { font-size: .9rem; line-height: 1.5; color: #eadac4; }
@@ -1602,9 +1602,6 @@ h1 {
 .relic-card .relic-emblem { border-color: var(--relic-rarity-color, #cde8cd); background: radial-gradient(ellipse at 30% 10%, #4d6765, #20383f 70%); }
 .relic-card .relic-count { color: var(--relic-rarity-color, #9af0da); }
 .relic-empty { grid-column: 1/-1; padding: 20px; border: 1px dashed #a9d4c255; border-radius: 14px; }
-.relic-loadout { display: grid; gap: 5px; padding: 12px; border: 1px solid #8ed8c733; border-radius: 13px; background: #102b2733; font-size: .85rem; }
-.relic-loadout > span:first-child { font-weight: 800; }
-.relic-loadout .food-icon { display: inline-block; }
 .relic-panel .relic-fields { margin: 0; }
 .relic-opening .reveal-cards { grid-template-columns: minmax(0, 1fr); width: min(320px, 100%); }
 .relic-opening .reveal-stage { min-height: 418px; }
@@ -1632,3 +1629,15 @@ h1 {
 }
 
 .relic-opening .reveal-card-front .reveal-card-type { color: var(--relic-rarity-color); background: #15323a; padding: 4px 9px; border-radius: 5px; }
+
+/* Packs and collection share the Relics stand; combining uses matching copies. */
+.relic-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.relic-tabs [aria-selected="true"] { color: #bcffe7; border-color: #71cba6; background: #23534366; }
+.relic-tab-panel[hidden] { display: none; }
+.relic-tab-panel { min-width: 0; }
+#relic-collection-panel > .relic-attachment { margin-bottom: 20px; }
+#relic-packs-panel { margin: 4px 0 0; }
+.relic-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.relic-card-actions .btn { padding-inline: 8px; min-height: 40px; }
+.relic-card .relic-combine-recipe { color: #cfdeca; font-size: .85rem; }
+@media (max-width: 600px) { .relic-card-actions { grid-template-columns: 1fr; } }

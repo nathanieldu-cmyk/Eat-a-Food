@@ -42,7 +42,8 @@
   let relicPurchaseBusy = false;
   let relicInspectPack = null;
   const relicViewEl = document.getElementById("relic-view");
-  const relicShopEl = document.getElementById("relic-shop-packs");
+  const relicPacksEl = document.getElementById("relic-packs");
+  let relicActiveTab = "collection";
   const indexModal = document.getElementById("index-modal");
   const indexRowsEl = document.getElementById("index-rows");
   const indexScrollEl = document.getElementById("index-scroll");
@@ -3146,10 +3147,6 @@
       <div class="relic-equipped-line">Relic: ${relicItemLabel(state.running ? state.runRelicKey : save.relics?.equipped)}${state.running ? " · Locked for this run" : ""}</div>
       <div class="type-count-line">Amount of food types: ${luck.typeCount} · Luck +${shownPct}% · ${luck.into}/${LUCK_EVERY} to next +50%</div>
     `;
-    const activeRelic = window.GameRelics.getRelic(state.running ? state.runRelicKey : save.relics.equipped);
-    const loadout = document.getElementById("relic-loadout");
-    const loadoutHtml = `<span>${foodIconHtml(tier)} ${tier.name}</span><span class="${activeRelic ? `rarity-${activeRelic.rarity}` : ""}">${activeRelic ? `${activeRelic.icon} ${activeRelic.name}` : "No relic equipped"}</span>`;
-    if (loadout.innerHTML !== loadoutHtml) loadout.innerHTML = loadoutHtml;
     luckEl.textContent = `+${shownPct}%`;
     luckLabelEl.textContent = `Luck · ${luck.into}/${LUCK_EVERY}`;
     const bentoLuck = Math.round(bentoLuckBonus() * 100);
@@ -3449,7 +3446,6 @@
       shopListEl.appendChild(row);
     }
     renderBento();
-    renderRelicShop();
   }
 
   function formatLongRemaining(ms) {
@@ -3813,10 +3809,9 @@
     return `<div class="relic-tutorial-gift" tabindex="-1"><div><h3>Free Common Pack</h3><p>${claimed ? "Tutorial reward claimed. Your relic is yours permanently." : eligible ? "Tutorial complete! Claim your one-time reward: one permanent relic." : "Complete the tutorial to unlock one free Common Pack."}</p><p class="relic-pack-odds">${window.GameRelics.oddsText(window.GameRelics.packs[0])}</p></div><button class="btn ghost small" type="button" data-relic-gift ${claimed || !eligible || state.running ? "disabled" : ""}>${claimed ? "Claimed" : "Claim free pack"}</button></div>`;
   }
 
-  function renderRelicShop() {
+  function renderRelicPacks() {
     const api = window.GameRelics;
-    document.getElementById("shop-relic-gift").innerHTML = relicGiftHtml();
-    relicShopEl.innerHTML = api.packs.map(pack => {
+    relicPacksEl.innerHTML = api.packs.map(pack => {
       const rarity = api.rarities.find(rarity => rarity.id === pack.rarity);
       return `<article class="relic-shop-pack" tabindex="-1" style="--relic-rarity-color:${rarity.color}">
         <img class="relic-shop-pack-art" src="relic-pack.svg?v=2" width="180" height="244" alt="" />
@@ -3836,7 +3831,6 @@
     const summary = document.getElementById("relic-equipped-summary");
     summary.innerHTML = equipped ? `<span class="relic-emblem" aria-hidden="true">${api.artHtml(equipped.family)}</span><div><span class="relic-rarity-tag rarity-${equipped.rarity}">Equipped · ${equipped.rarity}</span><h3>${equipped.name}</h3><p>${api.describe(equipped.key)}</p></div>` : '<p>No relic equipped. Choose an owned relic below.</p>';
     document.getElementById("relic-unequip").disabled = state.running || !equipped;
-    document.getElementById("relic-open-shop").disabled = state.running;
     document.getElementById("relic-diamond-carry").textContent = `Diamond Dish bonus carried forward: ${(save.relics.diamondCarry / 100).toFixed(2)} diamond.`;
     const pack = api.packs.find(pack => pack.id === relicInspectPack);
     const inspection = document.getElementById("relic-inspection");
@@ -3847,33 +3841,49 @@
     document.getElementById("relic-collection-count").textContent = `${api.relics.filter(relic => save.relics.items[relic.key] > 0).length} / ${api.relics.length} collected`;
     relicListEl.innerHTML = rows.length ? rows.map(relic => {
       const count = save.relics.items[relic.key] || 0, selected = save.relics.equipped === relic.key;
+      const next = api.nextRelic(relic.key), needed = api.config.combineCopies;
       return `<article class="relic-card relic-${relic.rarity}${selected ? " relic-is-equipped" : ""}" tabindex="-1" style="--relic-rarity-color:${relic.color}">
         <div class="relic-card-heading"><span class="relic-icon relic-emblem" aria-hidden="true">${api.artHtml(relic.family)}</span><div><span class="relic-rarity-tag rarity-${relic.rarity}">${relic.rarity}</span><h3>${relic.name}</h3></div></div>
         <p>${api.describe(relic.key)}</p><p class="relic-count">${count ? `Owned ×${count}` : "Not owned"}${selected ? " · Equipped" : ""}</p>
-        <button class="btn ghost small" type="button" data-relic-equip="${relic.key}" aria-pressed="${selected}" ${state.running || !count || selected ? "disabled" : ""}>${selected ? "Equipped" : state.running ? "Locked during run" : count ? "Equip" : "Not owned"}</button>
+        <div class="relic-card-actions"><button class="btn ghost small" type="button" data-relic-equip="${relic.key}" aria-pressed="${selected}" ${state.running || !count || selected ? "disabled" : ""}>${selected ? "Equipped" : state.running ? "Locked during run" : count ? "Equip" : "Not owned"}</button>
+        <button class="btn ghost small relic-combine" type="button" data-relic-combine="${relic.key}" ${state.running || !next || count < needed ? "disabled" : ""} aria-label="${next ? `Combine ${needed} ${relic.name} into one ${next.name}` : `${relic.name} is the highest rarity`}">${next ? `Combine ${needed} → ${api.rarities.find(rarity => rarity.id === next.rarity).label}` : "Highest rarity"}</button></div>
+        <p class="relic-combine-recipe">${next ? `${count}/${needed} matching copies · No diamond fee` : "Mythic is the highest rarity."}</p>
       </article>`;
-    }).join("") : '<p class="relic-empty">No relics match this filter. Open a pack in Shop, or choose “All possible relics” to browse the collection.</p>';
+    }).join("") : '<p class="relic-empty">No relics match this filter. Open a pack in the Packs tab, or choose “All possible relics” to browse the collection.</p>';
+    renderRelicPacks();
+    selectRelicTab(relicActiveTab);
+  }
+
+  function selectRelicTab(tab, resetScroll = false) {
+    relicActiveTab = tab === "packs" ? "packs" : "collection";
+    for (const name of ["collection", "packs"]) {
+      const selected = name === relicActiveTab;
+      const button = document.getElementById(`relic-tab-${name}`);
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      document.getElementById(`relic-${name}-panel`).hidden = !selected;
+    }
+    if (resetScroll) relicModal.querySelector(".relic-panel").scrollTop = 0;
   }
 
   function finishRelicAction(message) {
-    const panels = [relicModal.querySelector(".relic-panel"), shopModal.querySelector(".shop-panel")].filter(Boolean);
+    const panels = [relicModal.querySelector(".relic-panel")].filter(Boolean);
     const scroll = panels.map(panel => [panel, panel.scrollTop, panel.scrollLeft]);
     const active = document.activeElement;
     const focusId = active?.id;
     const equipKey = active?.dataset?.relicEquip;
     const buyKey = active?.dataset?.relicBuy;
+    const combineKey = active?.dataset?.relicCombine;
     const isGift = active?.hasAttribute?.("data-relic-gift");
     persistSave();
     refreshPlayerRelics();
     renderDiamonds();
     if (state.relicsOpen) renderRelics();
-    if (!shopModal.classList.contains("hidden")) renderShop();
     renderEquippedUi();
     relicStatusEl.textContent = message;
-    document.getElementById("shop-relic-status").textContent = message;
-    const scope = state.relicsOpen ? relicModal : shopModal;
+    const scope = relicModal;
     const control = focusId ? document.getElementById(focusId) : equipKey ? scope.querySelector(`[data-relic-equip="${equipKey}"]`)
-      : buyKey ? scope.querySelector(`[data-relic-buy="${buyKey}"]`) : isGift ? scope.querySelector('[data-relic-gift]') : null;
+      : combineKey ? scope.querySelector(`[data-relic-combine="${combineKey}"]`) : buyKey ? scope.querySelector(`[data-relic-buy="${buyKey}"]`) : isGift ? scope.querySelector('[data-relic-gift]') : null;
     const target = control?.disabled ? control.closest(".relic-card, .relic-shop-pack, .relic-tutorial-gift") : control;
     target?.focus({preventScroll: true});
     for (const [panel, top, left] of scroll) { panel.scrollTop = top; panel.scrollLeft = left; }
@@ -5828,7 +5838,7 @@
   );
   relicModal.addEventListener("keydown", e => {
     if (e.key !== "Tab") return;
-    const controls = [...relicModal.querySelectorAll("button:not([disabled]):not([hidden]), select:not([disabled])")];
+    const controls = [...relicModal.querySelectorAll("button:not([disabled]):not([hidden]), select:not([disabled])")].filter(control => control.getClientRects().length);
     const first = controls[0], last = controls[controls.length - 1];
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -5840,24 +5850,37 @@
   relicTierEl.addEventListener("change", renderRelics);
   relicViewEl.addEventListener("change", renderRelics);
   document.getElementById("relic-clear-inspection").addEventListener("click", () => { relicInspectPack = null; renderRelics(); });
-  document.getElementById("relic-open-shop").addEventListener("click", openShop);
+  document.getElementById("relic-open-packs").addEventListener("click", () => selectRelicTab("packs", true));
+  for (const name of ["collection", "packs"]) document.getElementById(`relic-tab-${name}`).addEventListener("click", () => selectRelicTab(name, true));
+  document.getElementById("relic-tabs").addEventListener("keydown", e => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    e.preventDefault(); e.stopPropagation();
+    const tab = e.key === "Home" ? "collection" : e.key === "End" ? "packs" : relicActiveTab === "collection" ? "packs" : "collection";
+    selectRelicTab(tab, true);
+    document.getElementById(`relic-tab-${tab}`).focus({preventScroll: true});
+  });
   document.getElementById("relic-unequip").addEventListener("click", () => {
     if (window.GameRelics.equip(save, null, state.running)) finishRelicAction("Relic unequipped.");
   });
   relicListEl.addEventListener("click", e => {
+    const combine = e.target.closest("[data-relic-combine]");
+    if (combine && !combine.disabled) {
+      const result = window.GameRelics.combine(save, combine.dataset.relicCombine, state.running);
+      if (result) finishRelicAction(`Combined 5 copies into ${window.GameRelics.getRelic(result).name}.${save.relics.equipped === result ? " The upgrade is equipped." : ""}`);
+      return;
+    }
     const button = e.target.closest("[data-relic-equip]");
     if (button && !button.disabled && window.GameRelics.equip(save, button.dataset.relicEquip, state.running)) finishRelicAction(`${window.GameRelics.getRelic(button.dataset.relicEquip).name} equipped.`);
   });
-  const onRelicShopAction = e => {
+  const onRelicPackAction = e => {
     const buy = e.target.closest("[data-relic-buy]");
     if (buy && !buy.disabled) purchaseRelicPack(buy.dataset.relicBuy);
     const browse = e.target.closest("[data-relic-browse]");
-    if (browse) { relicInspectPack = browse.dataset.relicBrowse; relicTierEl.value = "all"; relicViewEl.value = "all"; openRelics(); }
+    if (browse) { relicInspectPack = browse.dataset.relicBrowse; relicTierEl.value = "all"; relicViewEl.value = "all"; selectRelicTab("collection", true); renderRelics(); }
     const gift = e.target.closest("[data-relic-gift]");
     if (gift && !gift.disabled) purchaseRelicPack("common", true);
   };
-  document.getElementById("shop-modal").addEventListener("click", onRelicShopAction);
-  relicModal.addEventListener("click", onRelicShopAction);
+  relicModal.addEventListener("click", onRelicPackAction);
   const MOVE_KEYS = new Set(["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"]);
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
