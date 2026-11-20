@@ -3830,7 +3830,6 @@
     const summary = document.getElementById("relic-equipped-summary");
     summary.innerHTML = equipped ? `<span class="relic-emblem" aria-hidden="true">${api.artHtml(equipped.family)}</span><div><span class="relic-rarity-tag rarity-${equipped.rarity}">Equipped · ${equipped.rarity}</span><h3>${equipped.name}</h3><p>${api.describe(equipped.key)}</p></div>` : '<p>No relic equipped. Choose an owned relic below.</p>';
     document.getElementById("relic-unequip").disabled = state.running || !equipped;
-    document.getElementById("relic-diamond-carry").textContent = `Diamond Dish bonus carried forward: ${(save.relics.diamondCarry / 100).toFixed(2)} diamond.`;
     const filter = relicTierEl.value || "all";
     const rows = api.relics.filter(relic => (filter === "all" || relic.rarity === filter) && save.relics.items[relic.key] > 0);
     document.getElementById("relic-collection-count").textContent = `${api.relics.filter(relic => save.relics.items[relic.key] > 0).length} / ${api.relics.length} collected`;

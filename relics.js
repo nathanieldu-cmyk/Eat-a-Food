@@ -58,13 +58,12 @@
   const byKey = new Map(relics.map(relic=>[relic.key,relic]));
   const getRelic = key => byKey.get(key) || null;
   function parseKey(key) {const relic=getRelic(key);return relic?{id:relic.family,family:relic.family,rarity:relic.rarity,tier:relic.rarity}:null;}
-  function emptySave() {return {schema:config.schema,items:{},equipped:null,diamondCarry:0,tutorialGiftEligible:false,tutorialGiftClaimed:false};}
+  function emptySave() {return {schema:config.schema,items:{},equipped:null,tutorialGiftEligible:false,tutorialGiftClaimed:false};}
   function normalize(raw, {completedTutorial=false,food=null} = {}) {
     const bag=emptySave();
     if (raw?.schema===config.schema) {
       for(const relic of relics){const n=count(raw.items?.[relic.key]);if(n)bag.items[relic.key]=n;}
       bag.equipped=getRelic(raw.equipped)&&bag.items[raw.equipped]>0?raw.equipped:null;
-      bag.diamondCarry=count(raw.diamondCarry)%100;
       bag.tutorialGiftClaimed=raw.tutorialGiftClaimed===true;
       bag.tutorialGiftEligible=raw.tutorialGiftEligible===true||completedTutorial;
       if(raw.legacyArchive)bag.legacyArchive=raw.legacyArchive;
@@ -142,10 +141,9 @@
   }
   function bankDiamonds(save,base,key) {
     const earned=Number.isFinite(base)?Math.max(0,Math.floor(base)):0,pct=effectsForKey(key).diamonds;
-    const units=earned*pct+save.relics.diamondCarry;
-    const bonus=Math.floor(units/100);save.relics.diamondCarry=units%100;
+    const bonus=Math.round(earned*pct/100);
     save.diamonds+=earned+bonus;
-    return {base:earned,bonus,total:earned+bonus,carry:save.relics.diamondCarry};
+    return {base:earned,bonus,total:earned+bonus};
   }
   function unlockTutorialGift(save) {save.relics.tutorialGiftEligible=true;}
   function claimTutorialPack(save,running=false,random=Math.random) {
@@ -157,7 +155,7 @@
     let text=Object.entries(relic.stats).map(([stat,pct])=>`${pct<0?'−':'+'}${Math.abs(pct)}% ${labels[stat]}`).join('; ')+'.';
     if(relic.family==='tooth')text+=' Does not increase sprinkle growth.';
     if(relic.family==='medal')text+=' Does not increase sprinkle points. The 10-base-food cap per rival still applies.';
-    if(relic.stats.diamonds)text+=' Rounded down after weather rewards; fractional bonus diamonds carry between runs.';
+    if(relic.stats.diamonds)text+=' Rounded to the nearest whole diamond after weather rewards.';
     return text;
   }
   function artHtml(id) {

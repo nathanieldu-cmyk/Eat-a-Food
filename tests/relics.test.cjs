@@ -63,13 +63,21 @@ test('one globally equipped relic applies; owned copies and other owned families
  a.equip(save,'mythic:ladle');effects=a.effectsForKey(save.relics.equipped);near(effects.sprinkleGrowth,1.5);near(effects.speed,.9);near(effects.sprinklePoints,1);
  assert.equal(save.relics.items['rare:spoon'],100);a.equip(save,null);near(a.effectsForKey(save.relics.equipped).speed,1);
 });
-test('Diamond Dish carries exact fractional bonus units across small runs and reloads at every rarity',()=>{
+test('Diamond Dish rounds each run independently at every rarity and never saves fractions',()=>{
  const a=api();for(const [index,rarity]of rarityNames.entries()){
   let save=saveFor(a);save.diamonds=0;for(let run=0;run<100;run++){a.bankDiamonds(save,1,`${rarity}:dish`);save.relics=a.normalize(plain(save.relics));}
-  assert.equal(save.diamonds,100+expected.dish.diamonds[index]);assert.equal(save.relics.diamondCarry,0);
+  assert.equal(save.diamonds,expected.dish.diamonds[index]===50?200:100);assert.equal(save.relics.diamondCarry,undefined);
  }
- const save=saveFor(a);save.diamonds=0;const reward=a.bankDiamonds(save,303,'mythic:dish');assert.equal(reward.bonus,151);assert.equal(reward.total,454);assert.equal(save.relics.diamondCarry,50);
- a.bankDiamonds(save,1,null);assert.equal(save.relics.diamondCarry,50);a.bankDiamonds(save,2,'common:dish');assert.equal(save.relics.diamondCarry,60);assert.equal(save.diamonds,457);
+ for(const [base,bonus]of [[0,0],[9,0],[10,1],[11,1],[29,1],[30,2]]){
+  const save=saveFor(a);save.diamonds=0;const reward=a.bankDiamonds(save,base,'common:dish');assert.equal(reward.bonus,bonus);assert.equal(save.diamonds,base+bonus);assert.equal('carry' in reward,false);
+ }
+ const save=saveFor(a);save.diamonds=0;const reward=a.bankDiamonds(save,303,'mythic:dish');assert.equal(reward.bonus,152);assert.equal(reward.total,455);assert.equal(save.relics.diamondCarry,undefined);
+ a.bankDiamonds(save,1,null);a.bankDiamonds(save,2,'common:dish');assert.equal(save.diamonds,458);
+});
+test('old carried fractions are discarded on reload and cannot increase any future run reward',()=>{
+ const a=api(),raw=a.emptySave();raw.items['common:dish']=1;raw.equipped='common:dish';raw.diamondCarry=99;
+ const save={diamonds:0,relics:a.normalize(raw)};assert.equal('diamondCarry' in save.relics,false);assert.equal(save.relics.equipped,'common:dish');assert.equal(save.relics.items['common:dish'],1);
+ const reward=a.bankDiamonds(save,1,save.relics.equipped);assert.equal(reward.bonus,0);assert.equal(save.diamonds,1);assert.ok(!JSON.stringify(save).includes('diamondCarry'));
 });
 test('the free Common tutorial pack is claimable once, costs no diamonds, and cannot be claimed in a run',()=>{
  const a=api(),save=saveFor(a);save.diamonds=0;assert.equal(a.claimTutorialPack(save),null);a.unlockTutorialGift(save);
@@ -83,7 +91,7 @@ test('old collections migrate once, preserve an archive and keep ownership indep
 });
 test('normalization rejects unknown relics and invalid counts without creating ownership',()=>{
  const a=api(),bag=a.normalize({schema:2,items:{'mythic:missing':10,'common:spoon':-5,'rare:fork':Infinity,'epic:badge':2.9},equipped:'common:spoon',diamondCarry:-5});
- assert.deepEqual(plain(bag.items),{'epic:badge':2});assert.equal(bag.equipped,null);assert.equal(bag.diamondCarry,0);assert.ok(!a.artHtml('<bad>').includes('<bad>'));
+ assert.deepEqual(plain(bag.items),{'epic:badge':2});assert.equal(bag.equipped,null);assert.equal(bag.diamondCarry,undefined);assert.ok(!a.artHtml('<bad>').includes('<bad>'));
 });
 // Execute the real save, movement, reward and banking functions with a deterministic host.
 let harness=fs.readFileSync(path.join(__dirname,'bento.test.cjs'),'utf8').split('const thresholds =')[0];
@@ -111,10 +119,10 @@ test('Feast Medal boosts rival points only and respects ten base food rewards be
  const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=1e8;assert.ok(g.tryEatFood(f,prey,[prey],0));assert.equal(g.state.foodsEarned,10);assert.equal(g.bankPendingFoods().length,20);
  const s=game('mythic:medal');sprinkle(s);near(s.state.points,100);const small=s.createFood(s.tierByName.Peanut,100,100,true);small.size=100;s.state.player.size=1000;assert.ok(s.tryEatFood(s.state.player,small,[small],0));near(s.state.points,115);
 });
-test('Diamond Dish banks weather-inclusive diamonds once on death, preserves ownership and carries fractions',()=>{
+test('Diamond Dish rounds the weather-inclusive bonus once on death and preserves relic ownership',()=>{
  const g=game('mythic:dish');g.state.foodsEarned=3;g.state.foodWeather=['triple-diamonds','triple-diamonds','triple-diamonds'];g.state.player=null;g.endRun(true);
- assert.equal(g.save.diamonds,13);assert.equal(g.save.relics.diamondCarry,50);assert.equal(g.save.relics.items['mythic:dish'],1);assert.equal(g.save.relics.equipped,'mythic:dish');g.endRun(true);assert.equal(g.save.diamonds,13);
- const reload=ctx.boot(JSON.parse(g.storage.get('sprinkleFeastSave')));assert.equal(reload.save.relics.diamondCarry,50);assert.equal(reload.save.relics.equipped,'mythic:dish');
+ assert.equal(g.save.diamonds,14);assert.equal(g.save.relics.diamondCarry,undefined);assert.equal(g.save.relics.items['mythic:dish'],1);assert.equal(g.save.relics.equipped,'mythic:dish');g.endRun(true);assert.equal(g.save.diamonds,14);
+ const reload=ctx.boot(JSON.parse(g.storage.get('sprinkleFeastSave')));assert.equal(reload.save.relics.diamondCarry,undefined);assert.equal(reload.save.relics.equipped,'mythic:dish');
 });
 test('run relic stays locked across food changes, attempted equips and guest input updates',()=>{
  const g=game('rare:spoon');g.save.relics.items['mythic:chili']=1;assert.equal(g.relics.equip(g.save,'mythic:chili',g.state.running),false);
@@ -140,8 +148,8 @@ test('a confirmed guest run locks the host relic even if the lobby selection cha
 });
 test('five identical copies upgrade every family by exactly one rarity without spending diamonds',()=>{
  const a=api();for(const family of a.definitions.filter(row=>!row.rarities))for(let rank=0;rank<rarityNames.length-1;rank++){
-  const source=a.keyFor(family.id,a.rarities[rank].id),target=a.keyFor(family.id,a.rarities[rank+1].id),save=saveFor(a);save.relics.items[source]=5;save.relics.items[target]=2;save.relics.diamondCarry=37;
-  assert.equal(a.nextRelic(source).key,target);assert.equal(a.combine(save,source),target);assert.equal(save.relics.items[source],0);assert.equal(save.relics.items[target],3);assert.equal(save.diamonds,100000);assert.equal(save.relics.diamondCarry,37);
+  const source=a.keyFor(family.id,a.rarities[rank].id),target=a.keyFor(family.id,a.rarities[rank+1].id),save=saveFor(a);save.relics.items[source]=5;save.relics.items[target]=2;
+  assert.equal(a.nextRelic(source).key,target);assert.equal(a.combine(save,source),target);assert.equal(save.relics.items[source],0);assert.equal(save.relics.items[target],3);assert.equal(save.diamonds,100000);
   assert.equal(a.combine(save,source),null);assert.equal(save.relics.items[target],3);
  }
 });

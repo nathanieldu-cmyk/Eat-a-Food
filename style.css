@@ -1592,7 +1592,6 @@ h1 {
 .relic-equipped-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .relic-equipped-summary { display: flex; align-items: center; gap: 14px; }
 .relic-equipped-summary h3 { margin: 3px 0 7px; }
-.relic-diamond-carry { margin-top: 12px; color: #9cddde; }
 #relic-clear-inspection[hidden] { display: none; }
 .relic-collection-heading { flex-wrap: wrap; }
 .relic-card { border-color: var(--relic-rarity-color, #fff3e035); }
