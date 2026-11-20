@@ -1,5 +1,5 @@
 (() => {
-  // Original synthesized effects: frequency, duration, offset, waveform, end frequency.
+  // Original synthesized effects: frequency, duration, offset, waveform, end frequency, level, attack.
   const sounds = {
     start: [[392, .08, 0], [523.25, .08, .08], [783.99, .18, .16]],
     'orb-xs': [[1568, .045, 0, 'sine', 1174.66]],
@@ -23,8 +23,16 @@
     sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
     if (rank>=4) sounds[`relic-reveal-${rarity}`].push([98,.65,0,'triangle',49]);
   }
-  sounds['relic-secret-void'] = [[48,1.6,0,'triangle',32],[147,2.4,.15,'sine',294],[440,2.6,.4,'sine',880]];
-  sounds['relic-secret-impact'] = [[65,.85,0,'triangle',32],[1046.5,1.1,.1,'sine'],[1568,1.4,.16,'sine'],[2093,1.6,.23,'sine']];
+  // A sudden pitch collapse marks the blackout, then a slow riser and
+  // accelerating double heartbeats build toward a brief hush before the flip.
+  sounds['relic-secret-blackout'] = [[980,.40,0,'triangle',60,.32],[150,.85,0,'sine',34,1.15],[45,1.4,.02,'triangle',28,.65],[1400,.80,.04,'sine',200,.20]];
+  sounds['relic-charge-secret'] = [[46,4.35,0,'sine',68,.75,3.2],[93,4.25,0,'triangle',196,.22,3.4],[185,4.10,.2,'sine',740,.35,3.7],[392,3.4,.65,'sine',1568,.18,3.1]];
+  for (let pulse=1;pulse<=3;pulse++) {
+    const beats = pulse===1 ? [0,.22] : pulse===2 ? [0,.16,.38,.52] : [0,.11,.23,.34,.46,.57];
+    sounds[`relic-tick-secret-${pulse}`] = beats.map((offset,index)=>[index%2?65:84,.16,offset,'sine',34,index%2?.75:1]);
+    sounds[`relic-tick-secret-${pulse}`].push([280+pulse*120,.25,beats.at(-1)+.03,'triangle',620+pulse*220,.22,.12]);
+  }
+  sounds['relic-secret-impact'] = [[84,1,0,'triangle',28,1.1],[523.25,1.1,.04,'sine',1046.5,.7,.04],[1568,1.5,.13,'sine',undefined,.4,.02],[2349.32,1.8,.21,'sine',undefined,.3,.03]];
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();
@@ -67,7 +75,7 @@
     }
     const volume = name.startsWith('orb-') ? 1.25 : name.startsWith('relic-charge-') ? .55 : name.startsWith('relic-') ? .9 : 1;
     const voices = [];
-    for (const [frequency, duration, offset, wave = 'sine', end] of notes) {
+    for (const [frequency, duration, offset, wave = 'sine', end, level = 1, attack = .008] of notes) {
       const start = now + Math.max(0, delay) + offset;
       const osc = context.createOscillator();
       const gain = context.createGain();
@@ -75,7 +83,7 @@
       osc.frequency.setValueAtTime(frequency, start);
       if (end) osc.frequency.exponentialRampToValueAtTime(end, start + duration);
       gain.gain.setValueAtTime(.0001 * volume, start);
-      gain.gain.exponentialRampToValueAtTime(.09 * volume, start + .008);
+      gain.gain.exponentialRampToValueAtTime(.09 * volume * level, start + Math.max(.001, Math.min(attack, duration - .01)));
       gain.gain.exponentialRampToValueAtTime(.0001 * volume, start + duration);
       osc.connect(gain);
       gain.connect(context.destination);

@@ -13,10 +13,10 @@ function boot(muted = false, supported = true) {
     constructor() {this.state='running'; this.currentTime=1; this.voices=[]; contexts.push(this);}
     createOscillator() {
       const voice = {frequency:{setValueAtTime(f,t) {voice.frequencyValue=f; voice.time=t;}, exponentialRampToValueAtTime(f) {voice.end=f;}},
-        connect() {}, disconnect() {}, start() {}, stops:[], stop(time) {voice.stops.push(time ?? 'now');}};
+        connect(node) {voice.gainNode=node;}, disconnect() {}, start() {}, stops:[], stop(time) {voice.stops.push(time ?? 'now');}};
       this.voices.push(voice); return voice;
     }
-    createGain() {return {gain:{setValueAtTime() {}, exponentialRampToValueAtTime() {}}, connect() {}, disconnect() {}};}
+    createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
@@ -114,7 +114,7 @@ test('relic openings have distinct tear, deal, rising charges, beats and increas
  let previousNotes=0,previousCharge=0;
  for(const rarity of ['common','uncommon','rare','epic','legendary','mythic','secret']){
   const charge=play(`relic-charge-${rarity}`);assert.ok(charge[0].stops[0]>previousCharge);previousCharge=charge[0].stops[0];
-  const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`)[1].frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
+  const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`).at(-1).frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
   const reveal=play(`relic-reveal-${rarity}`);assert.ok(reveal.length>=previousNotes);previousNotes=reveal.length;
  }
  play('relic-finale');
@@ -134,6 +134,20 @@ test('pack audio mode stops existing game effects and admits only pack cues unti
 });
 
 test('Secret cinematic rumble and impact have distinct layers and remain part of pack-only audio',()=>{
- const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const before=ctx.voices.length;const stop=g.api.play('relic-secret-void');const rumble=ctx.voices.slice(before);assert.equal(rumble.length,3);assert.ok(rumble.some(v=>v.frequencyValue<60));
+ const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const before=ctx.voices.length;const stop=g.api.play('relic-secret-blackout');const rumble=ctx.voices.slice(before);assert.equal(rumble.length,4);assert.ok(rumble.some(v=>v.frequencyValue<60));
  const impactStart=ctx.voices.length;g.api.play('relic-secret-impact');const impact=ctx.voices.slice(impactStart);assert.equal(impact.length,4);assert.ok(impact.some(v=>v.frequencyValue>2000));stop();assert.ok(rumble.every(v=>v.stops.includes('now')));
+});
+
+test('Secret blackout is immediate with a downward whoosh; the charge grows for several seconds',()=>{
+ const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0],start=ctx.currentTime;
+ const stop=g.api.play('relic-secret-blackout');const blackout=[...ctx.voices];assert.ok(blackout.some(v=>v.time===start));assert.ok(blackout.every(v=>v.end<v.frequencyValue));assert.ok(blackout.some(v=>v.frequencyValue>=980&&v.end<=60));stop();
+ const before=ctx.voices.length;g.api.play('relic-charge-secret');const charge=ctx.voices.slice(before);assert.equal(charge.length,4);assert.ok(charge.every(v=>v.end>v.frequencyValue));assert.ok(charge.every(v=>v.gainNode.events[1].time-v.time>=3));assert.ok(charge.every(v=>v.stops[0]-start<4.8));
+});
+test('Secret heartbeats accelerate across the three suspense pulses and leave a hush before impact',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0],counts=[],intervals=[];
+ for(let pulse=1;pulse<=3;pulse++){
+  const before=ctx.voices.length;const stop=g.api.play(`relic-tick-secret-${pulse}`);const voices=ctx.voices.slice(before),heartbeats=voices.filter(v=>v.frequencyValue<100);
+  counts.push(heartbeats.length);intervals.push(heartbeats[1].time-heartbeats[0].time);assert.ok(voices.every(v=>v.stops[0]-ctx.currentTime<1.1));stop();
+ }
+ assert.deepEqual(counts,[2,4,6]);assert.ok(intervals[0]>intervals[1]&&intervals[1]>intervals[2]);
 });

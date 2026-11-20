@@ -111,7 +111,7 @@
         secretCard.innerHTML = `<span class="secret-card-inner"><span class="reveal-card-back secret-card-back" aria-hidden="true"><svg viewBox="0 0 96 96"><use href="relic-art.svg?v=3#crest"></use></svg><span>BEYOND THE ORDINARY</span></span><span class="reveal-card-front secret-card-front"><span class="secret-rarity-seal">SECRET</span><span class="reveal-relic-art">${api.artHtml(item.family)}</span><strong>${item.name}</strong><span class="reveal-card-stats">${api.describe(item.key)}</span><span class="reveal-card-count">Permanent · Owned ×${state.ownedCounts[state.spotlightIndex]}</span></span></span>`;
         shownSecretIndex = state.spotlightIndex;
         secretScene.focus({preventScroll:true});
-        if (state.spotlightStage === 'charging') cue('relic-secret-void');
+        if (state.spotlightStage === 'charging') cue('relic-secret-blackout');
       }
       secretScene.dataset.stage = state.spotlightStage;
       secretScene.dataset.pulse = state.pulse;
