@@ -35,8 +35,8 @@ test('exactly three cards are required and duplicate pack taps cannot start para
  const g=boot();for(const invalid of [[],['common:spoon'],['common:spoon','common:fork'],[null,...results.slice(1)],[...results,'common:fork']])assert.equal(g.c.show(invalid),false);
  assert.ok(g.c.show(results));assert.equal(g.c.show(results),false);assert.ok(g.c.openPack());assert.equal(g.c.openPack(),false);g.advance(30000);assert.equal(g.changes.filter(s=>s.phase==='complete').length,1);
 });
-test('reduced motion waits for a pack tap, then automatically reveals all three without timers',()=>{
- const g=boot(true);g.c.show(results);assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().revealed.length,0);g.c.openPack();assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);assert.equal(g.jobs.size,0);
+test('reduced motion keeps the pack tap and presents a static Secret spotlight',()=>{
+ const g=boot(true);g.c.show(results);assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().revealed.length,0);g.c.openPack();assert.equal(g.c.snapshot().phase,'spotlight');assert.equal(g.c.snapshot().spotlightIndex,2);assert.equal(g.c.snapshot().spotlightStage,'revealed');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);g.advance(2600);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.jobs.size,0);
 });
 test('the purchase handler saves all three awards before animation, blocks duplicate clicks and rejects runs',()=>{
  const window={};let rolls=0,open=false;const math=Object.create(Math);math.random=()=>{rolls++;return 0;};vm.runInNewContext(fs.readFileSync(path.join(root,'relics.js'),'utf8'),{window,Math:math});
@@ -48,4 +48,17 @@ test('the purchase handler saves all three awards before animation, blocks dupli
  context.buy('common');context.buy('common');assert.equal(save.diamonds,250);assert.equal(rolls,6);assert.equal(shown.length,1);assert.deepEqual(shown[0],{keys:['common:spoon','common:spoon','common:spoon'],packId:'common',counts:[3,3,3]});
  assert.equal(saved[0].relics.items['common:spoon'],3);
  open=false;context.state.running=true;assert.equal(context.buy('common'),null);assert.equal(save.diamonds,250);context.state.running=false;context.buy('common');assert.equal(save.diamonds,0);assert.equal(save.relics.items['common:spoon'],6);assert.equal(rolls,12);
+});
+
+test('only Secret cards take over the screen, flip once, and hold before the next reveal',()=>{
+ const g=boot();g.c.show(['secret:dragon','common:spoon','secret:hat']);g.c.openPack();g.advance(1650);
+ assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(650+950);assert.equal(g.c.snapshot().spotlightIndex,0);assert.equal(g.c.snapshot().spotlightStage,'charging');
+ g.advance(4799);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[1]);g.advance(1);assert.equal(g.c.snapshot().phase,'spotlight');assert.equal(g.c.snapshot().spotlightStage,'revealed');assert.deepEqual(plain(g.c.snapshot().revealed),[1,0]);
+ g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,0);g.advance(1);assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.deepEqual(plain(g.c.snapshot().revealed),[1,0,2]);
+});
+test('closing during a Secret cinematic clears the spotlight and all timers',()=>{
+ const g=boot();g.c.show(['secret:dragon','secret:hat','secret:truffle']);g.c.openPack();g.advance(1650+4800);assert.equal(g.c.snapshot().phase,'spotlight');g.c.close();assert.equal(g.c.snapshot().spotlightIndex,null);assert.equal(g.jobs.size,0);g.advance(30000);assert.equal(g.c.snapshot().phase,'closed');
+});
+test('reduced motion without a Secret completes immediately with no cinematic timers',()=>{
+ const g=boot(true);g.c.show(['common:spoon','rare:spoon','mythic:spoon']);g.c.openPack();assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.equal(g.jobs.size,0);
 });

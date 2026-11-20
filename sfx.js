@@ -23,6 +23,8 @@
     sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
     if (rank>=4) sounds[`relic-reveal-${rarity}`].push([98,.65,0,'triangle',49]);
   }
+  sounds['relic-secret-void'] = [[48,1.6,0,'triangle',32],[147,2.4,.15,'sine',294],[440,2.6,.4,'sine',880]];
+  sounds['relic-secret-impact'] = [[65,.85,0,'triangle',32],[1046.5,1.1,.1,'sine'],[1568,1.4,.16,'sine'],[2093,1.6,.23,'sine']];
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();

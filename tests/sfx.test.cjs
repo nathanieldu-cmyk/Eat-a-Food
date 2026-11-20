@@ -132,3 +132,8 @@ test('pack audio mode stops existing game effects and admits only pack cues unti
  g.api.setPackOpening(false);const complete=ctx.voices.length;g.api.play('collect');assert.equal(ctx.voices.length,complete+3);
  const muted=boot(true);muted.events.pointerdown();muted.api.setPackOpening(true);muted.api.play('relic-open');assert.equal(muted.contexts.length,0);muted.api.setPackOpening(false);assert.equal(muted.storage.get('eatAFoodSfxMuted'),'true');
 });
+
+test('Secret cinematic rumble and impact have distinct layers and remain part of pack-only audio',()=>{
+ const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const before=ctx.voices.length;const stop=g.api.play('relic-secret-void');const rumble=ctx.voices.slice(before);assert.equal(rumble.length,3);assert.ok(rumble.some(v=>v.frequencyValue<60));
+ const impactStart=ctx.voices.length;g.api.play('relic-secret-impact');const impact=ctx.voices.slice(impactStart);assert.equal(impact.length,4);assert.ok(impact.some(v=>v.frequencyValue>2000));stop();assert.ok(rumble.every(v=>v.stops.includes('now')));
+});

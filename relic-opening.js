@@ -1,9 +1,9 @@
 (() => {
-  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:3200,secret:4200};
+  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:3200,secret:4800};
   const rarityOrder = Object.keys(revealTimings);
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false} = {}) {
-    let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [];
-    const snapshot = () => ({phase, rewards: [...rewards], revealed: [...revealed], packId, ownedCounts: [...ownedCounts], revealingIndex, pulse});
+    let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null;
+    const snapshot = () => ({phase, rewards: [...rewards], revealed: [...revealed], packId, ownedCounts: [...ownedCounts], revealingIndex, pulse, spotlightIndex, spotlightStage});
     const emit = () => onChange(snapshot());
     function clear() { for (const timer of timers) cancel(timer); timers.clear(); }
     function later(delay, work) {
@@ -11,15 +11,22 @@
       const timer = schedule(() => { timers.delete(timer); if (generation === current && phase !== 'closed') work(); }, delay);
       timers.add(timer);
     }
+    function finishCard() {
+      spotlightIndex = null; spotlightStage = null;
+      phase = revealed.size === rewards.length ? 'complete' : 'cards'; emit();
+      if (phase !== 'complete') later(950, revealNext);
+    }
     function revealNext() {
-      const index = order[revealed.size];
-      revealingIndex = index; pulse = 0; phase = 'revealing'; emit();
+      const index = order[revealed.size], secret = rewards[index].startsWith('secret:');
+      revealingIndex = index; pulse = 0;
+      spotlightIndex = secret ? index : null; spotlightStage = secret ? 'charging' : null;
+      phase = 'revealing'; emit();
       const duration = revealTimings[rewards[index].split(':')[0]] || revealTimings.common;
       function beat(step) {
         if (step < 4) { pulse = step; emit(); later(duration / 4, () => beat(step + 1)); return; }
         revealed.add(index); revealingIndex = null; pulse = 0;
-        phase = revealed.size === rewards.length ? 'complete' : 'cards'; emit();
-        if (phase !== 'complete') later(950, revealNext);
+        if (secret) { spotlightStage = 'revealed'; phase = 'spotlight'; emit(); later(2600, finishCard); }
+        else finishCard();
       }
       later(duration / 4, () => beat(1));
     }
@@ -27,7 +34,10 @@
       if (phase !== 'sealed') return false;
       phase = 'opening'; emit();
       if (reducedMotion) {
-        revealed = new Set(order); phase = 'complete'; emit();
+        revealed = new Set(order);
+        spotlightIndex = order.filter(index=>rewards[index].startsWith('secret:')).at(-1) ?? null;
+        if (spotlightIndex !== null) { spotlightStage = 'revealed'; phase = 'spotlight'; emit(); later(2600, finishCard); }
+        else { phase = 'complete'; emit(); }
       } else {
         later(1000, () => { phase = 'cards'; emit(); later(650, revealNext); });
       }
@@ -36,14 +46,14 @@
     function show(results, options = {}) {
       if (phase !== 'closed' || !Array.isArray(results) || results.length !== 3 || results.some(id => typeof id !== 'string' || !id)) return false;
       packId = options.packId || 'common'; ownedCounts = results.map((_,index) => options.ownedCounts?.[index] || 1);
-      rewards = [...results]; revealed = new Set(); revealingIndex = null; pulse = 0;
+      rewards = [...results]; revealed = new Set(); revealingIndex = null; pulse = 0; spotlightIndex = null; spotlightStage = null;
       // Save the biggest reveal for last without changing the awarded results.
       order = rewards.map((_,index)=>index).sort((a,b)=>rarityOrder.indexOf(rewards[a].split(':')[0])-rarityOrder.indexOf(rewards[b].split(':')[0]));
       phase = 'sealed'; generation++; emit(); return true;
     }
     function close() {
       if (phase === 'closed') return;
-      clear(); generation++; revealingIndex = null; phase = 'closed'; emit();
+      clear(); generation++; revealingIndex = null; spotlightIndex = null; spotlightStage = null; phase = 'closed'; emit();
     }
     return {show, openPack, close, snapshot, isOpen: () => phase !== 'closed'};
   }
@@ -58,11 +68,15 @@
   const action = root.querySelector('.reveal-action');
   const swipeHint = root.querySelector('.reveal-swipe-hint');
   const dialog = root.querySelector('.reveal-dialog');
+  const secretScene = root.querySelector('.secret-reveal');
+  const secretCard = secretScene.querySelector('.secret-card');
+  const secretTitle = secretScene.querySelector('#secret-reveal-title');
+  let shownSecretIndex = null;
   let returnFocus = null, previousCount = 0, previousPulse = 0, previousPhase = 'closed', inerted = [], soundStops = [];
   const cue = name => { const stop = window.GameSfx?.play(name); if (typeof stop === 'function') soundStops.push(stop); };
   const controller = createController(state => {
     if (state.phase === 'closed') {
-      root.hidden = true;
+      root.hidden = true; secretScene.hidden = true; dialog.inert = false; shownSecretIndex = null;
       window.GameMusic?.setPackOpening?.(false);
       window.GameSfx?.setPackOpening?.(false);
       for (const stop of soundStops) stop(); soundStops = [];
@@ -87,6 +101,25 @@
       root.hidden = false;
       inerted = ['app', 'shop-modal', 'relic-modal'].map(id => document.getElementById(id)).filter(Boolean).map(element => [element, element.inert]);
       for (const [element] of inerted) element.inert = true;
+    }
+    const spotlight = state.spotlightIndex !== null;
+    secretScene.hidden = !spotlight;
+    dialog.inert = spotlight;
+    if (spotlight) {
+      const item = api.getRelic(state.rewards[state.spotlightIndex]);
+      if (shownSecretIndex !== state.spotlightIndex) {
+        secretCard.innerHTML = `<span class="secret-card-inner"><span class="reveal-card-back secret-card-back" aria-hidden="true"><svg viewBox="0 0 96 96"><use href="relic-art.svg?v=3#crest"></use></svg><span>BEYOND THE ORDINARY</span></span><span class="reveal-card-front secret-card-front"><span class="secret-rarity-seal">SECRET</span><span class="reveal-relic-art">${api.artHtml(item.family)}</span><strong>${item.name}</strong><span class="reveal-card-stats">${api.describe(item.key)}</span><span class="reveal-card-count">Permanent · Owned ×${state.ownedCounts[state.spotlightIndex]}</span></span></span>`;
+        shownSecretIndex = state.spotlightIndex;
+        secretScene.focus({preventScroll:true});
+        if (state.spotlightStage === 'charging') cue('relic-secret-void');
+      }
+      secretScene.dataset.stage = state.spotlightStage;
+      secretScene.dataset.pulse = state.pulse;
+      secretCard.querySelector('.secret-card-front').setAttribute('aria-hidden', String(state.spotlightStage !== 'revealed'));
+      secretTitle.textContent = state.spotlightStage === 'revealed' ? 'Secret discovered' : 'A Secret awakens';
+    } else if (shownSecretIndex !== null) {
+      shownSecretIndex = null;
+      dialog.focus({preventScroll:true});
     }
     root.dataset.phase = state.phase;
     packButton.hidden = !['sealed','opening'].includes(state.phase);
@@ -122,6 +155,7 @@
     }
     if (state.phase === 'revealing' && state.pulse > previousPulse) cue(`relic-tick-${active.rarity}-${state.pulse}`);
     if (state.revealed.length > previousCount) {
+      if (state.spotlightIndex !== null) cue('relic-secret-impact');
       const item = api.getRelic(state.rewards[state.revealed.at(-1)]); cue(`relic-reveal-${item.rarity}`);
     }
     if (state.phase === 'complete' && previousPhase !== 'complete') { cue('relic-finale'); action.focus({preventScroll: true}); }
@@ -130,12 +164,12 @@
   }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches});
   packButton.addEventListener('click', controller.openPack);
   action.addEventListener('click', () => { if (controller.snapshot().phase === 'complete') controller.close(); });
-  root.addEventListener('click', event => { if (event.target === root) dialog.focus({preventScroll:true}); });
+  root.addEventListener('click', event => { if (event.target === root) (secretScene.hidden ? dialog : secretScene).focus({preventScroll:true}); });
   root.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); }
     if (event.key === 'Tab') {
       const controls = [...root.querySelectorAll('button')].filter(button=>!button.disabled && button.getClientRects().length && !button.closest('[inert]'));
-      if (!controls.length) { event.preventDefault(); dialog.focus({preventScroll:true}); return; }
+      if (!controls.length) { event.preventDefault(); (secretScene.hidden ? dialog : secretScene).focus({preventScroll:true}); return; }
       const first = controls[0], last = controls[controls.length - 1];
       if (!controls.includes(document.activeElement)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); return; }
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
