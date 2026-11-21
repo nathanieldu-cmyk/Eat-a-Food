@@ -16,14 +16,12 @@
   sounds['relic-deal'] = [[740,.09,0,'triangle',210],[880,.09,.13,'triangle',250],[1040,.1,.26,'triangle',300]];
   // A layered impact: fast crack, falling bass, sub-bass tail and quiet echoes.
   const revealBoom = [[175,.85,0,'triangle',36,1.25,.004],[62,2.15,0,'sine',26,1.4,.01],[1100,.14,0,'triangle',90,.42,.003],[245,.28,.008,'triangle',48,.65,.004],[43,1.9,.03,'sine',24,.8,.015],[98,1.35,.16,'triangle',30,.45,.006],[71,1.4,.32,'sine',28,.35],[52,1.3,.52,'sine',25,.22]];
-  sounds['relic-finale'] = revealBoom;
   const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
   const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
   for (const [rank,rarity] of relicRarities.entries()) {
     sounds[`relic-charge-${rarity}`] = [[70+rank*9,.3+rank*.4,0,'triangle',150+rank*30],[180+rank*22,.25+rank*.3,.08,'sine',350+rank*75]];
     for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[95+rank*10,.13,0,'triangle',55],[360+rank*45+pulse*90,.10+pulse*.02,.025,'sine',430+rank*55+pulse*110]];
     sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
-    if (rank>=4) sounds[`relic-reveal-${rarity}`].push([98,.65,0,'triangle',49]);
   }
   // A sudden pitch collapse marks the blackout, then a slow riser and
   // accelerating double heartbeats build toward a brief hush before the flip.

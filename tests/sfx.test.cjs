@@ -117,7 +117,6 @@ test('relic openings have distinct tear, deal, rising charges, beats and increas
   const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`).at(-1).frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
   const reveal=play(`relic-reveal-${rarity}`);assert.ok(reveal.length>=previousNotes);previousNotes=reveal.length;
  }
- play('relic-finale');
 });
 test('pack sound handles stop only their own voices; mute and hidden tabs silence every relic cue',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0],stop=g.api.play('relic-charge-secret');const charge=[...ctx.voices];g.api.play('collect');stop();stop();assert.ok(charge.every(v=>v.stops.includes('now')));assert.ok(ctx.voices.slice(charge.length).every(v=>!v.stops.includes('now')));
@@ -152,14 +151,13 @@ test('Secret heartbeats accelerate across the three suspense pulses and leave a 
  assert.deepEqual(counts,[2,4,6]);assert.ok(intervals[0]>intervals[1]&&intervals[1]>intervals[2]);
 });
 
-test('the final reveal and Secret impact use the same deep boom with a sharp attack and bass tail',()=>{
- const g=boot();g.events.pointerdown();const ctx=g.contexts[0],signatures=[];
- for(const name of ['relic-finale','relic-secret-impact']){
-  const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
-  assert.ok(voices.some(v=>v.frequencyValue>=600&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.end<v.frequencyValue));
-  signatures.push(voices.map(v=>[v.frequencyValue,v.end,v.type,v.time,v.stops[0]]));stop();
+test('Secret impact retains the deep boom while all non-Secret reveal cues contain only high chimes',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
+ for(const rarity of ['common','uncommon','rare','epic','legendary','mythic']){
+  const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=3);assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
  }
- assert.deepEqual(signatures[0],signatures[1]);
+ const before=ctx.voices.length;g.api.play('relic-secret-impact');const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
+ assert.ok(voices.some(v=>v.frequencyValue>=600&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.end<v.frequencyValue));
 });
 
 test('all pack cues are louder while ordinary game effects retain their existing volume',()=>{

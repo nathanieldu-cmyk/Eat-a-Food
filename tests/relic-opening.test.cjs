@@ -100,3 +100,13 @@ test('the triple-purchase handler saves all nine awards before opening, charges 
  const results=context.buy('common',false,3);assert.equal(results.length,3);assert.equal(rolls,18);assert.equal(save.diamonds,250);assert.equal(shown.length,1);assert.deepEqual(shown[0].counts,[[9,9,9],[9,9,9],[9,9,9]]);
  assert.equal(context.buy('common',false,3),null);assert.equal(rolls,18);open=false;assert.equal(context.buy('common',false,3),null);assert.equal(rolls,18);assert.equal(saved.length,1);
 });
+
+test('the actual reveal callback chimes for non-Secrets in every slot, including the final card',()=>{
+ const window={};vm.runInNewContext(fs.readFileSync(path.join(root,'relics.js'),'utf8'),{window,Math});const api=window.GameRelics;
+ const start=source.indexOf('    if (state.revealed.length > previousCount) {'),end=source.indexOf("\n    if (state.phase === 'complete'",start),block=source.slice(start,end);
+ for(const rarity of ['common','uncommon','rare','epic','legendary','mythic','secret'])for(let slot=0;slot<3;slot++){
+  const cues=[],key=rarity==='secret'?'secret:dragon':`${rarity}:spoon`;
+  vm.runInNewContext(block,{api,state:{rewards:[key,key,key],revealed:Array.from({length:slot+1},(_,i)=>i)},previousCount:slot,cue:name=>cues.push(name)});
+  assert.deepEqual(cues,[rarity==='secret'?'relic-secret-impact':`relic-reveal-${rarity}`]);
+ }
+});
