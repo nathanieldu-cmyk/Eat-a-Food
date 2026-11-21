@@ -1547,7 +1547,7 @@ h1 {
 .reveal-card-front strong { font-family: "Fredoka",sans-serif; font-size: 1.15rem; line-height: 1.18; padding: 0 4px; min-height: 2.4em; display: grid; align-items: center; }
 .reveal-card-count { display: inline-block; padding: 5px 12px; border: 1px solid #658e7466; border-radius: 20px; font-weight: 800; font-size: .8rem; margin-top: auto; background: #fff8; }
 .reveal-status { min-height: 3em; max-width: 610px; margin: 0 auto 13px; color: #dae9d2; font-size: .9rem; line-height: 1.5; }
-.reveal-action { min-width: 180px; }
+.reveal-action, .reveal-skip { min-width: 180px; }
 .reveal-dialog button:focus-visible { outline: 3px solid #e5edbd; outline-offset: 5px; }
 @keyframes relic-pack-wake { 0% { transform: translateY(18px) rotate(-9deg) scale(.86); } 45% { transform: translateY(-8px) rotate(3deg) scale(1.03); } 100% { transform: rotate(-4deg); } }
 @keyframes relic-pack-tear { 0%,25% { transform: none; opacity: 1; } 100% { transform: translate(34px,-100px) rotate(25deg); opacity: 0; } }
@@ -1653,7 +1653,7 @@ h1 {
 
 /* A pack tap starts a sequence of increasingly dramatic automatic reveals. */
 .reveal-pack { padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
-.reveal-pack[hidden], .reveal-action[hidden], .reveal-swipe-hint[hidden] { display: none; }
+.reveal-pack[hidden], .reveal-action[hidden], .reveal-skip[hidden], .reveal-swipe-hint[hidden] { display: none; }
 .relic-opening[data-phase="sealed"] .reveal-pack { animation: sealed-pack-breathe 2.3s ease-in-out infinite; }
 .relic-opening[data-phase="sealed"] .reveal-pack:hover { filter: drop-shadow(0 0 18px #f5e1a588); }
 .reveal-card-back > span { font-size: .75rem; letter-spacing: .08em; }

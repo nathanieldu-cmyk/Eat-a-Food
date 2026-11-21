@@ -110,3 +110,63 @@ test('the actual reveal callback chimes for non-Secrets in every slot, including
   assert.deepEqual(cues,[rarity==='secret'?'relic-secret-impact':`relic-reveal-${rarity}`]);
  }
 });
+
+test('Skip Reveal requires a pack tap and skips non-Secrets during unsealing, dealing or a reveal',()=>{
+ for(const elapsed of [500,1200,1800]){
+  const g=boot(),keys=['mythic:spoon','rare:fork','legendary:chili'];g.c.show(keys,{ownedCounts:[2,5,1]});
+  const sealed=plain(g.c.snapshot());assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),sealed);
+  g.c.openPack();g.advance(elapsed);assert.equal(g.c.snapshot().canSkip,true);const rewards=plain(g.c.snapshot().rewards),counts=plain(g.c.snapshot().ownedCounts);
+  assert.equal(g.c.skipReveal(),true);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);assert.equal(g.c.snapshot().canSkip,false);assert.equal(g.jobs.size,0);
+  assert.equal(g.c.skipReveal(),false);g.advance(30000);assert.deepEqual(plain(g.c.snapshot().rewards),rewards);assert.deepEqual(plain(g.c.snapshot().ownedCounts),counts);assert.equal(g.changes.filter(s=>s.phase==='complete').length,1);
+ }
+});
+test('skipping every mix of Secrets reveals only non-Secrets and keeps all Secret cinematics in order',()=>{
+ for(let mask=0;mask<8;mask++){
+  const g=boot(),keys=[0,1,2].map(i=>mask&(1<<i)?['secret:dragon','secret:hat','secret:truffle'][i]:'mythic:spoon');g.c.show(keys);g.c.openPack();g.advance(500);
+  const normal=keys.filter(key=>!key.startsWith('secret:')).length;
+  assert.equal(g.c.skipReveal(),normal>0);
+  if(normal===3){assert.equal(g.c.snapshot().phase,'complete');continue;}
+  if(normal===0)g.advance(1150);else{
+   assert.equal(g.c.snapshot().phase,'cards');assert.deepEqual(plain(g.c.snapshot().revealed),Array.from({length:normal},(_,i)=>i));g.advance(950);
+  }
+  for(let index=normal;index<3;index++){
+   let s=g.c.snapshot();assert.equal(s.phase,'revealing');assert.equal(s.spotlightIndex,index);assert.equal(s.spotlightStage,'charging');assert.equal(s.canSkip,false);
+   g.advance(4799);assert.equal(g.c.snapshot().revealed.includes(index),false);g.advance(1);s=g.c.snapshot();assert.equal(s.phase,'spotlight');assert.equal(s.spotlightStage,'revealed');assert.equal(s.revealed.includes(index),true);
+   g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,index);g.advance(1);
+   if(index<2)g.advance(950);
+  }
+  assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);assert.equal(g.jobs.size,0);
+ }
+});
+test('skipping after a normal card has revealed keeps it and reveals the remaining non-Secrets once',()=>{
+ const g=boot();g.c.show(['common:spoon','mythic:fork','secret:dragon']);g.c.openPack();g.advance(2400);assert.deepEqual(plain(g.c.snapshot().revealed),[0]);
+ assert.equal(g.c.skipReveal(),true);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
+});
+test('Skip Reveal cannot interrupt or restart a charging or revealed Secret',()=>{
+ const g=boot();g.c.show(results);g.c.openPack();g.c.skipReveal();g.advance(950+1200);
+ let before=plain(g.c.snapshot()),jobs=g.jobs.size;assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);assert.equal(g.jobs.size,jobs);
+ g.advance(3600);before=plain(g.c.snapshot());assert.equal(before.phase,'spotlight');assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);
+ g.advance(2600);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.changes.filter(s=>s.phase==='spotlight').length,1);
+});
+test('skipping cancels earlier card timers and stale callbacks cannot reveal Secrets or later packs',()=>{
+ const g=boot();g.c.show(results);g.c.openPack();g.advance(1800);const stale=g.history.at(-1);g.c.skipReveal();const after=plain(g.c.snapshot());stale.fn();assert.deepEqual(plain(g.c.snapshot()),after);
+ g.advance(950);assert.equal(g.c.snapshot().spotlightStage,'charging');g.c.close();g.c.show(['common:spoon','common:fork','common:chili']);stale.fn();g.advance(30000);assert.equal(g.c.snapshot().phase,'sealed');assert.deepEqual(plain(g.c.snapshot().revealed),[]);
+});
+test('Skip Reveal applies separately to each pack in a three-pack purchase',()=>{
+ const g=boot(),normal=['common:spoon','rare:fork','mythic:chili'];g.c.showBatch([normal,results,normal]);
+ for(let pack=1;pack<=3;pack++){
+  assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().packNumber,pack);assert.equal(g.c.skipReveal(),false);
+  g.c.openPack();assert.equal(g.c.skipReveal(),true);assert.equal(g.c.skipReveal(),false);
+  if(pack===2){assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(950+7400);}
+  assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().packNumber,pack);
+  if(pack<3)g.advance(1200);
+ }
+ assert.equal(g.jobs.size,0);assert.deepEqual(g.changes.filter(s=>s.phase==='complete').map(s=>s.packNumber),[1,2,3]);
+});
+test('skip reveals chime for non-Secrets and the later Secret retains its impact cue',()=>{
+ const window={};vm.runInNewContext(fs.readFileSync(path.join(root,'relics.js'),'utf8'),{window,Math});const api=window.GameRelics;
+ const start=source.indexOf('    if (state.revealed.length > previousCount) {'),end=source.indexOf("\n    if (state.phase === 'complete'",start),block=source.slice(start,end),cues=[];
+ const state={rewards:['common:spoon','mythic:fork','secret:dragon'],revealed:[0,1]};
+ vm.runInNewContext(block,{api,state,previousCount:0,cue:name=>cues.push(name)});assert.deepEqual(cues,['relic-reveal-mythic']);
+ state.revealed=[0,1,2];vm.runInNewContext(block,{api,state,previousCount:2,cue:name=>cues.push(name)});assert.deepEqual(cues,['relic-reveal-mythic','relic-secret-impact']);
+});

@@ -3,7 +3,8 @@
   const rarityOrder = Object.keys(revealTimings);
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false} = {}) {
     let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null, batch = [], packNumber = 1, packTotal = 1;
-    const snapshot = () => ({phase, rewards: [...rewards], revealed: [...revealed], packId, ownedCounts: [...ownedCounts], revealingIndex, pulse, spotlightIndex, spotlightStage, packNumber, packTotal});
+    const canSkip = () => ['opening','cards','revealing'].includes(phase) && spotlightIndex === null && rewards.some((key,index)=>!key.startsWith('secret:')&&!revealed.has(index));
+    const snapshot = () => ({canSkip:canSkip(),phase, rewards: [...rewards], revealed: [...revealed], packId, ownedCounts: [...ownedCounts], revealingIndex, pulse, spotlightIndex, spotlightStage, packNumber, packTotal});
     const emit = () => onChange(snapshot());
     function clear() { for (const timer of timers) cancel(timer); timers.clear(); }
     function later(delay, work) {
@@ -44,6 +45,15 @@
       }
       return true;
     }
+    function skipReveal() {
+      if (!canSkip()) return false;
+      clear(); generation++;
+      for (const index of order) if (!rewards[index].startsWith('secret:')) revealed.add(index);
+      revealingIndex = null; pulse = 0;
+      // Keep every Secret hidden so it still gets its full cinematic, in order.
+      finishCard();
+      return true;
+    }
     function loadPack(index) {
       clear(); generation++; packNumber = index+1;
       const arranged = batch[index].map(item=>({...item}))
@@ -66,7 +76,7 @@
       if (phase === 'closed') return;
       clear(); generation++; revealingIndex = null; spotlightIndex = null; spotlightStage = null; phase = 'closed'; emit();
     }
-    return {show, showBatch, openPack, close, snapshot, isOpen: () => phase !== 'closed'};
+    return {show, showBatch, openPack, skipReveal, close, snapshot, isOpen: () => phase !== 'closed'};
   }
   window.GameRelicReveal = {createController, revealTimings};
   const root = typeof document === 'undefined' ? null : document.getElementById('relic-reveal');
@@ -77,6 +87,7 @@
   const title = root.querySelector('#relic-reveal-title');
   const status = root.querySelector('.reveal-status');
   const action = root.querySelector('.reveal-action');
+  const skip = root.querySelector('.reveal-skip');
   const swipeHint = root.querySelector('.reveal-swipe-hint');
   const dialog = root.querySelector('.reveal-dialog');
   const secretScene = root.querySelector('.secret-reveal');
@@ -143,6 +154,8 @@
     cards.inert = ['sealed','opening'].includes(state.phase);
     swipeHint.hidden = ['sealed','opening'].includes(state.phase);
     action.hidden = state.phase !== 'complete' || state.packNumber < state.packTotal;
+    skip.hidden = !state.canSkip;
+    skip.disabled = !state.canSkip;
     for (const card of cards.querySelectorAll('[data-card-index]')) {
       const index = Number(card.dataset.cardIndex), revealed = state.revealed.includes(index), revealing = state.revealingIndex === index;
       card.classList.toggle('is-revealed', revealed);
@@ -179,6 +192,12 @@
     previousCount = state.revealed.length; previousPhase = state.phase;
   }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches});
   packButton.addEventListener('click', controller.openPack);
+  skip.addEventListener('click', () => {
+    if (!controller.snapshot().canSkip) return;
+    for (const stop of soundStops) stop(); soundStops = [];
+    controller.skipReveal();
+    if (controller.snapshot().phase === 'cards') dialog.focus({preventScroll:true});
+  });
   action.addEventListener('click', () => { if (controller.snapshot().phase === 'complete') controller.close(); });
   root.addEventListener('click', event => { if (event.target === root) (secretScene.hidden ? dialog : secretScene).focus({preventScroll:true}); });
   root.addEventListener('keydown', event => {
