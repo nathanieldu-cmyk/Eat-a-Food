@@ -163,12 +163,11 @@
   }
   function describe(key) {
     const relic=getRelic(key);if(!relic)return 'No relic equipped.';
-    let text=Object.entries(relic.stats).map(([stat,pct])=>`${pct<0?'−':'+'}${Math.abs(pct)}% ${labels[stat]}`).join('; ')+'.';
-    if(relic.family==='tooth')text+=' Does not increase sprinkle growth.';
-    if(relic.stats.pickupRange)text+=' Only collects eligible sprinkles; does not extend rival eating range.';
-    if(relic.stats.luck)text+=' Affects run food rewards only; pack and Bento odds stay fixed. Gold, Rainbow, and Shadow weather upgrade chances are unaffected.';
-    if(relic.stats.diamonds)text+=' Rounded to the nearest whole diamond after weather rewards.';
-    return text;
+    const pct=value=>`${value<0?'−':'+'}${Math.abs(value)}%`;
+    const stats=relic.stats;
+    if(relic.family==='badge'&&stats.sprinkleGrowth===stats.sprinklePoints)return `${pct(stats.speed)} movement speed and ${pct(stats.sprinkleGrowth)} growth and points from sprinkles.`;
+    if(relic.family==='tooth')return `${pct(stats.rivalGrowth)} growth and ${pct(stats.rivalPoints)} points from eating rivals.`;
+    return Object.entries(stats).map(([stat,value])=>`${pct(value)} ${labels[stat]}`).join('; ')+'.';
   }
   function artHtml(id) {
     const family=config.families.find(family=>family.id===id);

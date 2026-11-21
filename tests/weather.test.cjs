@@ -313,7 +313,6 @@ test('every Clover rarity preserves exact Gold, Rainbow and Shadow weather upgra
     assert.equal(calls,1,'weather uses one independent upgrade roll');
    }
   }
-  assert.match(g.relics.describe(key),/Gold, Rainbow, and Shadow weather upgrade chances are unaffected/);
  }
 });
 test('Clover cannot boost weather upgrades when run foods bank after event expiry or death',()=>{
