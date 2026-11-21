@@ -33,6 +33,7 @@
       {id:'badge', name:'Chef’s Badge', icon:'🏅', weight:41, stats:{speed:[1,2,3,4,5,6],sprinkleGrowth:[2,4,6,8,12,15],sprinklePoints:[2,4,6,8,12,15]}},
       {id:'tooth', name:'Hunter’s Tooth', icon:'🦷', weight:51, stats:{rivalGrowth:[8,13,20,28,38,50],rivalPoints:[5,10,15,22,30,40]}},
       {id:'magnet', name:'Sprinkles Magnet', icon:'🧲', weight:51, stats:{pickupRange:[4,6,9,12,16,20]}},
+      {id:'clover', name:'Golden Clover', icon:'🍀', weight:51, stats:{luck:[10,20,35,50,75,100]}},
       {id:'dragon', name:'Dragon Pepper', icon:'🐉', weight:1, rarities:['secret'], stats:{speed:[30],sprinkleGrowth:[25]}},
       {id:'hat', name:'Royal Chef’s Hat', icon:'👨‍🍳', weight:1, rarities:['secret'], stats:{speed:[20],sprinklePoints:[25]}},
       {id:'chopsticks', name:'Phantom Chopsticks', icon:'🥢', weight:1, rarities:['secret'], stats:{rivalGrowth:[80],rivalPoints:[80]}},
@@ -172,7 +173,7 @@
   function artHtml(id) {
     const family=config.families.find(family=>family.id===id);
     const symbol=family?family.id:'crest';
-    return `<svg class="relic-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=4#${symbol}"></use></svg>`;
+    return `<svg class="relic-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=5#${symbol}"></use></svg>`;
   }
   const oddsText = pack => pack.odds.map(row=>`${row.chance}% ${row.label}`).join(' · ');
   window.GameRelics={config,rarities:config.rarities,definitions:config.families,tiers:config.rarities.map(rarity=>rarity.id),packs,relics,getRelic,keyFor,parseKey,emptySave,normalize,cleanAssignments,roll,buyPack,buyPacks,equip,nextRelic,combine,effectsForKey,bankDiamonds,unlockTutorialGift,claimTutorialPack,describe,artHtml,oddsText,familyWeightTotal};

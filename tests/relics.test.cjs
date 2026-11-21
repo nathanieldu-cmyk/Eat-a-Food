@@ -9,14 +9,14 @@ const rarityNames=['common','uncommon','rare','epic','legendary','mythic'];
 const expected={
  spoon:{sprinklePoints:[5,8,12,17,23,30]},fork:{sprinkleGrowth:[5,8,12,17,23,30]},chili:{speed:[3,5,7,10,12,15]},dish:{diamonds:[5,10,15,25,35,50]},
  badge:{speed:[1,2,3,4,5,6],sprinkleGrowth:[2,4,6,8,12,15],sprinklePoints:[2,4,6,8,12,15]},
- tooth:{rivalGrowth:[8,13,20,28,38,50],rivalPoints:[5,10,15,22,30,40]},magnet:{pickupRange:[4,6,9,12,16,20]},
+ tooth:{rivalGrowth:[8,13,20,28,38,50],rivalPoints:[5,10,15,22,30,40]},magnet:{pickupRange:[4,6,9,12,16,20]},clover:{luck:[10,20,35,50,75,100]},
 };
-test('all 54 unique relic definitions include the 42 standard pack relics with exact stats',()=>{
- const a=api();assert.equal(a.relics.length,54);assert.equal(new Set(a.relics.map(relic=>relic.key)).size,54);
+test('all 61 unique relic definitions include the 48 standard pack relics with exact stats',()=>{
+ const a=api();assert.equal(a.relics.length,61);assert.equal(new Set(a.relics.map(relic=>relic.key)).size,61);
  for(const [family,stats]of Object.entries(expected))for(const [index,rarity]of rarityNames.entries()){
   const relic=a.getRelic(`${rarity}:${family}`);assert.ok(relic);assert.equal(relic.name,`${a.rarities[index].label} ${a.definitions.find(row=>row.id===family).name}`);
   assert.deepEqual(plain(relic.stats),Object.fromEntries(Object.entries(stats).map(([stat,values])=>[stat,values[index]])));
-  const effects=a.effectsForKey(relic.key);for(const [stat,pct]of Object.entries(relic.stats))near(effects[stat],stat==='diamonds'?pct:1+pct/100);
+  const effects=a.effectsForKey(relic.key);for(const [stat,pct]of Object.entries(relic.stats))near(effects[stat],stat==='diamonds'||stat==='luck'?pct:1+pct/100);
   assert.ok(a.artHtml(family).includes(`#${family}`));
  }
 });
@@ -37,10 +37,10 @@ test('rarity rolls use exact boundaries, including capped Epic, Legendary and My
  }
 });
 test('standard family odds renormalize remaining weights and exclude removed families',()=>{
- const a=api();assert.equal(a.familyWeightTotal,347);
- for(const pack of a.packs){const counts={};for(let index=0;index<347;index++){let call=0;const key=a.roll(pack.id,()=>++call===1?0:(index+.5)/347);const family=a.getRelic(key).family;counts[family]=(counts[family]||0)+1;}
+ const a=api();assert.equal(a.familyWeightTotal,398);
+ for(const pack of a.packs){const counts={};for(let index=0;index<398;index++){let call=0;const key=a.roll(pack.id,()=>++call===1?0:(index+.5)/398);const family=a.getRelic(key).family;counts[family]=(counts[family]||0)+1;}
   for(const family of a.definitions.filter(row=>!row.rarities))assert.equal(counts[family.id],family.id==='badge'?41:51);
-  assert.equal(Object.values(counts).reduce((sum,n)=>sum+n,0),347);
+  assert.equal(Object.values(counts).reduce((sum,n)=>sum+n,0),398);
  }
 });
 test('purchases deduct one price and award three independent permanent results, including repeats',()=>{
@@ -102,7 +102,7 @@ harness=harness.replace('    pullFood = () => tierByName.Peanut;', '    const re
 const ctx={require,__dirname,console};vm.runInNewContext(harness+'\nglobalThis.boot=boot;',ctx);
 function game(key=null){const g=ctx.boot();if(key){g.save.relics.items[key]=1;g.relics.equip(g.save,key);}g.state.running=true;g.state.runRelicKey=g.save.relics.equipped;g.state.mode='run';g.state.player=g.createFood(g.tierByName.Peanut,100,100);g.refreshPlayerRelics();return g;}
 function sprinkle(g,type='small',points=100){const s={x:100,y:100,type:{points,radius:1,key:type,color:'#fff'}};g.state.sprinkles=[s];g.eatSprinkle(g.state.player,s,0);}
-test('all seven families apply only their named sources in real sprinkle and rival growth calculations',()=>{
+test('all eight families apply only their named sources in real sprinkle and rival growth calculations',()=>{
  for(const family of Object.keys(expected)){
   const g=game(`mythic:${family}`),f=g.state.player,e=g.relics.effectsForKey(`mythic:${family}`),baseSpeed=g.tierByName.Peanut.speed*.5;
   near(g.moveSpeed(f),baseSpeed*e.speed);near(g.growthForEat(f),f.tier.growth*e.rivalGrowth);sprinkle(g,'small');near(f.size,10+100*f.tier.growth*e.sprinkleGrowth);near(g.state.points,100*e.sprinklePoints);
@@ -189,7 +189,7 @@ test('Secret effects follow real source-specific growth, speed, reward caps and 
 });
 
 test('three results may have different rarities and families; a failed roll awards nothing and spends nothing',()=>{
- const a=api(),save=saveFor(a),rolls=[0,0,.85,.18,.999,.65];
+ const a=api(),save=saveFor(a),rolls=[0,0,.85,.18,.999,.56];
  assert.deepEqual(plain(a.buyPack(save,'common',false,()=>rolls.shift())),['common:spoon','uncommon:fork','epic:badge']);
  assert.equal(save.diamonds,99750);assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),3);
  const before=JSON.stringify(save);let calls=0;assert.throws(()=>a.buyPack(save,'common',false,()=>++calls===4?NaN:0));assert.equal(JSON.stringify(save),before);
@@ -211,7 +211,7 @@ test('a failed roll in the last pack leaves all diamonds and relics unchanged',(
 });
 
 test('Godly derives 1.5 times every Mythic bonus, preserves penalties and is combine-only',()=>{
- const a=api();assert.equal(a.relics.filter(row=>row.rarity==='godly').length,7);
+ const a=api();assert.equal(a.relics.filter(row=>row.rarity==='godly').length,8);
  for(const [family,stats]of Object.entries(expected)){
   const relic=a.getRelic(`godly:${family}`);
   assert.deepEqual(plain(relic.stats),Object.fromEntries(Object.entries(stats).map(([stat,values])=>[stat,values[5]>0?values[5]*1.5:values[5]])));
@@ -255,10 +255,10 @@ test('removed families have no definitions, drops, upgrades or equipped effects 
   const bag=a.normalize(plain(save.relics));assert.equal(bag.items[key],undefined);assert.equal(bag.equipped,null);
   near(a.effectsForKey(key).sprinkleGrowth,1);near(a.effectsForKey(key).rivalGrowth,1);near(a.effectsForKey(key).sprinklePoints,1);near(a.effectsForKey(key).rivalPoints,1);
  }
- const allowed=new Set(['spoon','fork','chili','dish','badge','tooth','magnet']);
+ const allowed=new Set(['spoon','fork','chili','dish','badge','tooth','magnet','clover']);
  for(const pack of a.packs)for(const row of pack.odds){
   let lower=0;for(const prev of pack.odds){if(prev===row)break;lower+=prev.weight;}
-  for(let index=0;index<347;index++){let calls=0;const key=a.roll(pack.id,()=>++calls===1?(lower+row.weight/2)/pack.weightTotal:(index+.5)/347);if(row.rarity!=='secret')assert.ok(allowed.has(a.getRelic(key).family));}
+  for(let index=0;index<398;index++){let calls=0;const key=a.roll(pack.id,()=>++calls===1?(lower+row.weight/2)/pack.weightTotal:(index+.5)/398);if(row.rarity!=='secret')assert.ok(allowed.has(a.getRelic(key).family));}
  }
 });
 test('existing Forbidden Fork copies become Forbidden Fortune with new stats and ownership intact',()=>{
@@ -342,4 +342,55 @@ test('Hunter’s Tooth rival points apply at every rarity and Chopsticks give 80
  }
  const g=game('secret:chopsticks');sprinkle(g);const f=g.state.player;f.size=1000;const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=100;
  assert.ok(g.tryEatFood(f,prey,[prey],0));near(g.state.points,118);
+});
+
+test('Golden Clover has exact Common-to-Godly luck stats, standard pack drops, and no Secret version',()=>{
+ const a=api();for(const [i,rarity]of [...rarityNames,'godly'].entries()){
+  const relic=a.getRelic(`${rarity}:clover`);assert.equal(relic.name,`${a.rarities[i].label} Golden Clover`);
+  assert.deepEqual(plain(relic.stats),{luck:[10,20,35,50,75,100,150][i]});assert.equal(a.effectsForKey(relic.key).luck,[10,20,35,50,75,100,150][i]);
+  assert.match(a.describe(relic.key),/food luck during a run/);assert.ok(a.artHtml(relic.family).includes('#clover'));
+ }
+ assert.equal(a.getRelic('secret:clover'),null);
+ for(const pack of a.packs)for(const row of pack.odds.filter(row=>row.rarity!=='secret')){
+  let low=0;for(const prev of pack.odds){if(prev===row)break;low+=prev.weight;}
+  let call=0;const key=a.roll(pack.id,()=>++call===1?(low+row.weight/2)/pack.weightTotal:.99999);
+  assert.equal(key,`${row.rarity}:clover`);
+ }
+});
+test('every Golden Clover adds to existing food and potion luck only while equipped for the run',()=>{
+ for(const [i,rarity]of [...rarityNames,'godly'].entries()){
+  const key=`${rarity}:clover`,g=game(key);g.save.bento.opened=12;
+  const permanent=g.permanentLuckBonus(),bento=plain(g.bentoRarityChances()),bonus=[.1,.2,.35,.5,.75,1,1.5][i];
+  g.save.relics.items[key]=100;g.save.relics.items['secret:forbidden']=100;near(g.totalLuckBonus(),permanent+bonus);
+  g.save.activePotions.luck={endsAt:999999,stacks:5};near(g.totalLuckBonus(),permanent+2.5+bonus);
+  for(const food of g.FOOD_TIERS){const rank=g.rarityById[food.rarity].rank;near(g.pullWeight(food),(1/food.odds)*(1+(permanent+2.5+bonus)*rank));}
+  assert.deepEqual(plain(g.bentoRarityChances()),bento);
+  const api=g.relics,boosted={diamonds:250,relics:api.normalize(plain(g.save.relics))},normal={diamonds:250,relics:api.emptySave()};
+  assert.deepEqual(plain(api.buyPack(boosted,'common',false,()=>.9)),plain(api.buyPack(normal,'common',false,()=>.9)));
+  g.state.player.tier=g.tierByName.Cookie;g.refreshPlayerRelics();near(g.totalLuckBonus(),permanent+2.5+bonus);
+  g.state.running=false;near(g.totalLuckBonus(),permanent+2.5);
+  g.save.relics.items['common:spoon']=1;g.relics.equip(g.save,'common:spoon');g.state.runRelicKey='common:spoon';g.state.running=true;near(g.totalLuckBonus(),permanent+2.5);
+ }
+});
+test('Common and Godly Clover improve real banked food rolls after ending or dying, without leaking into lobby luck',()=>{
+ for(const rarity of ['common','godly'])for(const wipedOut of [false,true]){
+  const key=`${rarity}:clover`,g=game(key);g.restoreFoodRolls();g.state.running=false;let selected=null;
+  for(let index=1;index<1000;index++){
+   const roll=index/1000;g.math.random=()=>roll;
+   const normal=g.realPullFood(null,null),boosted=g.realPullFood(null,key);
+   if(normal.name!==boosted.name){selected={roll,normal,boosted};break;}
+  }
+  assert.ok(selected,'Clover changes actual run food roll outcomes');g.math.random=()=>selected.roll;
+  g.state.running=true;g.state.foodsEarned=1;g.state.foodWeather=['clear'];g.endRun(wipedOut);
+  assert.equal(g.save.inventory[selected.boosted.name],selected.boosted.name==='Peanut'?2:1);assert.equal(g.save.inventory[selected.normal.name]||0,selected.normal.name==='Peanut'?1:0);
+  near(g.totalLuckBonus(),g.permanentLuckBonus());assert.equal(g.save.relics.equipped,key);
+  const reloaded=ctx.boot(JSON.parse(g.storage.get('sprinkleFeastSave')));assert.equal(reloaded.save.relics.equipped,key);assert.equal(reloaded.save.relics.items[key],1);
+ }
+});
+test('the run luck tooltip names the equipped Clover or Fortune rather than hardcoding a relic',()=>{
+ const source=fs.readFileSync(path.join(root,'game.js'),'utf8'),start=source.indexOf('  function renderEquippedUi('),end=source.indexOf('\n  function ',start+1),window={};vm.runInNewContext(relicSource,{window,Math});
+ for(const [key,pct,name]of [['common:clover',10,'Common Golden Clover'],['godly:clover',150,'Godly Golden Clover'],['secret:forbidden',200,'Secret Forbidden Fortune']]){
+  const c={window,state:{running:true,runRelicKey:key},save:{bento:{opened:0}},equippedTier:()=>({}),tierStatsLabel:()=>'',variantClass:()=>'',luckSnapshot:()=>({into:1,typeCount:1}),boostStacks:()=>0,displayedLuckPct:()=>100+pct,bentoLuckBonus:()=>0,LUCK_EVERY:10,LUCK_STEP:.5,equippedLineEl:{},luckEl:{},luckLabelEl:{},relicItemLabel:()=>name};
+  vm.runInNewContext(source.slice(start,end)+'\nrenderEquippedUi();',c);assert.match(c.luckEl.title,new RegExp(`\\+${pct}% from ${name}`));
+ }
 });

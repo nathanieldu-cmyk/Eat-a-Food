@@ -3158,7 +3158,7 @@
     const luckTitle =
       `+100% base, and +50% every 10 types (${luck.into}/${LUCK_EVERY} toward the next).` +
       (bentoLuck ? ` Plus +${bentoLuck}% forever from ${save.bento.opened} bento box${save.bento.opened === 1 ? "" : "es"}.` : "");
-    const relicLuckTitle = relicLuck ? ` Plus +${relicLuck}% from Forbidden Fortune for this run.` : "";
+    const relicLuckTitle = relicLuck ? ` Plus +${relicLuck}% from ${window.GameRelics.getRelic(state.runRelicKey).name} for this run.` : "";
     luckEl.title = potionLuck
       ? `${luckTitle} Plus +${Math.round(potionLuck * 100)}% from a luck potion.${relicLuckTitle}`
       : `${luckTitle}${relicLuckTitle} Luck makes rarer foods more likely.`;
