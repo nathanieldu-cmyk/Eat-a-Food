@@ -22,8 +22,8 @@ test('all 65 unique relic definitions include the 60 standard relics with exact 
  }
 });
 test('all six prices and coalesced rarity odds match the specification and sum to exactly 100%',()=>{
- const a=api(),odds=[[825,100,50,25,0,0,0],[0,824,100,50,25,0,1],[0,0,820,100,50,25,5],[0,0,0,820,100,70,10],[0,0,0,0,900,75,25],[0,0,0,0,0,900,100]];
- assert.deepEqual(Array.from(a.packs,pack=>pack.price),[250,1000,4000,15000,50000,200000]);
+ const a=api(),odds=[[850,100,40,10,0,0,0],[0,850,100,40,9,0,1],[0,0,850,100,40,5,5],[0,0,0,850,100,40,10],[0,0,0,0,880,100,20],[0,0,0,0,0,960,40]];
+ assert.deepEqual(Array.from(a.packs,pack=>pack.price),[250,1000,4000,12000,30000,90000]);
  for(const [index,pack]of a.packs.entries()){
   assert.equal(pack.odds.reduce((sum,row)=>sum+row.weight,0),1000);near(pack.odds.reduce((sum,row)=>sum+row.chance,0),100);
   assert.deepEqual([...rarityNames,'secret'].map(rarity=>pack.odds.find(row=>row.rarity===rarity)?.weight||0),odds[index]);
@@ -190,7 +190,7 @@ test('Secret effects follow real source-specific growth, speed, reward caps and 
 });
 
 test('three results may have different rarities and families; a failed roll awards nothing and spends nothing',()=>{
- const a=api(),save=saveFor(a),rolls=[0,0,.825,.11,.999,.45];
+ const a=api(),save=saveFor(a),rolls=[0,0,.85,.11,.999,.45];
  assert.deepEqual(plain(a.buyPack(save,'common',false,()=>rolls.shift())),['common:spoon','uncommon:fork','epic:badge']);
  assert.equal(save.diamonds,99750);assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),3);
  const before=JSON.stringify(save);let calls=0;assert.throws(()=>a.buyPack(save,'common',false,()=>++calls===4?NaN:0));assert.equal(JSON.stringify(save),before);
