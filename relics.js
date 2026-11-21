@@ -31,15 +31,16 @@
       {id:'chili', name:'Chili Charm', icon:'🌶️', weight:51, stats:{speed:[3,5,7,10,12,15]}},
       {id:'dish', name:'Diamond Dish', icon:'💎', weight:51, stats:{diamonds:[5,10,15,25,35,50]}},
       {id:'badge', name:'Chef’s Badge', icon:'🏅', weight:41, stats:{speed:[1,2,3,4,5,6],sprinkleGrowth:[2,4,6,8,12,15],sprinklePoints:[2,4,6,8,12,15]}},
-      {id:'tooth', name:'Hunter’s Tooth', icon:'🦷', weight:51, stats:{rivalGrowth:[8,13,20,28,38,50]}},
+      {id:'tooth', name:'Hunter’s Tooth', icon:'🦷', weight:51, stats:{rivalGrowth:[8,13,20,28,38,50],rivalPoints:[5,10,15,22,30,40]}},
+      {id:'magnet', name:'Sprinkles Magnet', icon:'🧲', weight:51, stats:{pickupRange:[4,6,9,12,16,20]}},
       {id:'dragon', name:'Dragon Pepper', icon:'🐉', weight:1, rarities:['secret'], stats:{speed:[30],sprinkleGrowth:[25]}},
       {id:'hat', name:'Royal Chef’s Hat', icon:'👨‍🍳', weight:1, rarities:['secret'], stats:{speed:[20],sprinklePoints:[25]}},
-      {id:'chopsticks', name:'Phantom Chopsticks', icon:'🥢', weight:1, rarities:['secret'], stats:{rivalGrowth:[80],rivalPoints:[50]}},
+      {id:'chopsticks', name:'Phantom Chopsticks', icon:'🥢', weight:1, rarities:['secret'], stats:{rivalGrowth:[80],rivalPoints:[80]}},
       {id:'truffle', name:'Diamond Truffle', icon:'💠', weight:1, rarities:['secret'], stats:{diamonds:[100]}},
       {id:'forbidden', name:'Forbidden Fortune', icon:'🔮', weight:1, rarities:['secret'], stats:{luck:[200]}},
     ],
   };
-  const labels = {luck:'food luck during a run',growth:'growth from all sources',speed:'movement speed',sprinkleGrowth:'growth from sprinkles',sprinklePoints:'points from sprinkles',diamonds:'diamonds when banking a run',rivalGrowth:'growth from eating rivals',xsPoints:'points from extra-small sprinkles only',rivalPoints:'points from eating rivals'};
+  const labels = {pickupRange:'sprinkle pickup distance',luck:'food luck during a run',growth:'growth from all sources',speed:'movement speed',sprinkleGrowth:'growth from sprinkles',sprinklePoints:'points from sprinkles',diamonds:'diamonds when banking a run',rivalGrowth:'growth from eating rivals',xsPoints:'points from extra-small sprinkles only',rivalPoints:'points from eating rivals'};
   const keyFor = (family, rarity) => `${rarity}:${family}`;
   const count = raw => Number.isFinite(Number(raw)) ? Math.min(1e9,Math.max(0,Math.floor(Number(raw)))) : 0;
   const familiesForRarity = rarity => config.families.filter(family => family.rarities ? family.rarities.includes(rarity) : rarity !== 'secret');
@@ -141,7 +142,7 @@
     return next.key;
   }
   function effectsForKey(key) {
-    const effects={speed:1,growth:1,sprinkleGrowth:1,sprinklePoints:1,rivalGrowth:1,rivalPoints:1,xsPoints:1,diamonds:0,luck:0};
+    const effects={pickupRange:1,speed:1,growth:1,sprinkleGrowth:1,sprinklePoints:1,rivalGrowth:1,rivalPoints:1,xsPoints:1,diamonds:0,luck:0};
     const relic=getRelic(key);if(!relic)return effects;
     for(const [stat,pct]of Object.entries(relic.stats))effects[stat]=stat==='diamonds'||stat==='luck'?pct:1+pct/100;
     // Expand all-source growth once into the two gameplay source multipliers.
@@ -163,6 +164,7 @@
     const relic=getRelic(key);if(!relic)return 'No relic equipped.';
     let text=Object.entries(relic.stats).map(([stat,pct])=>`${pct<0?'−':'+'}${Math.abs(pct)}% ${labels[stat]}`).join('; ')+'.';
     if(relic.family==='tooth')text+=' Does not increase sprinkle growth.';
+    if(relic.stats.pickupRange)text+=' Only collects eligible sprinkles; does not extend rival eating range.';
     if(relic.stats.luck)text+=' Affects run food rewards only; pack and Bento odds stay fixed.';
     if(relic.stats.diamonds)text+=' Rounded to the nearest whole diamond after weather rewards.';
     return text;

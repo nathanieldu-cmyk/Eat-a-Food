@@ -9,10 +9,10 @@ const rarityNames=['common','uncommon','rare','epic','legendary','mythic'];
 const expected={
  spoon:{sprinklePoints:[5,8,12,17,23,30]},fork:{sprinkleGrowth:[5,8,12,17,23,30]},chili:{speed:[3,5,7,10,12,15]},dish:{diamonds:[5,10,15,25,35,50]},
  badge:{speed:[1,2,3,4,5,6],sprinkleGrowth:[2,4,6,8,12,15],sprinklePoints:[2,4,6,8,12,15]},
- tooth:{rivalGrowth:[8,13,20,28,38,50]},
+ tooth:{rivalGrowth:[8,13,20,28,38,50],rivalPoints:[5,10,15,22,30,40]},magnet:{pickupRange:[4,6,9,12,16,20]},
 };
-test('all 47 unique relic definitions include the 36 standard pack relics with exact stats',()=>{
- const a=api();assert.equal(a.relics.length,47);assert.equal(new Set(a.relics.map(relic=>relic.key)).size,47);
+test('all 54 unique relic definitions include the 42 standard pack relics with exact stats',()=>{
+ const a=api();assert.equal(a.relics.length,54);assert.equal(new Set(a.relics.map(relic=>relic.key)).size,54);
  for(const [family,stats]of Object.entries(expected))for(const [index,rarity]of rarityNames.entries()){
   const relic=a.getRelic(`${rarity}:${family}`);assert.ok(relic);assert.equal(relic.name,`${a.rarities[index].label} ${a.definitions.find(row=>row.id===family).name}`);
   assert.deepEqual(plain(relic.stats),Object.fromEntries(Object.entries(stats).map(([stat,values])=>[stat,values[index]])));
@@ -37,10 +37,10 @@ test('rarity rolls use exact boundaries, including capped Epic, Legendary and My
  }
 });
 test('standard family odds renormalize remaining weights and exclude removed families',()=>{
- const a=api();assert.equal(a.familyWeightTotal,296);
- for(const pack of a.packs){const counts={};for(let index=0;index<296;index++){let call=0;const key=a.roll(pack.id,()=>++call===1?0:(index+.5)/296);const family=a.getRelic(key).family;counts[family]=(counts[family]||0)+1;}
+ const a=api();assert.equal(a.familyWeightTotal,347);
+ for(const pack of a.packs){const counts={};for(let index=0;index<347;index++){let call=0;const key=a.roll(pack.id,()=>++call===1?0:(index+.5)/347);const family=a.getRelic(key).family;counts[family]=(counts[family]||0)+1;}
   for(const family of a.definitions.filter(row=>!row.rarities))assert.equal(counts[family.id],family.id==='badge'?41:51);
-  assert.equal(Object.values(counts).reduce((sum,n)=>sum+n,0),296);
+  assert.equal(Object.values(counts).reduce((sum,n)=>sum+n,0),347);
  }
 });
 test('purchases deduct one price and award three independent permanent results, including repeats',()=>{
@@ -97,12 +97,12 @@ let harness=fs.readFileSync(path.join(__dirname,'bento.test.cjs'),'utf8').split(
 harness=harness.replace('    pullFood = () => tierByName.Peanut;', '    const realPullFood=pullFood; pullFood = () => tierByName.Peanut;').replace('  const storage = new Map();','  let now=1000;const sent=[];const storage = new Map();')
  .replace('window: {}, Math: math, console,','sent, window: {}, Math: math, console, crypto:require("node:crypto"), Date:class extends Date {static now(){return now;}}, performance:{now:()=>now}, setTimeout(){},')
  .replace('game.replace(marker,','game.replace("  const RING_MAJOR = 0.73;","").replace("  const RING_TUBE = 0.02;","").replace("  const FOOD_MODEL_SCALE = 2.15;","").replace("  const save = loadSave();","  const RING_MAJOR=.73, RING_TUBE=.02, FOOD_MODEL_SCALE=2.15; const save = loadSave();").replace(marker,')
- .replace('    globalThis.api = { save, state, net,','    netSend=msg=>sent.push(msg);\n    globalThis.api = { relics:window.GameRelics, gameWindow:window, realPullFood, pullWeight, restoreFoodRolls:()=>{pullFood=realPullFood;}, FOOD_TIERS, rarityById, setTutorialStep, persistSave, refreshPlayerRelics, createFood, moveSpeed, eatSprinkle, growthForEat, tryEatFood, addEatPoints, foodGainFactor, onGuestInput, save, state, net,')
+ .replace('    globalThis.api = { save, state, net,','    netSend=msg=>sent.push(msg);\n    globalThis.api = { relics:window.GameRelics, gameWindow:window, realPullFood, pullWeight, restoreFoodRolls:()=>{pullFood=realPullFood;}, FOOD_TIERS, rarityById, setTutorialStep, persistSave, refreshPlayerRelics, createFood, moveSpeed, eatSprinkle, growthForEat, tryEatFood, addEatPoints, foodGainFactor, ringReach, sprinklePickupReach, bodyReach, resolveEats, guestEatSprinkles, applySnap, onGuestInput, save, state, net,')
  .replace('return { ...context.api, math, storage, elements };','return { ...context.api, math, storage, elements, sent };');
 const ctx={require,__dirname,console};vm.runInNewContext(harness+'\nglobalThis.boot=boot;',ctx);
 function game(key=null){const g=ctx.boot();if(key){g.save.relics.items[key]=1;g.relics.equip(g.save,key);}g.state.running=true;g.state.runRelicKey=g.save.relics.equipped;g.state.mode='run';g.state.player=g.createFood(g.tierByName.Peanut,100,100);g.refreshPlayerRelics();return g;}
 function sprinkle(g,type='small',points=100){const s={x:100,y:100,type:{points,radius:1,key:type,color:'#fff'}};g.state.sprinkles=[s];g.eatSprinkle(g.state.player,s,0);}
-test('all six families apply only their named sources in real sprinkle and rival growth calculations',()=>{
+test('all seven families apply only their named sources in real sprinkle and rival growth calculations',()=>{
  for(const family of Object.keys(expected)){
   const g=game(`mythic:${family}`),f=g.state.player,e=g.relics.effectsForKey(`mythic:${family}`),baseSpeed=g.tierByName.Peanut.speed*.5;
   near(g.moveSpeed(f),baseSpeed*e.speed);near(g.growthForEat(f),f.tier.growth*e.rivalGrowth);sprinkle(g,'small');near(f.size,10+100*f.tier.growth*e.sprinkleGrowth);near(g.state.points,100*e.sprinklePoints);
@@ -116,7 +116,7 @@ test('food and potion calculations receive each percentage modifier exactly once
 test('Phantom Chopsticks boost rival points only and respect ten base food rewards before Double Foods',()=>{
  const g=game('secret:chopsticks');g.gameWindow.GameWeather={current:()=> 'double-foods'};const f=g.state.player;f.size=2e8;
  const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=1e8;assert.ok(g.tryEatFood(f,prey,[prey],0));assert.equal(g.state.foodsEarned,10);assert.equal(g.bankPendingFoods().length,20);
- const s=game('secret:chopsticks');sprinkle(s);near(s.state.points,100);const small=s.createFood(s.tierByName.Peanut,100,100,true);small.size=100;s.state.player.size=1000;assert.ok(s.tryEatFood(s.state.player,small,[small],0));near(s.state.points,115);
+ const s=game('secret:chopsticks');sprinkle(s);near(s.state.points,100);const small=s.createFood(s.tierByName.Peanut,100,100,true);small.size=100;s.state.player.size=1000;assert.ok(s.tryEatFood(s.state.player,small,[small],0));near(s.state.points,118);
 });
 test('Diamond Dish rounds the weather-inclusive bonus once on death and preserves relic ownership',()=>{
  const g=game('mythic:dish');g.state.foodsEarned=3;g.state.foodWeather=['triple-diamonds','triple-diamonds','triple-diamonds'];g.state.player=null;g.endRun(true);
@@ -131,7 +131,7 @@ test('run relic stays locked across food changes, attempted equips and guest inp
 test('host applies Spoon and Chopsticks to guest point events once, with potion growth kept separate',()=>{
  const g=game();g.net.role='host';const remote=g.createFood(g.tierByName.Peanut,100,100);remote.netId='guest';remote.zone='lobby';g.net.humans.set('guest',remote);g.onGuestInput({id:'guest',relic:'mythic:spoon',growth:1.25,speed:1.25});
  const s={x:100,y:100,type:{points:100,key:'xs',radius:1,color:'#fff'}};g.state.sprinkles=[s];g.eatSprinkle(remote,s,0);near(g.sent.at(-1).pts,130);near(remote.size,10+100*remote.tier.growth*1.25);
- remote.zone='lobby';g.onGuestInput({id:'guest',relic:'secret:chopsticks',growth:1,speed:1});remote.zone='arena';remote.size=1000;const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=100;assert.ok(g.tryEatFood(remote,prey,[prey],0));near(g.sent.at(-1).pts,15);
+ remote.zone='lobby';g.onGuestInput({id:'guest',relic:'secret:chopsticks',growth:1,speed:1});remote.zone='arena';remote.size=1000;const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=100;assert.ok(g.tryEatFood(remote,prey,[prey],0));near(g.sent.at(-1).pts,18);
 });
 test('tutorial finish unlocks the gift once, skipping does not, and replay does not renew a claim',()=>{
  const skipped=ctx.boot(undefined,true);skipped.setTutorialStep('done');assert.equal(skipped.save.relics.tutorialGiftEligible,false);
@@ -167,7 +167,7 @@ test('combined ownership and the upgraded equipped relic persist across reloads'
  const reloaded=a.normalize(plain(save.relics));assert.equal(reloaded.items['mythic:fork'],1);assert.equal(reloaded.items['legendary:fork']||0,0);assert.equal(reloaded.equipped,'mythic:fork');assert.equal(reloaded.tutorialGiftClaimed,true);
 });
 
-const secretStats={dragon:{speed:30,sprinkleGrowth:25},hat:{speed:20,sprinklePoints:25},chopsticks:{rivalGrowth:80,rivalPoints:50},truffle:{diamonds:100},forbidden:{luck:200}};
+const secretStats={dragon:{speed:30,sprinkleGrowth:25},hat:{speed:20,sprinklePoints:25},chopsticks:{rivalGrowth:80,rivalPoints:80},truffle:{diamonds:100},forbidden:{luck:200}};
 test('all five Secret relics have exact stats, equal conditional odds, unique art and no upgrades',()=>{
  const a=api(),secrets=a.relics.filter(row=>row.rarity==='secret');assert.equal(secrets.length,5);
  for(const relic of secrets){assert.deepEqual(plain(relic.stats),secretStats[relic.family]);assert.equal(a.nextRelic(relic.key),null);assert.ok(a.artHtml(relic.family).includes(`#${relic.family}`));}
@@ -189,7 +189,7 @@ test('Secret effects follow real source-specific growth, speed, reward caps and 
 });
 
 test('three results may have different rarities and families; a failed roll awards nothing and spends nothing',()=>{
- const a=api(),save=saveFor(a),rolls=[0,0,.85,.18,.999,.75];
+ const a=api(),save=saveFor(a),rolls=[0,0,.85,.18,.999,.65];
  assert.deepEqual(plain(a.buyPack(save,'common',false,()=>rolls.shift())),['common:spoon','uncommon:fork','epic:badge']);
  assert.equal(save.diamonds,99750);assert.equal(Object.values(save.relics.items).reduce((sum,n)=>sum+n,0),3);
  const before=JSON.stringify(save);let calls=0;assert.throws(()=>a.buyPack(save,'common',false,()=>++calls===4?NaN:0));assert.equal(JSON.stringify(save),before);
@@ -211,7 +211,7 @@ test('a failed roll in the last pack leaves all diamonds and relics unchanged',(
 });
 
 test('Godly derives 1.5 times every Mythic bonus, preserves penalties and is combine-only',()=>{
- const a=api();assert.equal(a.relics.filter(row=>row.rarity==='godly').length,6);
+ const a=api();assert.equal(a.relics.filter(row=>row.rarity==='godly').length,7);
  for(const [family,stats]of Object.entries(expected)){
   const relic=a.getRelic(`godly:${family}`);
   assert.deepEqual(plain(relic.stats),Object.fromEntries(Object.entries(stats).map(([stat,values])=>[stat,values[5]>0?values[5]*1.5:values[5]])));
@@ -255,10 +255,10 @@ test('removed families have no definitions, drops, upgrades or equipped effects 
   const bag=a.normalize(plain(save.relics));assert.equal(bag.items[key],undefined);assert.equal(bag.equipped,null);
   near(a.effectsForKey(key).sprinkleGrowth,1);near(a.effectsForKey(key).rivalGrowth,1);near(a.effectsForKey(key).sprinklePoints,1);near(a.effectsForKey(key).rivalPoints,1);
  }
- const allowed=new Set(['spoon','fork','chili','dish','badge','tooth']);
+ const allowed=new Set(['spoon','fork','chili','dish','badge','tooth','magnet']);
  for(const pack of a.packs)for(const row of pack.odds){
   let lower=0;for(const prev of pack.odds){if(prev===row)break;lower+=prev.weight;}
-  for(let index=0;index<296;index++){let calls=0;const key=a.roll(pack.id,()=>++calls===1?(lower+row.weight/2)/pack.weightTotal:(index+.5)/296);if(row.rarity!=='secret')assert.ok(allowed.has(a.getRelic(key).family));}
+  for(let index=0;index<347;index++){let calls=0;const key=a.roll(pack.id,()=>++calls===1?(lower+row.weight/2)/pack.weightTotal:(index+.5)/347);if(row.rarity!=='secret')assert.ok(allowed.has(a.getRelic(key).family));}
  }
 });
 test('existing Forbidden Fork copies become Forbidden Fortune with new stats and ownership intact',()=>{
@@ -294,4 +294,52 @@ test('banking and death use Forbidden Fortune on the actual run food rolls after
   near(g.totalLuckBonus(),g.permanentLuckBonus());
   const before=JSON.stringify(g.save.inventory);g.endRun(wipedOut);assert.equal(JSON.stringify(g.save.inventory),before);
  }
+});
+
+test('Sprinkles Magnet has all seven exact ranges, no Secret version, and persists through upgrading',()=>{
+ const a=api();for(const [i,rarity]of [...rarityNames,'godly'].entries()){
+  const relic=a.getRelic(`${rarity}:magnet`);assert.equal(relic.name,`${a.rarities[i].label} Sprinkles Magnet`);
+  assert.deepEqual(plain(relic.stats),{pickupRange:[4,6,9,12,16,20,30][i]});
+  near(a.effectsForKey(relic.key).pickupRange,1+[4,6,9,12,16,20,30][i]/100);
+ }
+ assert.equal(a.getRelic('secret:magnet'),null);
+ const save=saveFor(a);save.relics.items['mythic:magnet']=5;a.equip(save,'mythic:magnet');assert.equal(a.combine(save,'mythic:magnet'),'godly:magnet');
+ const reloaded=a.normalize(plain(save.relics));assert.equal(reloaded.equipped,'godly:magnet');assert.equal(reloaded.items['godly:magnet'],1);
+});
+test('solo pickup boundaries expand at every Magnet rarity without boosting rewards, rival reach or portal reach',()=>{
+ for(const [i,rarity]of [...rarityNames,'godly'].entries()){
+  const g=game(`${rarity}:magnet`),f=g.state.player;f.drawRadius=()=>100;
+  const base=g.ringReach(f),reach=base*(1+[4,6,9,12,16,20,30][i]/100);near(g.sprinklePickupReach(f),reach);
+  const s={x:f.x+(base+reach)/2+1,y:f.y,type:{key:'xs',radius:1,points:25,color:'#fff'}};
+  const before=f.size;g.state.sprinkles=[s];g.resolveEats();assert.equal(g.state.sprinkles.length,0);near(g.state.points,25);near(f.size-before,25*f.tier.growth);
+  const outside={...s,x:f.x+reach+1.001};g.state.sprinkles=[outside];g.resolveEats();assert.equal(g.state.sprinkles.length,1);near(g.state.points,25);
+  near(g.ringReach(f),base);near(g.bodyReach(f),107.5);
+  const prey=g.createFood(g.tierByName.Peanut,f.x+150,f.y,true);prey.drawRadius=()=>10;prey.size=1;
+  assert.equal(g.tryEatFood(f,prey,[prey],0),false);prey.x=f.x+g.bodyReach(f)+g.bodyReach(prey)-.001;assert.ok(g.tryEatFood(f,prey,[prey],0));
+ }
+ const normal=game(),f=normal.state.player;f.drawRadius=()=>100;normal.state.sprinkles=[{x:f.x+normal.ringReach(f)*1.02,y:f.y,type:{key:'xs',radius:1,points:25,color:'#fff'}}];normal.resolveEats();assert.equal(normal.state.sprinkles.length,1);
+});
+test('guest prediction and host-authoritative collection use the same equipped Magnet range',()=>{
+ const guest=game('mythic:magnet'),f=guest.state.player;guest.net.role='guest';f.drawRadius=()=>100;
+ const s={x:f.x+guest.ringReach(f)*1.1+1,y:f.y,type:{key:'xs',radius:1,points:25,color:'#fff'}};
+ guest.state.sprinkles=[s,{...s,x:f.x+guest.sprinklePickupReach(f)+1.001}];guest.guestEatSprinkles();assert.equal(guest.state.sprinkles.length,1);assert.equal(guest.net.ateSpr.length,1);assert.equal(guest.state.points,0);
+ const host=game();host.net.role='host';host.state.player=null;
+ const remote=host.createFood(host.tierByName.Peanut,100,100);remote.netId='guest';remote.zone='lobby';remote.drawRadius=()=>100;host.net.humans.set('guest',remote);
+ host.onGuestInput({id:'guest',relic:'mythic:magnet'});remote.zone='arena';host.onGuestInput({id:'guest',relic:'godly:magnet'});
+ assert.equal(remote.relicKey,'mythic:magnet');const before=remote.size;
+ host.state.sprinkles=[{...s,x:remote.x+host.ringReach(remote)*1.1+1,y:remote.y}];host.resolveEats();assert.equal(host.state.sprinkles.length,0);near(remote.size-before,25*remote.tier.growth);assert.equal(host.sent.at(-1).pts,25);
+});
+test('guest snapshots show the host-confirmed Magnet on other players',()=>{
+ const g=game();g.net.role='guest';g.net.id='me';g.applySnap({players:[{id:'remote',food:'Peanut',name:'Friend',x:100,y:100,size:10,zone:'arena',relic:'godly:magnet'}]});
+ const remote=g.net.humans.get('remote');assert.equal(remote.relicKey,'godly:magnet');near(remote.relicEffects.pickupRange,1.3);
+ g.applySnap({players:[{id:'remote',food:'Peanut',name:'Friend',x:100,y:100,size:10,zone:'lobby',relic:null}]});near(remote.relicEffects.pickupRange,1);
+});
+test('Hunter’s Tooth rival points apply at every rarity and Chopsticks give 80%, with sprinkle points unchanged',()=>{
+ for(const [i,rarity]of [...rarityNames,'godly'].entries()){
+  const g=game(`${rarity}:tooth`);sprinkle(g);near(g.state.points,100);
+  const f=g.state.player;f.size=1000;const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=100;
+  assert.ok(g.tryEatFood(f,prey,[prey],0));near(g.state.points,100+10*(1+[5,10,15,22,30,40,60][i]/100));
+ }
+ const g=game('secret:chopsticks');sprinkle(g);const f=g.state.player;f.size=1000;const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=100;
+ assert.ok(g.tryEatFood(f,prey,[prey],0));near(g.state.points,118);
 });

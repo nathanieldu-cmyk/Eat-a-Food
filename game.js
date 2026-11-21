@@ -1786,6 +1786,10 @@
     return (RING_MAJOR + RING_TUBE) * food.drawRadius() * FOOD_MODEL_SCALE;
   }
 
+  function sprinklePickupReach(food) {
+    return ringReach(food) * (food.relicEffects?.pickupRange || 1);
+  }
+
   // Half of the fitted model. Models are scaled so their longest side equals this reach times two.
   function bodyReach(food) {
     return 0.5 * food.drawRadius() * FOOD_MODEL_SCALE;
@@ -1801,7 +1805,7 @@
       let bestD = Infinity;
       for (const f of actors) {
         const d = dist(f, s);
-        const reach = ringReach(f) + s.type.radius;
+        const reach = sprinklePickupReach(f) + s.type.radius;
         if (d < reach && d < bestD) {
           bestD = d;
           eater = f;
@@ -2406,8 +2410,9 @@
     entry.holder.scale.setScalar(scale);
     entry.holder.rotation.set(0, t * 0.65 + entry.spin, 0);
     entry.ring.rotation.set(Math.PI / 2, 0, 0);
-    entry.ring.scale.setScalar(scale);
-    entry.ring.position.set(0, scale * (RING_TUBE + 0.02), 0);
+    const ringScale = scale * (food.relicEffects?.pickupRange || 1);
+    entry.ring.scale.setScalar(ringScale);
+    entry.ring.position.set(0, ringScale * (RING_TUBE + 0.02), 0);
     entry.group.position.set(worldX(food.x), bob, worldZ(food.y));
     entry.label.position.y = scale + 16;
     const labelText = `${food.tier.name}\n${formatCount(food.displaySize())}`;
@@ -4637,7 +4642,7 @@
   // growth and points, so this only hides them until its next update agrees.
   function guestEatSprinkles() {
     const food = state.player;
-    const reach = ringReach(food);
+    const reach = sprinklePickupReach(food);
     const now = performance.now();
     for (let i = state.sprinkles.length - 1; i >= 0; i--) {
       const s = state.sprinkles[i];
@@ -4956,6 +4961,8 @@
       food.tier = tier;
       food.netName = String(person.name || "Player").slice(0, 12);
       food.zone = zone;
+      food.relicKey = window.GameRelics.parseKey(person.relic) ? person.relic : null;
+      food.relicEffects = window.GameRelics.effectsForKey(food.relicKey);
       food.tx = person.x;
       food.ty = person.y;
       food.size = Math.max(10, person.size || 10);

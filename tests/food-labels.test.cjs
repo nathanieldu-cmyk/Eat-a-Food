@@ -77,3 +77,10 @@ test('small foods have readable labels that keep growing smoothly to the same ma
  }
  radius=17;g.syncFood(g.THREE,f,2);assert.equal(label.scale.y,smallHeight,'new small foods return to readable text without accumulated scaling');
 });
+
+test('Magnet scales the visible pickup ring without scaling the food model',async()=>{
+ const g=await boot(),f=food('Peanut',{relicEffects:{pickupRange:1.3}});g.syncFood(g.THREE,f,0);
+ const entry=g.view.foods.get(f.id),base=17*2.15;
+ assert.ok(Math.abs(entry.ring.scale.x-base*1.3)<1e-9);assert.ok(Math.abs(entry.holder.scale.x-base)<1e-9);
+ f.relicEffects={pickupRange:1};g.syncFood(g.THREE,f,1);assert.ok(Math.abs(entry.ring.scale.x-base)<1e-9);
+});
