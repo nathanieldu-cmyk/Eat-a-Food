@@ -3847,8 +3847,8 @@
         <div class="relic-card-heading"><span class="relic-icon relic-emblem" aria-hidden="true">${api.artHtml(relic.family)}</span><div><span class="relic-rarity-tag rarity-${relic.rarity}">${relic.rarity}</span><h3>${relic.name}</h3></div></div>
         <p>${api.describe(relic.key)}</p><p class="relic-count">${count ? `Owned ×${count}` : "Not owned"}${selected ? " · Equipped" : ""}</p>
         <div class="relic-card-actions"><button class="btn ghost small" type="button" data-relic-equip="${relic.key}" aria-pressed="${selected}" ${state.running || !count || selected ? "disabled" : ""}>${selected ? "Equipped" : state.running ? "Locked during run" : count ? "Equip" : "Not owned"}</button>
-        <button class="btn ghost small relic-combine" type="button" data-relic-combine="${relic.key}" ${state.running || !next || count < needed ? "disabled" : ""} aria-label="${next ? `Combine ${needed} ${relic.name} into one ${next.name}` : `${relic.name} is the highest rarity`}">${next ? `Combine ${needed} → ${api.rarities.find(rarity => rarity.id === next.rarity).label}` : "Highest rarity"}</button></div>
-        <p class="relic-combine-recipe">${next ? `${count}/${needed} matching copies · No diamond fee` : "This relic is at its highest rarity."}</p>
+        <button class="btn ghost small relic-combine" type="button" data-relic-combine="${relic.key}" ${state.running || !next || count < needed ? "disabled" : ""} aria-label="${next ? `Combine ${needed} ${relic.name} into one ${next.name}` : `${relic.name} is the highest rarity`}">${next ? `Combine ${needed}` : "Max tier"}</button></div>
+        <p class="relic-combine-recipe">${next ? `${count}/${needed} copies → ${api.rarities.find(rarity => rarity.id === next.rarity).label} · Free` : "Highest rarity"}</p>
       </article>`;
     }).join("") : '<p class="relic-empty">No owned relics match this filter. Open a pack in the Packs tab to add to your collection.</p>';
     renderRelicPacks();

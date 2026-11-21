@@ -1464,9 +1464,12 @@ h1 {
 .relic-collection-heading { margin: 22px 0 10px; }
 .relic-collection-heading label { grid-template-columns: auto minmax(120px, 1fr); align-items: center; }
 .relic-rules { margin-bottom: 14px; color: #eedcc6; }
-.relic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.relic-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid #fff3e035; border-radius: 14px; background: #ffffff08; }
-.relic-card-heading { display: flex; align-items: center; gap: 10px; }
+.relic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.relic-card { display: flex; flex-direction: column; min-width: 0; gap: 7px; padding: 10px; border: 1px solid #fff3e035; border-radius: 12px; background: #ffffff08; }
+.relic-card-heading { display: flex; align-items: center; gap: 8px; }
+.relic-card-heading > div { min-width: 0; }
+.relic-card h3 { font-size: .92rem; line-height: 1.2; }
+.relic-card p { font-size: .8rem; line-height: 1.35; }
 .relic-icon { font-size: 1.8rem; }
 .relic-card .relic-count { margin-top: auto; color: #9af0da; font-weight: 800; }
 .relic-card .relic-recipe { color: #e3d3c0; }
@@ -1474,7 +1477,8 @@ h1 {
 .relic-godly { border-color: #f3c36b99; background: #f3c36b0b; }
 .relic-equipped-line { color: #9af0da; font-size: .85rem; margin: 5px 0; }
 @media (max-width: 600px) {
-  .relic-grid, .relic-fields { grid-template-columns: 1fr; }
+  .relic-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .relic-fields { grid-template-columns: 1fr; }
   .relic-pack-card { flex-direction: column; align-items: stretch; }
   .relic-pack-card .btn { width: 100%; }
   .relic-panel { padding: 18px 14px; }
@@ -1596,8 +1600,11 @@ h1 {
 .relic-collection-heading { flex-wrap: wrap; }
 .relic-card { border-color: var(--relic-rarity-color, #fff3e035); }
 .relic-is-equipped { background: #7ce8c514; box-shadow: inset 0 0 0 2px #a7f5d455; }
-.relic-card .relic-emblem { border-color: var(--relic-rarity-color, #cde8cd); background: radial-gradient(ellipse at 30% 10%, #4d6765, #20383f 70%); }
-.relic-card .relic-count { color: var(--relic-rarity-color, #9af0da); }
+.relic-card .relic-emblem { width: 38px; height: 38px; flex-basis: 38px; border-radius: 11px; border-color: var(--relic-rarity-color, #cde8cd); background: radial-gradient(ellipse at 30% 10%, #4d6765, #20383f 70%); }
+.relic-card .relic-emblem::before { inset: 3px; border-radius: 7px; }
+.relic-card .relic-emblem .relic-glyph { width: 32px; height: 32px; }
+.relic-card .relic-rarity-tag { font-size: .63rem; letter-spacing: .05em; }
+.relic-card .relic-count { color: var(--relic-rarity-color, #9af0da); font-size: .75rem; }
 .relic-empty { grid-column: 1/-1; padding: 20px; border: 1px dashed #a9d4c255; border-radius: 14px; }
 .relic-panel .relic-fields { margin: 0; }
 .relic-opening .reveal-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); width: min(740px, 100%); }
@@ -1634,10 +1641,16 @@ h1 {
 .relic-tab-panel { min-width: 0; }
 #relic-collection-panel > .relic-attachment { margin-bottom: 20px; }
 #relic-packs-panel { margin: 4px 0 0; }
-.relic-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.relic-card-actions .btn { padding-inline: 8px; min-height: 40px; }
-.relic-card .relic-combine-recipe { color: #cfdeca; font-size: .85rem; }
-@media (max-width: 600px) { .relic-card-actions { grid-template-columns: 1fr; } }
+.relic-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.relic-card-actions .btn { min-width: 0; padding: 6px 4px; min-height: 44px; font-size: .76rem; line-height: 1.15; overflow-wrap: anywhere; }
+.relic-card .relic-combine-recipe { color: #cfdeca; font-size: .7rem; line-height: 1.3; }
+@media (max-width: 360px) {
+  .relic-card-heading { gap: 6px; }
+  .relic-card h3 { font-size: .86rem; }
+  .relic-card .relic-emblem { width: 28px; height: 28px; flex-basis: 28px; border-radius: 8px; }
+  .relic-card .relic-emblem .relic-glyph { width: 24px; height: 24px; }
+  .relic-card-actions { grid-template-columns: 1fr; }
+}
 
 .rarity-godly { color: #9cf4ff; }
 .relic-godly { background: linear-gradient(145deg, #194d5988, #292f54aa); box-shadow: inset 0 0 20px #9cf4ff12; }
