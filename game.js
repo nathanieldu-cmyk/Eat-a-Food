@@ -855,8 +855,8 @@
     return luckSnapshot(typeCount).bonus + bentoLuckBonus();
   }
 
-  function totalLuckBonus(typeCount = ownedTypeCount()) {
-    return permanentLuckBonus(typeCount) + boostStacks("luck") * LUCK_STEP;
+  function totalLuckBonus(typeCount = ownedTypeCount(), relicKey = state.running ? state.runRelicKey : null) {
+    return permanentLuckBonus(typeCount) + boostStacks("luck") * LUCK_STEP + window.GameRelics.effectsForKey(relicKey).luck / 100;
   }
 
   function displayedLuckPct(typeCount = ownedTypeCount()) {
@@ -884,21 +884,21 @@
     luckNoticeEl.classList.remove("hidden");
   }
 
-  function pullWeight(food) {
+  function pullWeight(food, relicKey) {
     // Base weight is 1/odds. Luck boosts higher rarities more,
     // so the base and every-10 bonuses shift pulls toward rarer foods.
     const rank = rarityById[food.rarity].rank;
-    const bonus = totalLuckBonus();
+    const bonus = totalLuckBonus(undefined, relicKey);
     return (1 / food.odds) * (1 + bonus * rank);
   }
 
-  function pullFood(excludedName = null) {
+  function pullFood(excludedName = null, relicKey) {
     const pool = excludedName ? FOOD_TIERS.filter(food => food.name !== excludedName) : FOOD_TIERS;
     let total = 0;
-    for (const food of pool) total += pullWeight(food);
+    for (const food of pool) total += pullWeight(food, relicKey);
     let roll = Math.random() * total;
     for (const food of pool) {
-      roll -= pullWeight(food);
+      roll -= pullWeight(food, relicKey);
       if (roll <= 0) return food;
     }
     return pool[pool.length - 1];
@@ -1290,7 +1290,7 @@
   function bankPendingFoods() {
     const gained = [];
     for (let i = 0; i < state.foodsEarned; i++) {
-      const food = applyFoodWeather(pullFood(save.firstRunRewardClaimed ? null : "Peanut"), state.foodWeather[i]);
+      const food = applyFoodWeather(pullFood(save.firstRunRewardClaimed ? null : "Peanut", state.runRelicKey), state.foodWeather[i]);
       save.firstRunRewardClaimed = true;
       const copies = state.foodWeather[i] === "double-foods" ? 2 : 1;
       for (let copy = 0; copy < copies; copy++) gained.push(food.name);
@@ -3149,12 +3149,14 @@
     luckEl.textContent = `+${shownPct}%`;
     luckLabelEl.textContent = `Luck · ${luck.into}/${LUCK_EVERY}`;
     const bentoLuck = Math.round(bentoLuckBonus() * 100);
+    const relicLuck = state.running ? window.GameRelics.effectsForKey(state.runRelicKey).luck : 0;
     const luckTitle =
       `+100% base, and +50% every 10 types (${luck.into}/${LUCK_EVERY} toward the next).` +
       (bentoLuck ? ` Plus +${bentoLuck}% forever from ${save.bento.opened} bento box${save.bento.opened === 1 ? "" : "es"}.` : "");
+    const relicLuckTitle = relicLuck ? ` Plus +${relicLuck}% from Forbidden Fortune for this run.` : "";
     luckEl.title = potionLuck
-      ? `${luckTitle} Plus +${Math.round(potionLuck * 100)}% from a luck potion.`
-      : `${luckTitle} Luck makes rarer foods more likely.`;
+      ? `${luckTitle} Plus +${Math.round(potionLuck * 100)}% from a luck potion.${relicLuckTitle}`
+      : `${luckTitle}${relicLuckTitle} Luck makes rarer foods more likely.`;
   }
 
   function appendInventoryItem(tier, tileGrid) {
