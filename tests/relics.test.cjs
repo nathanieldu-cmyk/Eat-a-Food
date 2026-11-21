@@ -22,17 +22,17 @@ test('all 65 unique relic definitions include the 60 standard relics with exact 
  }
 });
 test('all six prices and coalesced rarity odds match the specification and sum to exactly 100%',()=>{
- const a=api(),odds=[[850,100,40,10,0,0,0],[0,850,100,40,9,0,1],[0,0,850,100,40,5,5],[0,0,0,850,100,40,10],[0,0,0,0,880,100,20],[0,0,0,0,0,960,40]];
+ const a=api(),odds=[[8500,1000,400,100,0,0,0],[0,8500,1000,400,99,0,1],[0,0,8500,1000,400,90,10],[0,0,0,8500,1000,475,25],[0,0,0,0,8800,1100,100],[0,0,0,0,0,9700,300]];
  assert.deepEqual(Array.from(a.packs,pack=>pack.price),[250,1000,4000,12000,30000,90000]);
  for(const [index,pack]of a.packs.entries()){
-  assert.equal(pack.odds.reduce((sum,row)=>sum+row.weight,0),1000);near(pack.odds.reduce((sum,row)=>sum+row.chance,0),100);
+  assert.equal(pack.odds.reduce((sum,row)=>sum+row.weight,0),10000);near(pack.odds.reduce((sum,row)=>sum+row.chance,0),100);
   assert.deepEqual([...rarityNames,'secret'].map(rarity=>pack.odds.find(row=>row.rarity===rarity)?.weight||0),odds[index]);
  }
 });
 test('rarity rolls use exact boundaries, including capped Epic, Legendary and Mythic results',()=>{
  const a=api();for(const pack of a.packs){let low=0;
   for(const row of pack.odds){const high=low+row.weight;
-   for(const rarityRoll of [low/1000,high/1000-1e-10]){let calls=0;const result=a.roll(pack.id,()=>{calls++;return calls===1?rarityRoll:0;});assert.equal(a.getRelic(result).rarity,row.rarity);assert.equal(calls,2);}
+   for(const rarityRoll of [low/pack.weightTotal,high/pack.weightTotal-1e-10]){let calls=0;const result=a.roll(pack.id,()=>{calls++;return calls===1?rarityRoll:0;});assert.equal(a.getRelic(result).rarity,row.rarity);assert.equal(calls,2);}
    low=high;
   }
  }

@@ -16,12 +16,12 @@
       {id:'secret', label:'Secret', color:'#ffdb70'},
     ],
     packOdds: {
-      common:{common:850,uncommon:100,rare:40,epic:10},
-      uncommon:{uncommon:850,rare:100,epic:40,legendary:9,secret:1},
-      rare:{rare:850,epic:100,legendary:40,mythic:5,secret:5},
-      epic:{epic:850,legendary:100,mythic:40,secret:10},
-      legendary:{legendary:880,mythic:100,secret:20},
-      mythic:{mythic:960,secret:40},
+      common:{common:8500,uncommon:1000,rare:400,epic:100},
+      uncommon:{uncommon:8500,rare:1000,epic:400,legendary:99,secret:1},
+      rare:{rare:8500,epic:1000,legendary:400,mythic:90,secret:10},
+      epic:{epic:8500,legendary:1000,mythic:475,secret:25},
+      legendary:{legendary:8800,mythic:1100,secret:100},
+      mythic:{mythic:9700,secret:300},
     },
     families: [
       {id:'spoon', name:'Spoon', icon:'🥄', weight:51, stats:{sprinklePoints:[5,8,12,17,23,30]}},
