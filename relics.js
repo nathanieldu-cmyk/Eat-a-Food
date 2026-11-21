@@ -166,7 +166,7 @@
     let text=Object.entries(relic.stats).map(([stat,pct])=>`${pct<0?'−':'+'}${Math.abs(pct)}% ${labels[stat]}`).join('; ')+'.';
     if(relic.family==='tooth')text+=' Does not increase sprinkle growth.';
     if(relic.stats.pickupRange)text+=' Only collects eligible sprinkles; does not extend rival eating range.';
-    if(relic.stats.luck)text+=' Affects run food rewards only; pack and Bento odds stay fixed.';
+    if(relic.stats.luck)text+=' Affects run food rewards only; pack and Bento odds stay fixed. Gold, Rainbow, and Shadow weather upgrade chances are unaffected.';
     if(relic.stats.diamonds)text+=' Rounded to the nearest whole diamond after weather rewards.';
     return text;
   }

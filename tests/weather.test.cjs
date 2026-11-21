@@ -69,7 +69,7 @@ test('Triple Diamonds and Double Foods have distinct names, explanations and eff
 let harness=fs.readFileSync(path.join(__dirname,'bento.test.cjs'),'utf8').split('const thresholds =')[0];
 harness=harness.replace('window: {}, Math: math, console,','window: {GameWeather:{current:()=>weather}}, Math: math, console,')
  .replace('function boot(saved) {','function boot(saved) {\n  let weather="clear";')
- .replace('globalThis.api = { save, state, net,','globalThis.api = { setPull: fn => {pullFood=fn;}, awardRunFood, applyFoodWeather, save, state, net,')
+ .replace('globalThis.api = { save, state, net,','globalThis.api = { relics:window.GameRelics, setPull: fn => {pullFood=fn;}, awardRunFood, applyFoodWeather, save, state, net,')
  .replace('return { ...context.api, math, storage, elements };','return { ...context.api, math, storage, elements, setWeather:w=>{weather=w;} };');
 const ctx={require,__dirname,console};vm.runInNewContext(harness+'\nglobalThis.gameBoot=boot;',ctx);
 const gameBoot=ctx.gameBoot;
@@ -289,4 +289,41 @@ test('Frenzy duplicates guaranteed special boxes, honors doubled odds, capacity 
  const full=gameBoot();full.save.bento.ready=5;full.save.bento.readyTypes=Array(5).fill('normal');full.state.running=true;full.state.foodsEarned=3000;full.setWeather('bento-frenzy');full.math.random=()=>.9;full.endRun();
  assert.deepEqual(Array.from(full.save.bento.readyTypes),['rainbow','rainbow','gold','gold','normal']);assert.equal(full.bentoInventoryCount(),5);
  const empty=gameBoot();empty.state.running=true;empty.setWeather('bento-frenzy');empty.endRun();assert.equal(empty.bentoInventoryCount(),0);
+});
+
+const cloverWeatherRates={
+ gold:{common:.10,uncommon:.075,rare:.05,epic:.025,legendary:.01,mythic:.005},
+ rainbow:{common:.075,uncommon:.05,rare:.025,epic:.01,legendary:.005,mythic:.005},
+ shadow:{common:.05,uncommon:.025,rare:.02,epic:.01,legendary:.005,mythic:.001},
+};
+const cloverRarities=['common','uncommon','rare','epic','legendary','mythic','godly'];
+const weatherPrefix={gold:'Golden ',rainbow:'Rainbow ',shadow:'Shadow '};
+test('every Clover rarity preserves exact Gold, Rainbow and Shadow weather upgrade odds for every base food',()=>{
+ for(const cloverRarity of cloverRarities){
+  const g=gameBoot(),key=`${cloverRarity}:clover`;g.save.relics.items[key]=100;g.save.relics.equipped=key;g.state.running=true;g.state.runRelicKey=key;
+  g.save.bento.opened=100000;g.save.activePotions.luck={endsAt:Date.now()+60000,stacks:5};
+  assert.ok(g.totalLuckBonus()>g.permanentLuckBonus()+2.5,'Clover food luck is active during the checks');
+  const bases=Object.values(g.tierByName).filter(food=>!food.isGolden&&!food.isShiny&&!food.isShadow);
+  for(const [weather,rates]of Object.entries(cloverWeatherRates))for(const base of bases){
+   const chance=rates[base.rarity];assert.ok(chance);
+   for(const roll of [0,chance-1e-10,chance,.999999]){
+    let calls=0;g.math.random=()=>{calls++;return roll;};
+    const food=g.applyFoodWeather(base,weather);
+    assert.equal(food.name,roll<chance?weatherPrefix[weather]+base.name:base.name,`${cloverRarity} Clover, ${weather}, ${base.name}, ${roll}`);
+    assert.equal(calls,1,'weather uses one independent upgrade roll');
+   }
+  }
+  assert.match(g.relics.describe(key),/Gold, Rainbow, and Shadow weather upgrade chances are unaffected/);
+ }
+});
+test('Clover cannot boost weather upgrades when run foods bank after event expiry or death',()=>{
+ for(const cloverRarity of cloverRarities)for(const weather of Object.keys(cloverWeatherRates))for(const success of [false,true]){
+  const g=gameBoot(),key=`${cloverRarity}:clover`,base=g.tierByName.Peanut,chance=cloverWeatherRates[weather].common;
+  g.save.relics.items[key]=1;g.save.relics.equipped=key;g.state.runRelicKey=key;
+  // endRun clears running before banking; the earned weather is preserved separately.
+  g.state.running=false;g.state.foodsEarned=1;g.state.foodWeather=[weather];g.setWeather('clear');
+  g.setPull(()=>base);let calls=0;g.math.random=()=>{calls++;return success?chance-1e-10:chance;};
+  const banked=g.bankPendingFoods();assert.deepEqual(Array.from(banked),[success?weatherPrefix[weather]+'Peanut':'Peanut']);assert.equal(calls,1);
+  assert.equal(g.save.relics.equipped,key);assert.equal(g.save.relics.items[key],1);
+ }
 });
