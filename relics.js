@@ -1,6 +1,7 @@
 (() => {
   // All relic names, pack prices/odds, family chances and percentage stats live here.
   // Standard stat sequences: Common → Uncommon → Rare → Epic → Legendary → Mythic.
+  // Godly is combine-only: derive Mythic bonuses at 1.5× and retain Mythic penalties.
   // Secret families define only their Secret stats and are available exclusively from pack drops.
   const config = {
     schema: 2,
@@ -13,6 +14,7 @@
       {id:'epic', label:'Epic', color:'#c089ff', price:12000},
       {id:'legendary', label:'Legendary', color:'#ffb347', price:30000},
       {id:'mythic', label:'Mythic', color:'#ff6b9d', price:90000},
+      {id:'godly', label:'Godly', color:'#9cf4ff', inherits:'mythic', bonusMultiplier:1.5},
       {id:'secret', label:'Secret', color:'#ffdb70'},
     ],
     packOdds: {
@@ -29,8 +31,8 @@
       {id:'chili', name:'Chili Charm', icon:'🌶️', weight:51, stats:{speed:[3,5,7,10,12,15]}},
       {id:'dish', name:'Diamond Dish', icon:'💎', weight:51, stats:{diamonds:[5,10,15,25,35,50]}},
       {id:'badge', name:'Chef’s Badge', icon:'🏅', weight:41, stats:{speed:[1,2,3,4,5,6],sprinkleGrowth:[2,4,6,8,12,15],sprinklePoints:[2,4,6,8,12,15]}},
-      {id:'ladle', name:'Heavy Ladle', icon:'🥣', weight:51, stats:{sprinkleGrowth:[8,13,20,28,38,50],speed:[-2,-3,-5,-6,-8,-10]}},
-      {id:'goblet', name:'Glass Goblet', icon:'🍷', weight:51, stats:{sprinklePoints:[5,8,13,20,30,40],sprinkleGrowth:[-3,-5,-8,-12,-15,-20]}},
+      {id:'ladle', name:'Heavy Ladle', icon:'🥣', weight:51, stats:{growth:[8,13,20,28,38,50],speed:[-2,-3,-5,-7,-10,-10]}},
+      {id:'goblet', name:'Glass Goblet', icon:'🍷', weight:51, stats:{sprinklePoints:[5,8,13,20,30,40],sprinkleGrowth:[-2,-4,-7,-10,-12,-12]}},
       {id:'tooth', name:'Hunter’s Tooth', icon:'🦷', weight:51, stats:{rivalGrowth:[8,13,20,28,38,50]}},
       {id:'crown', name:'Crumb Crown', icon:'👑', weight:51, stats:{xsPoints:[10,20,35,50,75,100]}},
       {id:'medal', name:'Feast Medal', icon:'🎖️', weight:51, stats:{rivalPoints:[8,13,20,28,38,50]}},
@@ -41,7 +43,7 @@
       {id:'forbidden', name:'Forbidden Fork', icon:'🔱', weight:1, rarities:['secret'], stats:{sprinkleGrowth:[50],sprinklePoints:[25],speed:[-15]}},
     ],
   };
-  const labels = {speed:'movement speed',sprinkleGrowth:'growth from sprinkles',sprinklePoints:'points from sprinkles',diamonds:'diamonds when banking a run',rivalGrowth:'growth from eating rivals',xsPoints:'points from extra-small sprinkles only',rivalPoints:'points from eating rivals'};
+  const labels = {growth:'growth from all sources',speed:'movement speed',sprinkleGrowth:'growth from sprinkles',sprinklePoints:'points from sprinkles',diamonds:'diamonds when banking a run',rivalGrowth:'growth from eating rivals',xsPoints:'points from extra-small sprinkles only',rivalPoints:'points from eating rivals'};
   const keyFor = (family, rarity) => `${rarity}:${family}`;
   const count = raw => Number.isFinite(Number(raw)) ? Math.min(1e9,Math.max(0,Math.floor(Number(raw)))) : 0;
   const familiesForRarity = rarity => config.families.filter(family => family.rarities ? family.rarities.includes(rarity) : rarity !== 'secret');
@@ -53,7 +55,11 @@
   });
   const relics = config.rarities.flatMap((rarity,index)=>familiesForRarity(rarity.id).map(family=>({
     key:keyFor(family.id,rarity.id),family:family.id,rarity:rarity.id,name:`${rarity.label} ${family.name}`,icon:family.icon,color:rarity.color,
-    stats:Object.fromEntries(Object.entries(family.stats).map(([stat,values])=>[stat,values[family.rarities ? family.rarities.indexOf(rarity.id) : index]])),
+    stats:Object.fromEntries(Object.entries(family.stats).map(([stat,values])=>{
+      const sourceIndex=family.rarities ? family.rarities.indexOf(rarity.id) : rarity.inherits ? config.rarities.findIndex(row=>row.id===rarity.inherits) : index;
+      const pct=values[sourceIndex];
+      return [stat,pct>0 ? pct*(rarity.bonusMultiplier||1) : pct];
+    })),
   })));
   const byKey = new Map(relics.map(relic=>[relic.key,relic]));
   const getRelic = key => byKey.get(key) || null;
@@ -139,9 +145,11 @@
     return next.key;
   }
   function effectsForKey(key) {
-    const effects={speed:1,sprinkleGrowth:1,sprinklePoints:1,rivalGrowth:1,rivalPoints:1,xsPoints:1,diamonds:0};
+    const effects={speed:1,growth:1,sprinkleGrowth:1,sprinklePoints:1,rivalGrowth:1,rivalPoints:1,xsPoints:1,diamonds:0};
     const relic=getRelic(key);if(!relic)return effects;
     for(const [stat,pct]of Object.entries(relic.stats))effects[stat]=stat==='diamonds'?pct:1+pct/100;
+    // Expand all-source growth once into the two gameplay source multipliers.
+    effects.sprinkleGrowth*=effects.growth;effects.rivalGrowth*=effects.growth;
     return effects;
   }
   function bankDiamonds(save,base,key) {

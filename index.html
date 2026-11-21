@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=96" />
+  <link rel="stylesheet" href="style.css?v=97" />
   <script type="importmap">
     {
       "imports": {
@@ -226,7 +226,7 @@
   <div id="relic-modal" class="shop-modal hidden" aria-hidden="true">
     <div class="shop-panel relic-panel" role="dialog" aria-modal="true" aria-labelledby="relic-title">
       <div class="inv-header"><h2 id="relic-title"><svg class="relic-title-glyph" viewBox="0 0 96 96" aria-hidden="true"><use href="relic-art.svg?v=3#crest"></use></svg> Relics</h2><button id="relic-close" class="btn ghost small" type="button">Close</button></div>
-      <div class="relic-intro"><p>65 permanent relics. One equipped at a time.</p><strong id="relic-diamonds">0 diamonds</strong></div>
+      <div class="relic-intro"><p>75 permanent relics. One equipped at a time.</p><strong id="relic-diamonds">0 diamonds</strong></div>
       <p class="relic-rules">Only your equipped relic works. Switch outside a run; ownership survives death and food changes. Extra copies never stack bonuses.</p>
       <p id="relic-run-note" class="relic-run-note hidden">Your run continues. Purchases and relic changes unlock after the run.</p>
       <p id="relic-status" class="relic-status" role="status" aria-live="polite"></p>
@@ -239,9 +239,9 @@
         <div class="relic-equipped-heading"><h3 id="relic-attachment-title">Equipped relic</h3><button id="relic-unequip" class="btn ghost small" type="button">Unequip</button></div>
         <div id="relic-equipped-summary" class="relic-equipped-summary"></div>
       </section>
-      <div class="relic-collection-heading"><div><h3>Your relic inventory</h3><p id="relic-collection-count">0 / 65 collected</p></div><button id="relic-open-packs" class="btn primary small" type="button">Open relic packs</button></div>
-      <div class="relic-fields"><label>Rarity<select id="relic-tier"><option value="all">All rarities</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="epic">Epic</option><option value="legendary">Legendary</option><option value="mythic">Mythic</option><option value="secret">Secret</option></select></label></div>
-      <p class="relic-rules">Combine 5 identical relics of the same rarity for 1 of the next rarity, with no diamond fee. Standard relics upgrade up to Mythic; Secret relics are exclusive pack drops. If your last equipped copy is used, its upgrade is equipped automatically.</p>
+      <div class="relic-collection-heading"><div><h3>Your relic inventory</h3><p id="relic-collection-count">0 / 75 collected</p></div><button id="relic-open-packs" class="btn primary small" type="button">Open relic packs</button></div>
+      <div class="relic-fields"><label>Rarity<select id="relic-tier"><option value="all">All rarities</option><option value="common">Common</option><option value="uncommon">Uncommon</option><option value="rare">Rare</option><option value="epic">Epic</option><option value="legendary">Legendary</option><option value="mythic">Mythic</option><option value="godly">Godly</option><option value="secret">Secret</option></select></label></div>
+      <p class="relic-rules">Combine 5 identical relics of the same rarity for 1 of the next rarity, with no diamond fee. Standard relics upgrade up to Godly. Combine 5 matching Mythics for a Godly with 1.5× bonuses and unchanged penalties; Godly relics come only from combining. Secret relics are exclusive pack drops. If your last equipped copy is used, its upgrade is equipped automatically.</p>
       <div id="relic-list" class="relic-grid"></div>
       </div>
       <section id="relic-packs-panel" class="relic-shop-section relic-tab-panel" role="tabpanel" aria-labelledby="relic-tab-packs" hidden>
@@ -282,7 +282,7 @@
   <script src="music.js?v=3"></script>
   <script src="sfx.js?v=13"></script>
   <script src="weather.js?v=11"></script>
-  <script src="relics.js?v=11"></script>
+  <script src="relics.js?v=12"></script>
   <script src="relic-opening.js?v=12"></script>
   <script src="game.js?v=249"></script>
   <script src="giveaway.js?v=1"></script>

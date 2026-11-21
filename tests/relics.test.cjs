@@ -9,11 +9,11 @@ const rarityNames=['common','uncommon','rare','epic','legendary','mythic'];
 const expected={
  spoon:{sprinklePoints:[5,8,12,17,23,30]},fork:{sprinkleGrowth:[5,8,12,17,23,30]},chili:{speed:[3,5,7,10,12,15]},dish:{diamonds:[5,10,15,25,35,50]},
  badge:{speed:[1,2,3,4,5,6],sprinkleGrowth:[2,4,6,8,12,15],sprinklePoints:[2,4,6,8,12,15]},
- ladle:{sprinkleGrowth:[8,13,20,28,38,50],speed:[-2,-3,-5,-6,-8,-10]},goblet:{sprinklePoints:[5,8,13,20,30,40],sprinkleGrowth:[-3,-5,-8,-12,-15,-20]},
+ ladle:{growth:[8,13,20,28,38,50],speed:[-2,-3,-5,-7,-10,-10]},goblet:{sprinklePoints:[5,8,13,20,30,40],sprinkleGrowth:[-2,-4,-7,-10,-12,-12]},
  tooth:{rivalGrowth:[8,13,20,28,38,50]},crown:{xsPoints:[10,20,35,50,75,100]},medal:{rivalPoints:[8,13,20,28,38,50]},
 };
-test('all 65 unique relic definitions include the 60 standard relics with exact stats',()=>{
- const a=api();assert.equal(a.relics.length,65);assert.equal(new Set(a.relics.map(relic=>relic.key)).size,65);
+test('all 75 unique relic definitions include the 60 pack relics with exact stats',()=>{
+ const a=api();assert.equal(a.relics.length,75);assert.equal(new Set(a.relics.map(relic=>relic.key)).size,75);
  for(const [family,stats]of Object.entries(expected))for(const [index,rarity]of rarityNames.entries()){
   const relic=a.getRelic(`${rarity}:${family}`);assert.ok(relic);assert.equal(relic.name,`${a.rarities[index].label} ${a.definitions.find(row=>row.id===family).name}`);
   assert.deepEqual(plain(relic.stats),Object.fromEntries(Object.entries(stats).map(([stat,values])=>[stat,values[index]])));
@@ -147,16 +147,16 @@ test('a confirmed guest run locks the host relic even if the lobby selection cha
  vm.runInNewContext(source.slice(start,end)+'\nguestBeginRun(7,"rare:fork");',c);assert.equal(state.running,true);assert.equal(state.runRelicKey,'rare:fork');
 });
 test('five identical copies upgrade every family by exactly one rarity without spending diamonds',()=>{
- const a=api();for(const family of a.definitions.filter(row=>!row.rarities))for(let rank=0;rank<rarityNames.length-1;rank++){
+ const a=api();for(const family of a.definitions.filter(row=>!row.rarities))for(let rank=0;rank<rarityNames.length;rank++){
   const source=a.keyFor(family.id,a.rarities[rank].id),target=a.keyFor(family.id,a.rarities[rank+1].id),save=saveFor(a);save.relics.items[source]=5;save.relics.items[target]=2;
   assert.equal(a.nextRelic(source).key,target);assert.equal(a.combine(save,source),target);assert.equal(save.relics.items[source],0);assert.equal(save.relics.items[target],3);assert.equal(save.diamonds,100000);
   assert.equal(a.combine(save,source),null);assert.equal(save.relics.items[target],3);
  }
 });
-test('combining rejects mixed families/rarities, insufficient copies, Mythic and in-run actions',()=>{
- const a=api(),save=saveFor(a);save.relics.items={'common:spoon':3,'uncommon:spoon':2,'common:fork':2,'mythic:chili':5,'rare:badge':10};
- const before=JSON.stringify(save);for(const [key,running]of [['common:spoon',false],['uncommon:spoon',false],['common:fork',false],['mythic:chili',false],['missing',false],['rare:badge',true]])assert.equal(a.combine(save,key,running),null);
- assert.equal(JSON.stringify(save),before);assert.equal(a.nextRelic('mythic:chili'),null);
+test('combining rejects mixed families/rarities, insufficient copies, Godly and in-run actions',()=>{
+ const a=api(),save=saveFor(a);save.relics.items={'common:spoon':3,'uncommon:spoon':2,'common:fork':2,'godly:chili':5,'rare:badge':10};
+ const before=JSON.stringify(save);for(const [key,running]of [['common:spoon',false],['uncommon:spoon',false],['common:fork',false],['godly:chili',false],['missing',false],['rare:badge',true]])assert.equal(a.combine(save,key,running),null);
+ assert.equal(JSON.stringify(save),before);assert.equal(a.nextRelic('godly:chili'),null);
 });
 test('using the last equipped copy equips the upgrade; remaining copies and other equipped families stay selected',()=>{
  const a=api(),save=saveFor(a);save.relics.items={'common:spoon':5,'common:chili':6,'rare:fork':1};a.equip(save,'common:spoon');a.combine(save,'common:spoon');assert.equal(save.relics.equipped,'uncommon:spoon');near(a.effectsForKey(save.relics.equipped).sprinklePoints,1.08);
@@ -209,4 +209,57 @@ test('triple purchases reject insufficient total funds, invalid quantities and a
 });
 test('a failed roll in the last pack leaves all diamonds and relics unchanged',()=>{
  const a=api(),save=saveFor(a),before=JSON.stringify(save);let calls=0;assert.throws(()=>a.buyPacks(save,'common',3,false,()=>++calls===18?NaN:0));assert.equal(calls,18);assert.equal(JSON.stringify(save),before);
+});
+
+test('Godly derives 1.5 times every Mythic bonus, preserves penalties and is combine-only',()=>{
+ const a=api();assert.equal(a.relics.filter(row=>row.rarity==='godly').length,10);
+ for(const [family,stats]of Object.entries(expected)){
+  const relic=a.getRelic(`godly:${family}`);
+  assert.deepEqual(plain(relic.stats),Object.fromEntries(Object.entries(stats).map(([stat,values])=>[stat,values[5]>0?values[5]*1.5:values[5]])));
+  assert.equal(a.nextRelic(relic.key),null);assert.ok(!a.describe(relic.key).includes('undefined'));
+ }
+ assert.deepEqual(plain(a.getRelic('godly:ladle').stats),{growth:75,speed:-10});
+ assert.deepEqual(plain(a.getRelic('godly:goblet').stats),{sprinklePoints:60,sprinkleGrowth:-12});
+ assert.equal(a.packs.some(pack=>pack.id==='godly'||pack.odds.some(row=>row.rarity==='godly')),false);
+});
+test('five matching Mythics combine once into Godly, auto-equip, and survive the real save/reload path',()=>{
+ const g=ctx.boot();g.save.relics.items={'mythic:ladle':5,'mythic:goblet':4,'secret:dragon':1};
+ g.relics.equip(g.save,'mythic:ladle');const diamonds=g.save.diamonds;
+ assert.equal(g.relics.combine(g.save,'mythic:ladle',true),null);
+ assert.equal(g.relics.combine(g.save,'mythic:goblet'),null);
+ assert.equal(g.relics.combine(g.save,'mythic:ladle'),'godly:ladle');
+ assert.equal(g.save.relics.equipped,'godly:ladle');assert.equal(g.save.relics.items['mythic:ladle'],0);
+ assert.equal(g.save.relics.items['godly:ladle'],1);assert.equal(g.save.diamonds,diamonds);
+ assert.equal(g.relics.combine(g.save,'mythic:ladle'),null);g.persistSave();
+ const reloaded=ctx.boot(JSON.parse(g.storage.get('sprinkleFeastSave')));
+ assert.equal(reloaded.save.relics.equipped,'godly:ladle');assert.equal(reloaded.save.relics.items['godly:ladle'],1);
+ assert.equal(reloaded.save.relics.items['mythic:goblet'],4);assert.equal(reloaded.save.relics.items['secret:dragon'],1);
+});
+test('Heavy Ladle applies all-source growth exactly once after food and potions at every rarity',()=>{
+ for(const [index,rarity]of [...rarityNames,'godly'].entries()){
+  const g=game(`${rarity}:ladle`),f=g.state.player;
+  for(const id of ['speed','growth','points'])g.save.activePotions[id]={endsAt:999999,stacks:1};
+  const growth=index===6?1.75:1+expected.ladle.growth[index]/100,speed=index===6?.9:1+expected.ladle.speed[index]/100;
+  near(g.growthForEat(f),f.tier.growth*1.25*growth);
+  near(g.moveSpeed(f),f.tier.speed*.5*1.25*speed);
+  sprinkle(g);near(f.size,10+100*f.tier.growth*1.25*growth);near(g.state.points,100);
+  const prey=g.createFood(g.tierByName.Peanut,100,100,true);prey.size=1;const before=f.size;
+  assert.ok(g.tryEatFood(f,prey,[prey],0));near(f.size-before,f.tier.growth*1.25*growth);
+ }
+});
+test('Godly source-specific bonuses, Goblet penalty, diamond rounding and rival cap apply in real gameplay',()=>{
+ for(const [family,stats]of Object.entries(expected)){
+  const g=game(`godly:${family}`),f=g.state.player;
+  const pct=stat=>{const v=stats[stat]?.[5]||0;return v>0?v*1.5:v;};
+  const growth=1+pct('growth')/100;
+  near(g.moveSpeed(f),f.tier.speed*.5*(1+pct('speed')/100));
+  near(g.growthForEat(f),f.tier.growth*growth*(1+pct('rivalGrowth')/100));
+  sprinkle(g);near(f.size,10+100*f.tier.growth*growth*(1+pct('sprinkleGrowth')/100));
+  near(g.state.points,100*(1+pct('sprinklePoints')/100));
+  const before=g.state.points;sprinkle(g,'xs');near(g.state.points-before,100*(1+pct('sprinklePoints')/100)*(1+pct('xsPoints')/100));
+ }
+ const goblet=game('godly:goblet');near(goblet.growthForEat(goblet.state.player),goblet.state.player.tier.growth);
+ const dish=game('godly:dish');dish.state.foodsEarned=3;dish.state.foodWeather=Array(3).fill('triple-diamonds');dish.state.player=null;dish.endRun(true);assert.equal(dish.save.diamonds,16);dish.endRun(true);assert.equal(dish.save.diamonds,16);
+ const medal=game('godly:medal');medal.state.player.size=2e8;const prey=medal.createFood(medal.tierByName.Peanut,100,100,true);prey.size=1e8;
+ assert.ok(medal.tryEatFood(medal.state.player,prey,[prey],0));assert.equal(medal.state.foodsEarned,10);
 });

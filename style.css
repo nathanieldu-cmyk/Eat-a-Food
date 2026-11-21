@@ -1639,6 +1639,8 @@ h1 {
 .relic-card .relic-combine-recipe { color: #cfdeca; font-size: .85rem; }
 @media (max-width: 600px) { .relic-card-actions { grid-template-columns: 1fr; } }
 
+.rarity-godly { color: #9cf4ff; }
+.relic-godly { background: linear-gradient(145deg, #194d5988, #292f54aa); box-shadow: inset 0 0 20px #9cf4ff12; }
 .rarity-secret { color: #ffdb70; }
 .relic-secret { background: linear-gradient(145deg, #49351f88, #302241aa); box-shadow: inset 0 0 20px #ffdb7012; }
 #shop-tabs { margin-bottom: 16px; }
