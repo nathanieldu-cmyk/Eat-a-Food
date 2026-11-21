@@ -165,7 +165,8 @@
     const relic=getRelic(key);if(!relic)return 'No relic equipped.';
     const pct=value=>`${value<0?'−':'+'}${Math.abs(value)}%`;
     const stats=relic.stats;
-    if(relic.family==='badge'&&stats.sprinkleGrowth===stats.sprinklePoints)return `${pct(stats.speed)} movement speed and ${pct(stats.sprinkleGrowth)} growth and points from sprinkles.`;
+    if(relic.family==='badge'&&stats.sprinkleGrowth===stats.sprinklePoints)return `${pct(stats.speed)} speed, ${pct(stats.sprinkleGrowth)} growth and points from sprinkles.`;
+    if(relic.family==='chopsticks'&&stats.rivalGrowth===stats.rivalPoints)return `${pct(stats.rivalGrowth)} growth and points from eating rivals.`;
     if(relic.family==='tooth')return `${pct(stats.rivalGrowth)} growth and ${pct(stats.rivalPoints)} points from eating rivals.`;
     return Object.entries(stats).map(([stat,value])=>`${pct(value)} ${labels[stat]}`).join('; ')+'.';
   }
