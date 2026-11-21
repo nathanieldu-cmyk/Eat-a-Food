@@ -14,8 +14,9 @@
   // Original synthesized pack tear, card shuffle, rising tension, and rarity fanfares.
   sounds['relic-open'] = [[92,.24,0,'triangle',370],[1700,.07,.04,'triangle',320],[2200,.08,.14,'triangle',460],[196,.4,.22,'sine',392]];
   sounds['relic-deal'] = [[740,.09,0,'triangle',210],[880,.09,.13,'triangle',250],[1040,.1,.26,'triangle',300]];
-  // A layered impact: fast crack, falling bass, sub-bass tail and quiet echoes.
-  const revealBoom = [[175,.85,0,'triangle',36,1.25,.004],[62,2.15,0,'sine',26,1.4,.01],[1100,.14,0,'triangle',90,.42,.003],[245,.28,.008,'triangle',48,.65,.004],[43,1.9,.03,'sine',24,.8,.015],[98,1.35,.16,'triangle',30,.45,.006],[71,1.4,.32,'sine',28,.35],[52,1.3,.52,'sine',25,.22]];
+  // A physical crash: broadband crack and debris over a falling thud and rumble.
+  // For noise layers the frequency values control a low-pass filter cutoff.
+  const revealBoom = [[110,.7,0,'sine',28,1.45,.003],[49,2.35,0,'sine',24,1.5,.009],[9500,.16,0,'noise',2200,.85,.002],[3200,.82,.012,'noise',95,1,.004],[170,1.05,.006,'triangle',42,.62,.002],[760,2.2,.035,'noise',55,.68,.012],[1150,.38,.19,'noise',160,.24,.002],[450,.45,.48,'noise',70,.16,.003]];
   const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
   const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
   for (const [rank,rarity] of relicRarities.entries()) {
@@ -36,7 +37,7 @@
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();
-  let context = null;
+  let context = null, noiseBuffer = null;
   let unlocked = false;
   let muted = false;
   let packOpening = false;
@@ -45,7 +46,7 @@
   function stopVoice(voice) {
     if (!active.delete(voice)) return;
     try { voice.osc.stop(); } catch (_) {}
-    voice.osc.disconnect(); voice.gain.disconnect();
+    voice.osc.disconnect(); voice.filter?.disconnect(); voice.gain.disconnect();
   }
   function stopAll() { for (const voice of [...active]) stopVoice(voice); }
 
@@ -58,6 +59,19 @@
       if (context.state === 'suspended' || context.state === 'interrupted') context.resume().catch(() => {});
       return context.state !== 'closed';
     } catch (_) { return false; }
+  }
+
+  function impactNoise() {
+    if (noiseBuffer) return noiseBuffer;
+    noiseBuffer = context.createBuffer(1, Math.ceil(context.sampleRate * 3), context.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    // Independent from the game's random rolls, with no download on first use.
+    let seed = 0x5eed;
+    for (let i=0; i<data.length; i++) {
+      seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+      data[i] = (seed >>> 0) / 2147483648 - 1;
+    }
+    return noiseBuffer;
   }
 
   function play(name, delay = 0) {
@@ -77,19 +91,27 @@
     const voices = [];
     for (const [frequency, duration, offset, wave = 'sine', end, level = 1, attack = .008] of notes) {
       const start = now + Math.max(0, delay) + offset;
-      const osc = context.createOscillator();
+      const noisy = wave === 'noise';
+      const osc = noisy ? context.createBufferSource() : context.createOscillator();
       const gain = context.createGain();
-      osc.type = wave;
-      osc.frequency.setValueAtTime(frequency, start);
-      if (end) osc.frequency.exponentialRampToValueAtTime(end, start + duration);
+      const filter = noisy ? context.createBiquadFilter() : null;
+      if (noisy) {
+        osc.buffer = impactNoise(); filter.type = 'lowpass'; filter.Q.value = .7;
+        filter.frequency.setValueAtTime(frequency, start);
+        if (end) filter.frequency.exponentialRampToValueAtTime(end, start + duration);
+      } else {
+        osc.type = wave;
+        osc.frequency.setValueAtTime(frequency, start);
+        if (end) osc.frequency.exponentialRampToValueAtTime(end, start + duration);
+      }
       gain.gain.setValueAtTime(.0001 * volume, start);
       gain.gain.exponentialRampToValueAtTime(.09 * volume * level, start + Math.max(.001, Math.min(attack, duration - .01)));
       gain.gain.exponentialRampToValueAtTime(.0001 * volume, start + duration);
-      osc.connect(gain);
+      if (filter) { osc.connect(filter); filter.connect(gain); } else osc.connect(gain);
       gain.connect(context.destination);
-      const voice = {osc, gain};
+      const voice = {osc, gain, filter};
       active.add(voice); voices.push(voice);
-      osc.onended = () => { active.delete(voice); osc.disconnect(); gain.disconnect(); };
+      osc.onended = () => { active.delete(voice); osc.disconnect(); filter?.disconnect(); gain.disconnect(); };
       osc.start(start);
       osc.stop(start + duration + .015);
     }

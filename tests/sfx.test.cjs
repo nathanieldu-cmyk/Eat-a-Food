@@ -10,12 +10,15 @@ function boot(muted = false, supported = true) {
   const storage = new Map([['eatAFoodSfxMuted', String(muted)]]);
   const document = {hidden:false, getElementById:()=>button, addEventListener(k,fn) {events[k]=fn;}};
   class AudioContext {
-    constructor() {this.state='running'; this.currentTime=1; this.voices=[]; contexts.push(this);}
+    constructor() {this.state='running'; this.currentTime=1; this.sampleRate=44100; this.voices=[]; this.buffers=[]; contexts.push(this);}
     createOscillator() {
       const voice = {frequency:{setValueAtTime(f,t) {voice.frequencyValue=f; voice.time=t;}, exponentialRampToValueAtTime(f) {voice.end=f;}},
         connect(node) {voice.gainNode=node;}, disconnect() {}, start() {}, stops:[], stop(time) {voice.stops.push(time ?? 'now');}};
       this.voices.push(voice); return voice;
     }
+    createBuffer(channels,length,sampleRate) {const data=new Float32Array(length),buffer={length,sampleRate,getChannelData:()=>data};this.buffers.push(buffer);return buffer;}
+    createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time){this.time=time;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
+    createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
@@ -157,7 +160,7 @@ test('Secret impact retains the deep boom while all non-Secret reveal cues conta
   const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=3);assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
  }
  const before=ctx.voices.length;g.api.play('relic-secret-impact');const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
- assert.ok(voices.some(v=>v.frequencyValue>=600&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.end<v.frequencyValue));
+ assert.ok(voices.some(v=>v.type==='noise'&&v.filterNode.frequencyValue>=9000&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.type==='noise'?v.filterNode.end<v.filterNode.frequencyValue:v.end<v.frequencyValue));
 });
 
 test('all pack cues are louder while ordinary game effects retain their existing volume',()=>{
@@ -166,4 +169,12 @@ test('all pack cues are louder while ordinary game effects retain their existing
  assert.ok(Math.abs(peak('relic-open')-.135)<1e-10);assert.ok(Math.abs(peak('relic-deal')-.135)<1e-10);assert.ok(Math.abs(peak('relic-charge-common')-.0855)<1e-10);
  assert.ok(Math.abs(peak('collect')-.09)<1e-10);assert.ok(Math.abs(peak('orb-small')-.1125)<1e-10);
  const before=ctx.voices.length;g.api.play('relic-secret-impact');const boom=ctx.voices.slice(before);assert.equal(boom.length,8);assert.ok(boom.some(v=>v.frequencyValue<70&&v.stops[0]-v.time>2));assert.ok(boom.some(v=>v.gainNode.events[1].value>.18));
+});
+
+test('Secret explosions layer filtered crack, debris and rolling noise over a deep thud, using one cached buffer',()=>{
+ const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const stop=g.api.play('relic-secret-impact');
+ const noise=ctx.voices.filter(v=>v.type==='noise');assert.equal(noise.length,5);assert.ok(noise.every(v=>v.filterNode.type==='lowpass'&&v.filterNode.end<v.filterNode.frequencyValue));
+ assert.ok(noise.some(v=>v.stops[0]-v.time>2));assert.ok(noise.some(v=>v.time-ctx.currentTime>=.19));assert.equal(ctx.buffers.length,1);assert.ok(ctx.buffers[0].getChannelData(0).some(v=>v!==0));assert.ok(ctx.buffers[0].getChannelData(0).every(v=>v>=-1&&v<=1));
+ stop();assert.ok(noise.every(v=>v.stops.includes('now')&&v.disconnected&&v.filterNode.disconnected));g.api.play('relic-secret-impact');assert.equal(ctx.buffers.length,1);
+ g.button.click();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));
 });
