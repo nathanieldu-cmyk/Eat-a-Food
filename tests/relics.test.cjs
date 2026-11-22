@@ -20,9 +20,9 @@ test('all 61 unique relic definitions include the 48 standard pack relics with e
   assert.ok(a.artHtml(family).includes(`#${family}`));
  }
 });
-test('all six prices and coalesced rarity odds match the specification and sum to exactly 100%',()=>{
- const a=api(),odds=[[8500,1000,400,100,0,0,0],[0,8500,1000,400,99,0,1],[0,0,8500,1000,400,90,10],[0,0,0,8500,1000,475,25],[0,0,0,0,8800,1100,100],[0,0,0,0,0,9700,300]];
- assert.deepEqual(Array.from(a.packs,pack=>pack.price),[250,1000,4000,12000,30000,90000]);
+test('all five prices and coalesced rarity odds match the specification and sum to exactly 100%',()=>{
+ const a=api(),odds=[[8500,1000,400,100,0,0,0],[0,8500,1000,400,99,0,1],[0,0,8500,1000,400,90,10],[0,0,0,8500,1000,475,25],[0,0,0,0,8800,1100,100]];
+ assert.deepEqual(Array.from(a.packs,pack=>pack.price),[250,1000,4000,12000,30000]);
  for(const [index,pack]of a.packs.entries()){
   assert.equal(pack.odds.reduce((sum,row)=>sum+row.weight,0),10000);near(pack.odds.reduce((sum,row)=>sum+row.chance,0),100);
   assert.deepEqual([...rarityNames,'secret'].map(rarity=>pack.odds.find(row=>row.rarity===rarity)?.weight||0),odds[index]);
@@ -393,4 +393,17 @@ test('the run luck tooltip names the equipped Clover or Fortune rather than hard
   const c={window,state:{running:true,runRelicKey:key},save:{bento:{opened:0}},equippedTier:()=>({}),tierStatsLabel:()=>'',variantClass:()=>'',luckSnapshot:()=>({into:1,typeCount:1}),boostStacks:()=>0,displayedLuckPct:()=>100+pct,bentoLuckBonus:()=>0,LUCK_EVERY:10,LUCK_STEP:.5,equippedLineEl:{},luckEl:{},luckLabelEl:{},relicItemLabel:()=>name};
   vm.runInNewContext(source.slice(start,end)+'\nrenderEquippedUi();',c);assert.match(c.luckEl.title,new RegExp(`\\+${pct}% from ${name}`));
  }
+});
+
+test('Mythic Pack cannot be bought or rolled while Mythic relics remain obtainable and combinable',()=>{
+ const a=api(),save=saveFor(a);save.diamonds=1e9;const before=JSON.stringify(save);
+ assert.deepEqual(Array.from(a.packs,p=>p.id),['common','uncommon','rare','epic','legendary']);
+ assert.equal(a.roll('mythic',()=>assert.fail('removed pack must not roll')),null);
+ assert.equal(a.buyPack(save,'mythic',false,()=>assert.fail('removed pack must not award')),null);
+ assert.equal(a.buyPacks(save,'mythic',3,false,()=>assert.fail('removed pack must not award')),null);assert.equal(JSON.stringify(save),before);
+ for(const id of ['rare','epic','legendary']){
+  const pack=a.packs.find(p=>p.id===id);let low=0;
+  for(const row of pack.odds){if(row.rarity==='mythic'){let calls=0;assert.equal(a.getRelic(a.roll(id,()=>++calls===1?(low+row.weight/2)/pack.weightTotal:0)).rarity,'mythic');break;}low+=row.weight;}
+ }
+ save.relics.items['mythic:spoon']=5;assert.equal(a.combine(save,'mythic:spoon'),'godly:spoon');
 });

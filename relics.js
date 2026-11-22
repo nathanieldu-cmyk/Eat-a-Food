@@ -13,7 +13,7 @@
       {id:'rare', label:'Rare', color:'#6eb6ff', price:4000},
       {id:'epic', label:'Epic', color:'#c089ff', price:12000},
       {id:'legendary', label:'Legendary', color:'#ffb347', price:30000},
-      {id:'mythic', label:'Mythic', color:'#ff6b9d', price:90000},
+      {id:'mythic', label:'Mythic', color:'#ff6b9d'},
       {id:'godly', label:'Godly', color:'#9cf4ff', inherits:'mythic', bonusMultiplier:1.5},
       {id:'secret', label:'Secret', color:'#ffdb70'},
     ],
@@ -23,7 +23,6 @@
       rare:{rare:8500,epic:1000,legendary:400,mythic:90,secret:10},
       epic:{epic:8500,legendary:1000,mythic:475,secret:25},
       legendary:{legendary:8800,mythic:1100,secret:100},
-      mythic:{mythic:9700,secret:300},
     },
     families: [
       {id:'spoon', name:'Spoon', icon:'🥄', weight:51, stats:{sprinklePoints:[5,8,12,17,23,30]}},
