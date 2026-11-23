@@ -39,8 +39,8 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
-  const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=5', buffer:null, promise:null};
-  const mythicImpactOffset = 3.0;
+  const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=6', buffer:null, promise:null};
+  const mythicImpactOffset = 2.7;
   let mythicVoice = null;
   let unlocked = false;
   let muted = false;
