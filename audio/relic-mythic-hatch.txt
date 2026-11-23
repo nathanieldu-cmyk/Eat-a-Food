@@ -1,11 +1,7 @@
 3M+ Mythical Hatch excerpt supplied by the project owner.
 Source: ScreenRecording_11-22-2026 08-48-55_1.MOV, 19.15–23.35 seconds.
 Stereo 16-bit PCM WAV at 44.1 kHz, 5.75 seconds total.
-Only the first 0.55 seconds are extended to a 2.1-second quiet lead-in.
-The intro uses a high-quality phase-continuous, transient-preserving offline
-render with zero pitch shift, short FFT windows, and no time-domain smoothing.
-The previous extra volume ramp is removed; no repeated phrases or added layers.
-A 30 ms cosine transition joins the original source without a hard cut.
-The final 3.65 seconds are byte-identical to the original recording, preserving
-the later rising notes, the boom, and its complete tail at their native speed.
-The recording plays once, starting with the outline; the boom remains at 3.2 seconds.
+A 1.55-second silent lead-in is followed by the untouched 4.2-second recording.
+The entire original buildup, boom, and tail are byte-identical to the source excerpt.
+No stretching, looping, crossfades, gain shaping, denoising, or additional layers.
+One continuous playback; the boom remains aligned to the existing 3.2-second reveal.
