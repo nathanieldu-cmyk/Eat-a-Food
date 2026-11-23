@@ -1,5 +1,5 @@
 (() => {
-  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:3200,secret:4800};
+  const revealTimings = {common:300,uncommon:500,rare:750,epic:1050,legendary:1350,mythic:1650,secret:4800};
   const rarityOrder = Object.keys(revealTimings);
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false, prepareReveal = null} = {}) {
     let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null, batch = [], packNumber = 1, packTotal = 1;

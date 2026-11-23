@@ -39,8 +39,8 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
-  const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=2', buffer:null, promise:null};
-  const mythicImpactOffset = 3.2;
+  const mythicSample = {url:'audio/relic-mythic-clean.wav?v=1', buffer:null, promise:null};
+  const mythicImpactOffset = 1.65;
   let mythicVoice = null;
   let unlocked = false;
   let muted = false;
@@ -79,7 +79,7 @@
     return noiseBuffer;
   }
 
-  // Extend only the quiet opening; the main rise, impact and tail stay original.
+  // Play the original stereo 3M+ excerpt without stretching, looping or processing.
   function loadMythicSample() {
     if (mythicSample.buffer) return Promise.resolve(mythicSample.buffer);
     if (!mythicSample.promise && context && typeof fetch === 'function') {
@@ -111,7 +111,7 @@
       if (!buffer) { stopVoice(voice); return; }
       const source = context.createBufferSource(), gain = context.createGain();
       voice.osc = source; voice.gain = gain; source.buffer = buffer;
-      const chargeSeconds = (window.GameRelicReveal?.revealTimings.mythic || 3200) / 1000;
+      const chargeSeconds = (window.GameRelicReveal?.revealTimings.mythic || 1650) / 1000;
       const lead = impactOnly ? 0 : Math.max(0, chargeSeconds - mythicImpactOffset);
       const offset = impactOnly ? mythicImpactOffset : 0;
       const at = context.currentTime + Math.max(0, delay) + lead;
@@ -142,8 +142,14 @@
       stopAll();
     }
     const volume = name.startsWith('orb-') ? 1.25 : name.startsWith('relic-charge-') ? .95 : name.startsWith('relic-') ? 1.5 : 1;
+    // Keep each existing tone, pitch sweep and volume; compress only its timing.
+    const rarity = /^relic-(?:charge|tick|reveal)-(common|uncommon|rare|epic|legendary)(?:-|$)/.exec(name)?.[1];
+    const originalTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450};
+    const timing = rarity && window.GameRelicReveal?.revealTimings[rarity];
+    const timeScale = timing ? timing / originalTimings[rarity] : 1;
     const voices = [];
-    for (const [frequency, duration, offset, wave = 'sine', end, level = 1, attack = .008] of notes) {
+    for (const [frequency, originalDuration, originalOffset, wave = 'sine', end, level = 1, originalAttack = .008] of notes) {
+      const duration = originalDuration * timeScale, offset = originalOffset * timeScale, attack = originalAttack * timeScale;
       const start = now + Math.max(0, delay) + offset;
       const noisy = wave === 'noise';
       const osc = noisy ? context.createBufferSource() : context.createOscillator();
