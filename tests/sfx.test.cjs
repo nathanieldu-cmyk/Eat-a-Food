@@ -188,9 +188,9 @@ test('Mythic plays one original-speed stereo recording continuously through buil
  assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=4']);assert.equal(ctx.decodeCalls,1);
  const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,5.75);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
  assert.equal(charge.time,ctx.currentTime,'buildup starts with the moving outline');
- assert.ok(Math.abs((ctx.currentTime+3.4)-(charge.time+3.2)-.2)<1e-9,'the card reveals 200ms later without shifting the recording');
+ assert.ok(Math.abs((ctx.currentTime+3.6)-(charge.time+3.2)-.4)<1e-9,'the card reveals 400ms later without shifting the recording');
  const count=ctx.voices.length;g.api.play('relic-charge-mythic');assert.equal(ctx.voices.length,count,'a repeated charge cue cannot layer or restart the recording');assert.ok(!charge.stops.includes('now'));for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,count);
- ctx.currentTime+=3.4;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
+ ctx.currentTime+=3.6;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
  chargeStop();impactStop();assert.ok(charge.stops.includes('now'));
  await g.api.prepareMythic();assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);
  const next=ctx.voices.length;g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.slice(next).every(v=>!v.buffer?.hatch));
