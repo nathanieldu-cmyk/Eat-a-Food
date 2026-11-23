@@ -5,4 +5,4 @@ A 1.55-second silent lead-in is followed by the untouched 4.2-second recording.
 The entire original buildup, boom, and tail are byte-identical to the source excerpt.
 No stretching, looping, crossfades, gain shaping, denoising, or additional layers.
 One continuous playback; the original boom is at 3.2 seconds.
-The Mythic card reveals at 3.6 seconds, without delaying or modifying the audio.
+The Mythic card reveals at 3.0 seconds, without delaying or modifying the audio.

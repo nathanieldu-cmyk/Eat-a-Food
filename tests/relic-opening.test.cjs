@@ -186,8 +186,8 @@ test('Skip Reveal preserves the full Mythic and Secret sequence for all 27 three
   assert.deepEqual(plain(g.c.snapshot().revealed),Array.from({length:ordinary},(_,i)=>i));g.advance(ordinary?950:1150);
   for(let index=ordinary;index<3;index++){
    let s=g.c.snapshot();const secret=s.rewards[index].startsWith('secret:');assert.equal(s.phase,'revealing');assert.equal(s.revealingIndex,index);assert.equal(s.canSkip,false);assert.equal(g.c.skipReveal(),false);
-   const duration=secret?4800:3600;g.advance(duration-1);assert.equal(g.c.snapshot().revealed.includes(index),false);g.advance(1);s=g.c.snapshot();assert.equal(s.phase,secret?'spotlight':'mythic');assert.equal(s.revealed.includes(index),true);
-   assert.equal(g.c.skipReveal(),false);g.advance(2599);assert.equal(g.c.snapshot().phase,secret?'spotlight':'mythic');g.advance(1);if(index<2)g.advance(950);
+   const duration=secret?4800:3000;g.advance(duration-1);assert.equal(g.c.snapshot().revealed.includes(index),false);g.advance(1);s=g.c.snapshot();assert.equal(s.phase,secret?'spotlight':'mythic');assert.equal(s.revealed.includes(index),true);
+   assert.equal(g.c.skipReveal(),false);g.advance((secret?2600:2800)-1);assert.equal(g.c.snapshot().phase,secret?'spotlight':'mythic');g.advance(1);if(index<2)g.advance(950);
   }
   assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.jobs.size,0);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
  }
@@ -195,16 +195,16 @@ test('Skip Reveal preserves the full Mythic and Secret sequence for all 27 three
 test('skip never cancels or restarts an active Mythic buildup or impact hold',()=>{
  const g=boot();g.c.show(['common:spoon','mythic:fork','secret:dragon']);g.c.openPack();g.c.skipReveal();g.advance(950+800);
  let before=plain(g.c.snapshot()),jobs=g.jobs.size;assert.equal(before.revealingIndex,1);assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);assert.equal(g.jobs.size,jobs);
- g.advance(2800);before=plain(g.c.snapshot());assert.equal(before.phase,'mythic');assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);
- g.advance(2600+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');
+ g.advance(2200);before=plain(g.c.snapshot());assert.equal(before.phase,'mythic');assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);
+ g.advance(2800+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');
 });
 test('Mythic animation waits for audio preparation and stale readiness cannot resume a closed pack',async()=>{
  let ready;const prepared=new Promise(resolve=>{ready=resolve;}),g=boot(false,{prepareReveal:rarity=>rarity==='mythic'?prepared:null});
  g.c.show(['common:spoon','mythic:fork','secret:dragon']);g.c.openPack();g.c.skipReveal();g.advance(950);assert.equal(g.c.snapshot().phase,'cards');assert.equal(g.c.snapshot().revealingIndex,null);
- ready();await Promise.resolve();assert.equal(g.c.snapshot().phase,'revealing');assert.equal(g.c.snapshot().revealingIndex,1);g.advance(3599);assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(1);assert.equal(g.c.snapshot().phase,'mythic');
+ ready();await Promise.resolve();assert.equal(g.c.snapshot().phase,'revealing');assert.equal(g.c.snapshot().revealingIndex,1);g.advance(2999);assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(1);assert.equal(g.c.snapshot().phase,'mythic');
  let staleReady;const stale=new Promise(resolve=>{staleReady=resolve;}),closed=boot(false,{prepareReveal:()=>stale});closed.c.show(['mythic:spoon','mythic:fork','mythic:chili']);closed.c.openPack();closed.advance(1650);closed.c.close();closed.c.show(results);staleReady();await Promise.resolve();closed.advance(30000);assert.equal(closed.c.snapshot().phase,'sealed');assert.deepEqual(plain(closed.c.snapshot().revealed),[]);
 });
 test('reduced motion preserves every Mythic and Secret reveal instead of jumping to the last card',()=>{
  const g=boot(true);g.c.show(['secret:dragon','mythic:fork','secret:hat']);g.c.openPack();assert.equal(g.c.snapshot().revealingIndex,0);assert.deepEqual(plain(g.c.snapshot().revealed),[]);
- g.advance(3600);assert.equal(g.c.snapshot().phase,'mythic');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(2600+950);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(7400+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
+ g.advance(3000);assert.equal(g.c.snapshot().phase,'mythic');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(2800+950);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(7400+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
 });

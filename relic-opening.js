@@ -1,5 +1,5 @@
 (() => {
-  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:3600,secret:4800};
+  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:3000,secret:4800};
   const rarityOrder = Object.keys(revealTimings);
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false, prepareReveal = null} = {}) {
     let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null, batch = [], packNumber = 1, packTotal = 1;
@@ -40,7 +40,7 @@
         if (step < 4) { pulse = step; emit(); later(duration / 4, () => beat(step + 1)); return; }
         revealed.add(index); revealingIndex = null; pulse = 0;
         if (secret) { spotlightStage = 'revealed'; phase = 'spotlight'; emit(); later(2600, finishCard); }
-        else if (mythic) { phase = 'mythic'; emit(); later(2600, finishCard); }
+        else if (mythic) { phase = 'mythic'; emit(); later(2800, finishCard); } // Preserve the unchanged recording's full tail after the earlier flip.
         else finishCard();
       }
       later(duration / 4, () => beat(1));
