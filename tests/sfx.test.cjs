@@ -184,7 +184,7 @@ const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
 test('Mythic plays one original-speed stereo recording continuously through buildup and impact',async()=>{
  const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(16)};});
  g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await g.api.prepareMythic();
- assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=2']);assert.equal(ctx.decodeCalls,1);
+ assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=3']);assert.equal(ctx.decodeCalls,1);
  const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,5.75);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
  assert.equal(charge.time,ctx.currentTime,'buildup starts with the moving outline');
  assert.ok(Math.abs(charge.time+3.2-(ctx.currentTime+3.2))<1e-9,'the original impact lands at the visual flip without stretching');
@@ -212,4 +212,19 @@ test('an unavailable recording never restores the removed synthesized Mythic sou
  for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,0);
  g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.length>0);
  const muted=boot(true,true,()=>assert.fail('muted effects must not request audio'));muted.events.pointerdown();muted.api.play('relic-reveal-mythic');assert.equal(muted.contexts.length,0);
+});
+
+
+test('the refined Mythic asset preserves stereo, timing, native rising notes and the original boom without clipping',()=>{
+ const wav=rel=>{
+  const bytes=fs.readFileSync(path.join(root,rel));assert.equal(bytes.toString('ascii',0,4),'RIFF');assert.equal(bytes.toString('ascii',8,12),'WAVE');
+  let format,data;for(let pos=12;pos+8<=bytes.length;){const size=bytes.readUInt32LE(pos+4),id=bytes.toString('ascii',pos,pos+4);if(id==='fmt ')format=bytes.subarray(pos+8,pos+8+size);if(id==='data')data=bytes.subarray(pos+8,pos+8+size);pos+=8+size+(size%2);}
+  assert.ok(format&&data);assert.equal(format.readUInt16LE(0),1);assert.equal(format.readUInt16LE(2),2);assert.equal(format.readUInt32LE(4),44100);assert.equal(format.readUInt16LE(14),16);return data;
+ };
+ const original=wav('audio/relic-mythic-clean.wav'),refined=wav('audio/relic-mythic-continuous.wav'),frame=seconds=>Math.round(seconds*44100)*4;
+ assert.equal(refined.length,frame(5.75));assert.equal(original.length,frame(4.2));
+ assert.deepEqual(refined.subarray(frame(2.1)),original.subarray(frame(.55)),'all later rising notes and the complete impact/tail stay original');
+ assert.deepEqual(refined.subarray(frame(3.2)),original.subarray(frame(1.65)),'the original boom stays aligned with the unchanged card flip');
+ assert.deepEqual(refined.subarray(frame(2.1)-4,frame(2.1)),original.subarray(frame(.55)-4,frame(.55)),'the quiet intro meets the original recording without a hard cut');
+ for(let offset=0;offset<refined.length;offset+=2)assert.ok(Math.abs(refined.readInt16LE(offset))<32767,'no clipped samples');
 });

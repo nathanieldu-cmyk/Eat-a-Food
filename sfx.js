@@ -39,7 +39,7 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
-  const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=2', buffer:null, promise:null};
+  const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=3', buffer:null, promise:null};
   const mythicImpactOffset = 3.2;
   let mythicVoice = null;
   let unlocked = false;
@@ -79,7 +79,7 @@
     return noiseBuffer;
   }
 
-  // Extend only the quiet opening; the main rise, impact and tail stay original.
+  // Clean, phase-coherent quiet opening; the main rise, impact and tail stay original.
   function loadMythicSample() {
     if (mythicSample.buffer) return Promise.resolve(mythicSample.buffer);
     if (!mythicSample.promise && context && typeof fetch === 'function') {
