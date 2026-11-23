@@ -1,10 +1,11 @@
 3M+ Mythical Hatch excerpt supplied by the project owner.
 Source: ScreenRecording_11-22-2026 08-48-55_1.MOV, 19.15–23.35 seconds.
 Stereo 16-bit PCM WAV at 44.1 kHz, 5.75 seconds total.
-One continuous 3.2-second buildup rendered from the original 1.65-second rise
-with the system pitch-preserving audio processor (zero pitch shift, overlap 32).
-The short repeating shimmer loop was removed. A smooth gain ramp rises from
-45% to 100%, with a 40 ms transition into the original pre-impact lead.
-The impact and its 2.55-second tail remain byte-identical to the original PCM.
-No duplicated phrases, layered playback, channel mixing, or lossy encoding.
-Playback starts with the moving outline; the boom lands at the card reveal.
+Only the first 0.55 seconds (the quiet opening) are extended to 2.1 seconds
+with the system pitch-preserving processor (zero pitch shift, overlap 32).
+That opening uses a gentle 75%-to-100% gain ramp and a 30 ms transition.
+The entire remaining 3.65 seconds are byte-identical to the original PCM:
+the last 1.1 seconds of the rising sound, the boom, and its full tail.
+No repeated phrases, added sound layers, channel mixing, or lossy encoding.
+One recording starts with the outline, reaches the original boom at 3.2 seconds,
+and continues without a second playback trigger at the card reveal.

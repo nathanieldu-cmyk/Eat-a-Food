@@ -184,7 +184,7 @@ const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
 test('Mythic plays one original-speed stereo recording continuously through buildup and impact',async()=>{
  const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(16)};});
  g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await g.api.prepareMythic();
- assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=1']);assert.equal(ctx.decodeCalls,1);
+ assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=2']);assert.equal(ctx.decodeCalls,1);
  const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,5.75);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
  assert.equal(charge.time,ctx.currentTime,'buildup starts with the moving outline');
  assert.ok(Math.abs(charge.time+3.2-(ctx.currentTime+3.2))<1e-9,'the original impact lands at the visual flip without stretching');
