@@ -1704,16 +1704,16 @@ h1 {
 .secret-world { position: absolute; inset: -20%; overflow: hidden; background: linear-gradient(#b9e8ff, #eafaff 52%, #92ff47 52%); opacity: 0; animation: secret-reference-world var(--secret-reveal-duration) linear both; }
 .secret-clouds { position: absolute; inset: 0 0 44%; background: radial-gradient(ellipse at 16% 25%,#fff 0 8%,transparent 8.5%),radial-gradient(ellipse at 25% 20%,#fff 0 11%,transparent 11.5%),radial-gradient(ellipse at 67% 35%,#fff9 0 12%,transparent 12.5%),radial-gradient(ellipse at 86% 14%,#fff 0 14%,transparent 14.5%); filter: blur(7px); opacity: .7; }
 .secret-ground { position: absolute; top: 52%; left: -100%; width: 300%; height: 220%; transform-origin: 50% 0; transform: perspective(600px) rotateX(64deg); background: repeating-conic-gradient(#62f82b 0% 25%,#9bff55 0% 50%) 50% 0/140px 140px; box-shadow: 0 -3px 25px #caffae; }
-.secret-pack-stage { position: absolute; inset: 0; perspective: 1100px; overflow: hidden; }
-.secret-pack-fall { position: absolute; top: 52%; left: 50%; width: clamp(170px,26vw,280px); aspect-ratio: 180/244; opacity: 0; transform-style: preserve-3d; animation: secret-reference-drop var(--secret-reveal-duration) linear both; }
+.secret-pack-stage { --secret-pack-size: min(clamp(170px,26vw,280px),42dvh,62vw); position: absolute; inset: 0; z-index: 2; perspective: 1100px; overflow: hidden; opacity: 1; transition: opacity .12s ease-out; animation: secret-impact-shake var(--secret-reveal-duration) linear both; }
+.secret-pack-fall { position: absolute; top: 52%; left: 50%; width: var(--secret-pack-size); aspect-ratio: 180/244; opacity: 0; transform-origin: center; transform-style: preserve-3d; animation: secret-reference-drop var(--secret-reveal-duration) linear both; }
 .secret-pack-model { position: absolute; inset: 0; transform-style: preserve-3d; animation: secret-reference-rock var(--secret-reveal-duration) linear both; filter: drop-shadow(0 0 2px #fff); }
 .secret-pack-face { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: contain; backface-visibility: hidden; }
 .secret-pack-front { transform: translateZ(7px); }
 .secret-pack-back { transform: rotateY(180deg) translateZ(7px); }
 .secret-pack-edge { position: absolute; top: 3%; bottom: 3%; right: 8%; width: 14px; transform-origin: right; transform: rotateY(90deg); background: linear-gradient(90deg,#11162b,#979ab3,#262039); }
-.secret-pack-shadow { position: absolute; top: 73%; left: 50%; width: clamp(140px,23vw,260px); height: 24px; border-radius: 50%; background: #216e294d; filter: blur(4px); opacity: 0; transform: translateX(-50%); animation: secret-reference-shadow var(--secret-reveal-duration) linear both; }
+.secret-pack-shadow { position: absolute; top: calc(52% + var(--secret-pack-size) * .678 + 14px); left: 50%; width: var(--secret-pack-size); height: 24px; border-radius: 50%; background: #216e294d; filter: blur(4px); opacity: 0; transform: translateX(-50%); animation: secret-reference-shadow var(--secret-reveal-duration) linear both; }
 .secret-charge-rays { position: absolute; inset: -30%; opacity: 0; background: repeating-conic-gradient(from 4deg at 50% 50%,transparent 0deg 15deg,#fff9 17deg 18deg,transparent 20deg 35deg); mask-image: radial-gradient(circle,transparent 16%,#000 38%,transparent 66%); animation: secret-reference-rays var(--secret-reveal-duration) linear both; }
-.secret-flash { position: absolute; inset: 0; z-index: 6; background: #fff; opacity: 0; pointer-events: none; animation: secret-reference-flash var(--secret-reveal-duration) linear both; }
+.secret-flash { position: absolute; inset: 0; z-index: 1; background: #fff; opacity: 0; pointer-events: none; animation: secret-reference-flash var(--secret-reveal-duration) linear both; }
 .secret-result { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: max(18px,env(safe-area-inset-top)) 16px max(18px,env(safe-area-inset-bottom)); visibility: hidden; }
 .secret-heading { text-align: center; }
 .secret-heading p { margin: 0 0 6px; font-size: .65rem; font-weight: 800; letter-spacing: .4em; color: #fff0ff; text-shadow: 0 2px 5px #4d146e; }
@@ -1738,6 +1738,7 @@ h1 {
 .secret-burst-ring { position: absolute; top: 50%; left: 50%; width: min(90vmin,740px); aspect-ratio: 1; border: 22px solid #ce80ff88; border-radius: 50%; box-shadow: 0 0 35px #9a41ff,inset 0 0 32px #fd9aff; opacity: 0; transform: translate(-50%,-50%) scale(.3); }
 .secret-sparks { position: absolute; top: 50%; left: 50%; }
 .secret-sparks i { position: absolute; top: 0; left: 0; width: 18px; height: 36px; background: #fff2ff; clip-path: polygon(50% 0,61% 37%,100% 50%,61% 63%,50% 100%,39% 63%,0 50%,39% 37%); opacity: 0; filter: drop-shadow(0 0 6px #e066ff); }
+.secret-reveal[data-stage="revealed"] .secret-pack-stage { opacity: 0; pointer-events: none; }
 .secret-reveal[data-stage="revealed"] .secret-result { visibility: visible; }
 .secret-reveal[data-stage="revealed"] .secret-heading, .secret-reveal[data-stage="revealed"] .secret-caption { animation: secret-result-title .45s .15s ease-out both; }
 .secret-reveal[data-stage="revealed"] .secret-card { animation: secret-result-arrive .65s cubic-bezier(.14,.85,.24,1.15) both; }
@@ -1751,6 +1752,10 @@ h1 {
   0%,23.2% { opacity: 0; transform: translateY(15vh); }
   24.3% { opacity: 1; transform: translateY(15vh); }
   26.5% { opacity: 1; transform: translateY(-12vh); }
+  28.5% { transform: translate(0,calc(-14vh + 14px)) rotate(.8deg); }
+  28.85% { transform: translate(-12px,calc(-14vh - 10px)) rotate(-.65deg); }
+  29.2% { transform: translate(10px,calc(-14vh + 6px)) rotate(.4deg); }
+  29.6% { transform: translate(-6px,calc(-14vh - 3px)) rotate(-.2deg); }
   30% { transform: translateY(-14vh); }
   35%,40% { transform: translateY(0); }
   44% { transform: translateY(1vh) rotate(-.8deg); }
@@ -1759,22 +1764,30 @@ h1 {
   58% { transform: translateY(-1vh) rotate(.5deg); }
   63%,100% { opacity: 1; transform: none; }
 }
+@keyframes secret-impact-shake {
+  0%,28.49% { transform: none; }
+  28.5% { transform: translateY(7px); }
+  28.85% { transform: translate(-8px,-5px); }
+  29.2% { transform: translate(7px,3px); }
+  29.6% { transform: translate(-4px,-2px); }
+  30%,100% { transform: none; }
+}
+/* A 100ms slam, hard squash and rebound; the pack vanishes into the reveal glow. */
 @keyframes secret-reference-drop {
-  0%,23.2% { opacity: 0; transform: translate(-50%,-150vh) scale(.025); }
-  23.3% { opacity: 1; transform: translate(-50%,-75vh) scale(.025); }
-  25.5% { opacity: 1; transform: translate(-50%,-35vh) scale(.05); }
-  28.5% { opacity: 1; transform: translate(-50%,120vh) scale(.8); }
-  30.3% { transform: translate(-50%,60vh) scale(1.3); }
-  32.1% { transform: translate(-50%,-50%) scale(1.45); }
-  35% { transform: translate(-50%,-50%) scale(1.12); }
-  38% { transform: translate(-50%,-50%) scale(1); }
+  0%,23.2% { opacity: 0; transform: translate(-50%,calc(-50% - 100dvh)) scale(.3); }
+  23.3%,27.55% { opacity: 1; transform: translate(-50%,calc(-50% - 90dvh)) scale(.95); animation-timing-function: cubic-bezier(.6,0,1,.55); }
+  28.5% { opacity: 1; transform: translate(-50%,-36%) scale(1.3,.68); animation-timing-function: cubic-bezier(0,.7,.25,1); }
+  29.9% { transform: translate(-50%,-77%) scale(1.07,1.17); }
+  31.1% { transform: translate(-50%,-44%) scale(1.12,.88); }
+  32.4% { transform: translate(-50%,-54%) scale(.99,1.04); }
+  35%,38% { transform: translate(-50%,-50%) scale(1); }
   43% { transform: translate(-50%,-50%) scale(.94); }
   49% { transform: translate(-50%,-50%) scale(.83); }
   54% { transform: translate(-50%,-50%) scale(.75); }
-  56% { transform: translate(-50%,-20%) scale(.78,.56); }
-  58.8% { transform: translate(-50%,-90%) scale(.55); }
-  61% { opacity: 1; transform: translate(-50%,-55%) scale(.6); }
-  62.6% { opacity: 1; transform: translate(-50%,-50%) scale(.9); }
+  56% { transform: translate(-50%,-42%) scale(.78,.66); }
+  58.8% { transform: translate(-50%,-70%) scale(.72); }
+  61% { opacity: 1; transform: translate(-50%,-55%) scale(.8); }
+  62.6% { opacity: 1; transform: translate(-50%,-50%) scale(.95); }
   63%,100% { opacity: 0; transform: translate(-50%,-50%) scale(1.2); }
 }
 @keyframes secret-reference-rock {
@@ -1788,9 +1801,9 @@ h1 {
   55% { transform: rotateY(-20deg) rotateZ(-6deg); }
   58% { transform: rotateY(24deg) rotateZ(5deg); }
   61% { transform: rotateY(-14deg) rotateZ(-4deg); filter: brightness(1); }
-  62.6%,100% { transform: rotateY(0) rotateZ(0); filter: brightness(12) drop-shadow(0 0 45px #fff); }
+  62.6%,100% { transform: rotateY(0) rotateZ(0); filter: brightness(1.6) drop-shadow(0 0 35px #fff); }
 }
-@keyframes secret-reference-shadow { 0%,30% { opacity: 0; } 32%,52% { opacity: .8; transform: translateX(-50%) scale(1); } 58% { opacity: .35; transform: translateX(-50%) scale(.6); } 62.5% { opacity: .7; } 63%,100% { opacity: 0; } }
+@keyframes secret-reference-shadow { 0%,25.5% { opacity: 0; transform: translateX(-50%) scale(.3); } 28.5% { opacity: 1; transform: translateX(-50%) scale(1.35); } 29.9% { opacity: .25; transform: translateX(-50%) scale(.65); } 35%,52% { opacity: .7; transform: translateX(-50%) scale(1); } 58.8% { opacity: .35; transform: translateX(-50%) scale(.7); } 62.6% { opacity: .7; } 63%,100% { opacity: 0; transform: translateX(-50%) scale(1); } }
 @keyframes secret-reference-rays { 0%,41% { opacity: 0; transform: scale(.7); } 42% { opacity: .85; transform: scale(1); } 44%,59% { opacity: 0; } 62.5% { opacity: 1; transform: scale(1.25); } 63%,100% { opacity: 0; } }
 @keyframes secret-reference-flash { 0%,62.2% { opacity: 0; } 63%,89.1% { opacity: 1; } 94%,100% { opacity: 0; } }
 @keyframes secret-purple-bloom { 0% { transform: translate(-50%,-50%) scale(.2); opacity: 1; } 15% { transform: translate(-50%,-50%) scale(1.15); opacity: 1; } 45% { transform: translate(-50%,-50%) scale(1); opacity: .95; } 100% { transform: translate(-50%,-50%) scale(1.13); opacity: .75; } }
