@@ -17,20 +17,13 @@
   // A physical crash: broadband crack and debris over a falling thud and rumble.
   // For noise layers the frequency values control a low-pass filter cutoff.
   const revealBoom = [[110,.7,0,'sine',28,1.45,.003],[49,2.35,0,'sine',24,1.5,.009],[9500,.16,0,'noise',2200,.85,.002],[3200,.82,.012,'noise',95,1,.004],[170,1.05,.006,'triangle',42,.62,.002],[760,2.2,.035,'noise',55,.68,.012],[1150,.38,.19,'noise',160,.24,.002],[450,.45,.48,'noise',70,.16,.003]];
-  // A short bell for Commons; higher rarities build through warm major arpeggios.
-  // Sine tones and quiet upper harmonics keep these bright without the old buzz/thud.
-  sounds['relic-reveal-common'] = [[1046.5,.16,0,'sine',null,.9,.003],[2093,.11,0,'sine',null,.12,.002]];
-  const relicChimes = {
-    uncommon: {duration:.5, rise:[523.25,659.25,783.99], chord:[783.99,1046.5,2093], levels:[.65,.5,.12], tail:.25},
-    rare: {duration:.75, rise:[523.25,659.25,783.99,1046.5], chord:[1046.5,1318.51,1567.98,2093], levels:[.65,.45,.3,.12], tail:.32},
-    epic: {duration:1.05, rise:[523.25,659.25,783.99,1046.5,1318.51], chord:[523.25,783.99,1046.5,1318.51,1567.98], levels:[.35,.4,.65,.45,.25], tail:.38},
-    legendary: {duration:1.35, rise:[523.25,659.25,783.99,1046.5,1318.51,1567.98], chord:[523.25,783.99,1046.5,1318.51,1567.98,2093], levels:[.35,.4,.6,.45,.3,.2], tail:.45},
-  };
-  for (const [rarity, chime] of Object.entries(relicChimes)) {
-    const spacing = (chime.duration - .18) / (chime.rise.length - 1);
-    sounds[`relic-charge-${rarity}`] = chime.rise.map((frequency,index)=>[frequency,.18,index*spacing,'sine',null,.35+index*.035,.025]);
-    for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[[1046.5,1318.51,1567.98][pulse-1],.07,0,'sine',null,.12,.004]];
-    sounds[`relic-reveal-${rarity}`] = chime.chord.map((frequency,index)=>[frequency,chime.tail,index*.025,'sine',null,chime.levels[index],.004]);
+  const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
+  const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
+  for (const [rank,rarity] of relicRarities.entries()) {
+    if (rarity === 'mythic') continue; // Mythics use only the recorded buildup and impact.
+    sounds[`relic-charge-${rarity}`] = [[70+rank*9,.3+rank*.4,0,'triangle',150+rank*30],[180+rank*22,.25+rank*.3,.08,'sine',350+rank*75]];
+    for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[95+rank*10,.13,0,'triangle',55],[360+rank*45+pulse*90,.10+pulse*.02,.025,'sine',430+rank*55+pulse*110]];
+    sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
   }
   // A sudden pitch collapse marks the blackout, then a slow riser and
   // accelerating double heartbeats build toward a brief hush before the flip.
@@ -46,8 +39,8 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
-  const mythicSample = {url:'audio/relic-mythic-clean.wav?v=1', buffer:null, promise:null};
-  const mythicImpactOffset = 1.65;
+  const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=2', buffer:null, promise:null};
+  const mythicImpactOffset = 3.2;
   let mythicVoice = null;
   let unlocked = false;
   let muted = false;
@@ -86,7 +79,7 @@
     return noiseBuffer;
   }
 
-  // Play the original stereo 3M+ excerpt without stretching, looping or processing.
+  // Extend only the quiet opening; the main rise, impact and tail stay original.
   function loadMythicSample() {
     if (mythicSample.buffer) return Promise.resolve(mythicSample.buffer);
     if (!mythicSample.promise && context && typeof fetch === 'function') {
@@ -118,7 +111,7 @@
       if (!buffer) { stopVoice(voice); return; }
       const source = context.createBufferSource(), gain = context.createGain();
       voice.osc = source; voice.gain = gain; source.buffer = buffer;
-      const chargeSeconds = (window.GameRelicReveal?.revealTimings.mythic || 1650) / 1000;
+      const chargeSeconds = (window.GameRelicReveal?.revealTimings.mythic || 3200) / 1000;
       const lead = impactOnly ? 0 : Math.max(0, chargeSeconds - mythicImpactOffset);
       const offset = impactOnly ? mythicImpactOffset : 0;
       const at = context.currentTime + Math.max(0, delay) + lead;

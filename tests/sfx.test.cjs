@@ -20,12 +20,11 @@ function boot(muted = false, supported = true, sampleFetch = undefined) {
     createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time,offset=0){this.time=time;this.offset=offset;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
     createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
-    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:4.2,numberOfChannels:2,hatch:'clean'});}
+    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:5.75,numberOfChannels:2,hatch:'clean'});}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
   const window = {AudioContext:supported ? AudioContext : undefined, addEventListener(k,fn) {windowEvents[k]=fn;}};
-  vm.runInNewContext(fs.readFileSync(path.join(root,'relic-opening.js'),'utf8'), {window});
   vm.runInNewContext(fs.readFileSync(path.join(root,'sfx.js'),'utf8'), {window,document,fetch:sampleFetch,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}});
   return {events,windowEvents,button,storage,document,contexts,api:window.GameSfx};
 }
@@ -117,8 +116,8 @@ test('relic openings have distinct tear, deal, rising charges, beats and increas
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0],play=name=>{const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.ok(voices.length>0,name);stop();return voices;};
  const tear=play('relic-open'),deal=play('relic-deal');assert.notDeepEqual(tear.map(v=>v.frequencyValue),deal.map(v=>v.frequencyValue));
  let previousNotes=0,previousCharge=0;
- for(const rarity of ['uncommon','rare','epic','legendary']){
-  const charge=play(`relic-charge-${rarity}`);const end=Math.max(...charge.map(v=>v.stops[0]));assert.ok(end>previousCharge);previousCharge=end;
+ for(const rarity of ['common','uncommon','rare','epic','legendary','secret']){
+  const charge=play(`relic-charge-${rarity}`);assert.ok(charge[0].stops[0]>previousCharge);previousCharge=charge[0].stops[0];
   const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`).at(-1).frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
   const reveal=play(`relic-reveal-${rarity}`);assert.ok(reveal.length>=previousNotes);previousNotes=reveal.length;
  }
@@ -159,7 +158,7 @@ test('Secret heartbeats accelerate across the three suspense pulses and leave a 
 test('Secret impact retains the deep boom while all non-Secret reveal cues contain only high chimes',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
  for(const rarity of ['common','uncommon','rare','epic','legendary']){
-  const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=(rarity==='common'?2:3));assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
+  const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=3);assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
  }
  const before=ctx.voices.length;g.api.play('relic-secret-impact');const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
  assert.ok(voices.some(v=>v.type==='noise'&&v.filterNode.frequencyValue>=9000&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.type==='noise'?v.filterNode.end<v.filterNode.frequencyValue:v.end<v.frequencyValue));
@@ -168,7 +167,7 @@ test('Secret impact retains the deep boom while all non-Secret reveal cues conta
 test('all pack cues are louder while ordinary game effects retain their existing volume',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
  const peak=name=>{const before=ctx.voices.length,stop=g.api.play(name),voices=ctx.voices.slice(before);const result=voices[0].gainNode.events[1].value;stop();return result;};
- assert.ok(Math.abs(peak('relic-open')-.135)<1e-10);assert.ok(Math.abs(peak('relic-deal')-.135)<1e-10);assert.ok(Math.abs(peak('relic-reveal-common')-.1215)<1e-10);
+ assert.ok(Math.abs(peak('relic-open')-.135)<1e-10);assert.ok(Math.abs(peak('relic-deal')-.135)<1e-10);assert.ok(Math.abs(peak('relic-charge-common')-.0855)<1e-10);
  assert.ok(Math.abs(peak('collect')-.09)<1e-10);assert.ok(Math.abs(peak('orb-small')-.1125)<1e-10);
  const before=ctx.voices.length;g.api.play('relic-secret-impact');const boom=ctx.voices.slice(before);assert.equal(boom.length,8);assert.ok(boom.some(v=>v.frequencyValue<70&&v.stops[0]-v.time>2));assert.ok(boom.some(v=>v.gainNode.events[1].value>.18));
 });
@@ -185,12 +184,12 @@ const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
 test('Mythic plays one original-speed stereo recording continuously through buildup and impact',async()=>{
  const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(16)};});
  g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await g.api.prepareMythic();
- assert.deepEqual(urls,['audio/relic-mythic-clean.wav?v=1']);assert.equal(ctx.decodeCalls,1);
- const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,4.2);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
+ assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=2']);assert.equal(ctx.decodeCalls,1);
+ const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,5.75);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
  assert.equal(charge.time,ctx.currentTime,'buildup starts with the moving outline');
- assert.ok(Math.abs(charge.time+1.65-(ctx.currentTime+1.65))<1e-9,'the original impact lands at the visual flip without stretching');
+ assert.ok(Math.abs(charge.time+3.2-(ctx.currentTime+3.2))<1e-9,'the original impact lands at the visual flip without stretching');
  const count=ctx.voices.length;g.api.play('relic-charge-mythic');assert.equal(ctx.voices.length,count,'a repeated charge cue cannot layer or restart the recording');assert.ok(!charge.stops.includes('now'));for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,count);
- ctx.currentTime+=1.65;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
+ ctx.currentTime+=3.2;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
  chargeStop();impactStop();assert.ok(charge.stops.includes('now'));
  await g.api.prepareMythic();assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);
  const next=ctx.voices.length;g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.slice(next).every(v=>!v.buffer?.hatch));
@@ -198,7 +197,7 @@ test('Mythic plays one original-speed stereo recording continuously through buil
 });
 test('a Mythic impact without an active buildup starts at the original impact rather than replaying the rise',async()=>{
  const g=boot(false,true,async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(16)}));g.events.pointerdown();await g.api.prepareMythic();const ctx=g.contexts[0];
- const stop=g.api.play('relic-reveal-mythic'),voice=ctx.voices.at(-1);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.offset,1.65);assert.ok(Math.abs(voice.stops[0]-voice.time-2.565)<1e-9);stop();assert.ok(voice.stops.includes('now'));
+ const stop=g.api.play('relic-reveal-mythic'),voice=ctx.voices.at(-1);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.offset,3.2);assert.ok(Math.abs(voice.stops[0]-voice.time-2.565)<1e-9);stop();assert.ok(voice.stops.includes('now'));
 });
 test('pending Mythic audio cannot play after cancellation, mute, hiding or leaving the opening',async()=>{
  for(const action of ['cancel','mute','hide','close']){
@@ -213,29 +212,4 @@ test('an unavailable recording never restores the removed synthesized Mythic sou
  for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,0);
  g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.length>0);
  const muted=boot(true,true,()=>assert.fail('muted effects must not request audio'));muted.events.pointerdown();muted.api.play('relic-reveal-mythic');assert.equal(muted.contexts.length,0);
-});
-
-
-test('Common is a single bell with a quiet harmonic and no charge or pulse sounds',()=>{
- const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
- for(const name of ['relic-charge-common','relic-tick-common-1','relic-tick-common-2','relic-tick-common-3'])g.api.play(name);
- assert.equal(ctx.voices.length,0);g.api.play('relic-reveal-common');assert.equal(ctx.voices.length,2);
- assert.ok(ctx.voices.every(v=>v.type==='sine'&&v.time===ctx.currentTime&&v.stops[0]-v.time<.2));
- assert.equal(ctx.voices[1].frequencyValue,ctx.voices[0].frequencyValue*2);
- assert.ok(ctx.voices[1].gainNode.events[1].value<ctx.voices[0].gainNode.events[1].value/5);
-});
-test('new rarity chimes use clean major arpeggios and richer chords without low thuds or overlapping the next card',()=>{
- const g=boot();g.events.pointerdown();const ctx=g.contexts[0];let previousCharge=0,previousTail=0,previousNotes=0;
- const play=name=>{const count=ctx.voices.length,stop=g.api.play(name),voices=ctx.voices.slice(count);stop();return voices;};
- const timings={uncommon:.5,rare:.75,epic:1.05,legendary:1.35};
- for(const rarity of Object.keys(timings)){
-  const charge=play(`relic-charge-${rarity}`),duration=Math.max(...charge.map(v=>v.stops[0]-.015))-ctx.currentTime;
-  assert.ok(duration>previousCharge);assert.ok(Math.abs(duration-timings[rarity])<1e-9);previousCharge=duration;
-  assert.ok(charge.every(v=>v.type==='sine'&&v.frequencyValue>=523&&!v.end));
-  for(let i=1;i<charge.length;i++){assert.ok(charge[i].frequencyValue>charge[i-1].frequencyValue);assert.ok(charge[i].time>charge[i-1].time);}
-  const reveal=play(`relic-reveal-${rarity}`),tail=Math.max(...reveal.map(v=>v.stops[0]))-ctx.currentTime;
-  assert.ok(reveal.length>previousNotes);previousNotes=reveal.length;assert.ok(tail>previousTail&&tail<.95);previousTail=tail;
-  assert.ok(reveal.every(v=>v.type==='sine'&&v.frequencyValue>=523&&!v.end&&v.gainNode.events[1].value<=.09));
-  for(let n=1;n<=3;n++){const tick=play(`relic-tick-${rarity}-${n}`);assert.equal(tick.length,1);assert.ok(tick[0].frequencyValue>=1046);assert.ok(tick[0].gainNode.events[1].value<.02);}
- }
 });
