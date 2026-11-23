@@ -1,5 +1,5 @@
 3M+ Mythical Hatch excerpt supplied by the project owner.
-Source: ScreenRecording_11-22-2026 08-48-55_1.MOV.
-Buildup: 19.15–20.80 seconds, stretched to 3.2 seconds without changing pitch.
-Impact: 20.80–23.35 seconds, played at the card flip.
-Both clips normalized and encoded as mono MP3 for game playback.
+Source: ScreenRecording_11-22-2026 08-48-55_1.MOV, 19.15–23.35 seconds.
+One continuous 4.2-second stereo PCM WAV at the original 44.1 kHz sample rate.
+No time stretching, pitch changes, channel mixing, normalization, fades, or lossy re-encoding.
+Original impact begins 1.65 seconds into the clip; playback is scheduled so it coincides with the card flip.

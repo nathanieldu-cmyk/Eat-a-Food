@@ -39,10 +39,9 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
-  const mythicSamples = {
-    'relic-charge-mythic': {url:'audio/relic-mythic-buildup.mp3?v=1', buffer:null, promise:null},
-    'relic-reveal-mythic': {url:'audio/relic-mythic-impact.mp3?v=1', buffer:null, promise:null},
-  };
+  const mythicSample = {url:'audio/relic-mythic-clean.wav?v=1', buffer:null, promise:null};
+  const mythicImpactOffset = 1.65;
+  let mythicVoice = null;
   let unlocked = false;
   let muted = false;
   let packOpening = false;
@@ -50,6 +49,7 @@
 
   function stopVoice(voice) {
     if (!active.delete(voice)) return;
+    if (mythicVoice === voice) mythicVoice = null;
     try { voice.osc.stop(); } catch (_) {}
     voice.osc?.disconnect(); voice.filter?.disconnect(); voice.gain?.disconnect();
   }
@@ -79,44 +79,53 @@
     return noiseBuffer;
   }
 
-  // Decode both parts before the expanding-outline animation starts.
-  function loadMythicSample(name) {
-    const sample = mythicSamples[name];
-    if (sample.buffer) return Promise.resolve(sample.buffer);
-    if (!sample.promise && context && typeof fetch === 'function') {
+  // One lossless stereo excerpt: preserve the recording's speed and continuity.
+  function loadMythicSample() {
+    if (mythicSample.buffer) return Promise.resolve(mythicSample.buffer);
+    if (!mythicSample.promise && context && typeof fetch === 'function') {
       const decoder = context;
       const options = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? {signal:AbortSignal.timeout(5000)} : undefined;
-      sample.promise = fetch(sample.url, options)
+      mythicSample.promise = fetch(mythicSample.url, options)
         .then(response => { if (!response.ok) throw new Error('Hatch sound unavailable'); return response.arrayBuffer(); })
         .then(bytes => decoder.decodeAudioData(bytes))
-        .then(buffer => { sample.buffer = buffer; return buffer; })
+        .then(buffer => { mythicSample.buffer = buffer; return buffer; })
         .catch(() => null);
     }
-    return sample.promise || Promise.resolve(null);
+    return mythicSample.promise || Promise.resolve(null);
   }
   function prepareMythic() {
-    return wake() ? Promise.all(Object.keys(mythicSamples).map(loadMythicSample)) : null;
+    return wake() ? loadMythicSample() : null;
   }
   function playMythic(name, delay) {
+    const impactOnly = name === 'relic-reveal-mythic';
+    // The impact is already part of the active recording; never replay or splice it.
+    if (impactOnly && mythicVoice && active.has(mythicVoice)) {
+      const voice = mythicVoice;
+      return () => stopVoice(voice);
+    }
+    if (mythicVoice) stopVoice(mythicVoice);
     if (active.size >= 24) stopAll();
     const voice = {osc:null, gain:null};
-    active.add(voice);
+    mythicVoice = voice; active.add(voice);
     function start(buffer) {
       if (!active.has(voice) || muted || document.hidden) return;
       if (!buffer) { stopVoice(voice); return; }
       const source = context.createBufferSource(), gain = context.createGain();
       voice.osc = source; voice.gain = gain; source.buffer = buffer;
-      const at = context.currentTime + Math.max(0, delay);
-      gain.gain.setValueAtTime(.9, at);
+      const chargeSeconds = (window.GameRelicReveal?.revealTimings.mythic || 3200) / 1000;
+      const lead = impactOnly ? 0 : Math.max(0, chargeSeconds - mythicImpactOffset);
+      const offset = impactOnly ? mythicImpactOffset : 0;
+      const at = context.currentTime + Math.max(0, delay) + lead;
+      gain.gain.setValueAtTime(1, at);
       source.connect(gain); gain.connect(context.destination);
-      source.onended = () => { active.delete(voice); source.disconnect(); gain.disconnect(); };
-      source.start(at); source.stop(at + buffer.duration + .015);
+      source.onended = () => { active.delete(voice); if (mythicVoice === voice) mythicVoice = null; source.disconnect(); gain.disconnect(); };
+      source.start(at, offset); source.stop(at + buffer.duration - offset + .015);
     }
-    if (mythicSamples[name].buffer) start(mythicSamples[name].buffer); else loadMythicSample(name).then(start);
+    if (mythicSample.buffer) start(mythicSample.buffer); else loadMythicSample().then(start);
     return () => stopVoice(voice);
   }
   function play(name, delay = 0) {
-    if (mythicSamples[name]) return wake() ? playMythic(name, delay) : undefined;
+    if (name === 'relic-charge-mythic' || name === 'relic-reveal-mythic') return wake() ? playMythic(name, delay) : undefined;
     return playSynth(name, delay);
   }
 

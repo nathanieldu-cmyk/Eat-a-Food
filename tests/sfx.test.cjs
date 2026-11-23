@@ -17,10 +17,10 @@ function boot(muted = false, supported = true, sampleFetch = undefined) {
       this.voices.push(voice); return voice;
     }
     createBuffer(channels,length,sampleRate) {const data=new Float32Array(length),buffer={length,sampleRate,getChannelData:()=>data};this.buffers.push(buffer);return buffer;}
-    createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time){this.time=time;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
+    createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time,offset=0){this.time=time;this.offset=offset;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
     createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
-    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:bytes.byteLength===32?3.2:2.55,hatch:bytes.byteLength===32?'buildup':'impact'});}
+    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:4.2,numberOfChannels:2,hatch:'clean'});}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
@@ -181,17 +181,22 @@ test('Secret explosions layer filtered crack, debris and rolling noise over a de
 });
 
 const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
-test('Mythic uses only the recorded buildup and impact, decoded once and played in the two reveal phases',async()=>{
- const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(url.includes('buildup')?32:16)};});
+test('Mythic plays one original-speed stereo recording continuously through buildup and impact',async()=>{
+ const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(16)};});
  g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await g.api.prepareMythic();
- assert.deepEqual(urls,['audio/relic-mythic-buildup.mp3?v=1','audio/relic-mythic-impact.mp3?v=1']);assert.equal(ctx.decodeCalls,2);
- const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'buildup');assert.equal(charge.time,1);assert.equal(charge.buffer.duration,3.2);
- const count=ctx.voices.length;for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,count,'old Mythic ticks are removed');
- ctx.currentTime+=3.2;const impactStop=g.api.play('relic-reveal-mythic'),impact=ctx.voices.at(-1);assert.equal(impact.buffer.hatch,'impact');assert.equal(impact.time,4.2);assert.equal(impact.gainNode.events[0].value,.9);
- chargeStop();impactStop();assert.ok(charge.stops.includes('now'));assert.ok(impact.stops.includes('now'));
- await g.api.prepareMythic();assert.equal(urls.length,2);assert.equal(ctx.decodeCalls,2);
+ assert.deepEqual(urls,['audio/relic-mythic-clean.wav?v=1']);assert.equal(ctx.decodeCalls,1);
+ const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,4.2);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
+ assert.ok(Math.abs(charge.time+1.65-(ctx.currentTime+3.2))<1e-9,'the original impact lands at the visual flip without stretching');
+ const count=ctx.voices.length;for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,count);
+ ctx.currentTime+=3.2;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
+ chargeStop();impactStop();assert.ok(charge.stops.includes('now'));
+ await g.api.prepareMythic();assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);
  const next=ctx.voices.length;g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.slice(next).every(v=>!v.buffer?.hatch));
  const secret=ctx.voices.length;g.api.play('relic-secret-impact');assert.ok(ctx.voices.slice(secret).every(v=>!v.buffer?.hatch));
+});
+test('a Mythic impact without an active buildup starts at the original impact rather than replaying the rise',async()=>{
+ const g=boot(false,true,async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(16)}));g.events.pointerdown();await g.api.prepareMythic();const ctx=g.contexts[0];
+ const stop=g.api.play('relic-reveal-mythic'),voice=ctx.voices.at(-1);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.offset,1.65);assert.ok(Math.abs(voice.stops[0]-voice.time-2.565)<1e-9);stop();assert.ok(voice.stops.includes('now'));
 });
 test('pending Mythic audio cannot play after cancellation, mute, hiding or leaving the opening',async()=>{
  for(const action of ['cancel','mute','hide','close']){
