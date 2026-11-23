@@ -20,7 +20,7 @@ function boot(muted = false, supported = true, sampleFetch = undefined) {
     createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time,offset=0){this.time=time;this.offset=offset;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
     createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
-    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:4.85,numberOfChannels:2,hatch:'clean'});}
+    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve(bytes.byteLength===64?{duration:12.78,numberOfChannels:2,secret:'reference'}:{duration:4.85,numberOfChannels:2,hatch:'clean'});}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
@@ -117,52 +117,37 @@ test('relic openings have distinct tear, deal, rising charges, beats and increas
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0],play=name=>{const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.ok(voices.length>0,name);stop();return voices;};
  const tear=play('relic-open'),deal=play('relic-deal');assert.notDeepEqual(tear.map(v=>v.frequencyValue),deal.map(v=>v.frequencyValue));
  let previousNotes=0,previousCharge=0;
- for(const rarity of ['common','uncommon','rare','epic','legendary','secret']){
+ for(const rarity of ['common','uncommon','rare','epic','legendary']){
   const charge=play(`relic-charge-${rarity}`);assert.ok(charge[0].stops[0]>previousCharge);previousCharge=charge[0].stops[0];
   const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`).at(-1).frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
   const reveal=play(`relic-reveal-${rarity}`);assert.ok(reveal.length>=previousNotes);previousNotes=reveal.length;
  }
 });
 test('pack sound handles stop only their own voices; mute and hidden tabs silence every relic cue',()=>{
- const g=boot();g.events.pointerdown();const ctx=g.contexts[0],stop=g.api.play('relic-charge-secret');const charge=[...ctx.voices];g.api.play('collect');stop();stop();assert.ok(charge.every(v=>v.stops.includes('now')));assert.ok(ctx.voices.slice(charge.length).every(v=>!v.stops.includes('now')));
- g.api.play('relic-tick-secret-3');g.button.click();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));const before=ctx.voices.length;g.api.play('relic-reveal-secret');assert.equal(ctx.voices.length,before);
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0],stop=g.api.play('relic-charge-rare');const charge=[...ctx.voices];g.api.play('collect');stop();stop();assert.ok(charge.every(v=>v.stops.includes('now')));assert.ok(ctx.voices.slice(charge.length).every(v=>!v.stops.includes('now')));
+ g.api.play('relic-tick-rare-3');g.button.click();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));const before=ctx.voices.length;g.api.play('relic-reveal-rare');assert.equal(ctx.voices.length,before);
  g.button.click();g.document.hidden=true;g.events.visibilitychange();g.api.play('relic-open');assert.equal(ctx.voices.length,before);
 });
 
 test('pack audio mode stops existing game effects and admits only pack cues until completion',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];g.api.play('collect',.6);const existing=[...ctx.voices];g.api.setPackOpening(true);assert.ok(existing.every(v=>v.stops.includes('now')));
  const before=ctx.voices.length;for(const name of ['start','collect','death','orb-xs','bento'])g.api.play(name);assert.equal(ctx.voices.length,before);
- g.api.play('relic-open');g.api.play('relic-charge-secret');g.api.play('relic-tick-secret-1');g.api.play('relic-reveal-secret');assert.ok(ctx.voices.length>before);
+ g.api.play('relic-open');g.api.play('relic-charge-rare');g.api.play('relic-tick-rare-1');g.api.play('relic-reveal-rare');assert.ok(ctx.voices.length>before);
  g.api.setPackOpening(false);const complete=ctx.voices.length;g.api.play('collect');assert.equal(ctx.voices.length,complete+3);
  const muted=boot(true);muted.events.pointerdown();muted.api.setPackOpening(true);muted.api.play('relic-open');assert.equal(muted.contexts.length,0);muted.api.setPackOpening(false);assert.equal(muted.storage.get('eatAFoodSfxMuted'),'true');
 });
 
-test('Secret cinematic rumble and impact have distinct layers and remain part of pack-only audio',()=>{
- const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const before=ctx.voices.length;const stop=g.api.play('relic-secret-blackout');const rumble=ctx.voices.slice(before);assert.equal(rumble.length,4);assert.ok(rumble.some(v=>v.frequencyValue<60));
- const impactStart=ctx.voices.length;g.api.play('relic-secret-impact');const impact=ctx.voices.slice(impactStart);assert.equal(impact.length,8);assert.ok(impact.some(v=>v.frequencyValue<60));stop();assert.ok(rumble.every(v=>v.stops.includes('now')));
-});
 
-test('Secret blackout is immediate with a downward whoosh; the charge grows for several seconds',()=>{
- const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0],start=ctx.currentTime;
- const stop=g.api.play('relic-secret-blackout');const blackout=[...ctx.voices];assert.ok(blackout.some(v=>v.time===start));assert.ok(blackout.every(v=>v.end<v.frequencyValue));assert.ok(blackout.some(v=>v.frequencyValue>=980&&v.end<=60));stop();
- const before=ctx.voices.length;g.api.play('relic-charge-secret');const charge=ctx.voices.slice(before);assert.equal(charge.length,4);assert.ok(charge.every(v=>v.end>v.frequencyValue));assert.ok(charge.every(v=>v.gainNode.events[1].time-v.time>=3));assert.ok(charge.every(v=>v.stops[0]-start<4.8));
-});
-test('Secret heartbeats accelerate across the three suspense pulses and leave a hush before impact',()=>{
- const g=boot();g.events.pointerdown();const ctx=g.contexts[0],counts=[],intervals=[];
- for(let pulse=1;pulse<=3;pulse++){
-  const before=ctx.voices.length;const stop=g.api.play(`relic-tick-secret-${pulse}`);const voices=ctx.voices.slice(before),heartbeats=voices.filter(v=>v.frequencyValue<100);
-  counts.push(heartbeats.length);intervals.push(heartbeats[1].time-heartbeats[0].time);assert.ok(voices.every(v=>v.stops[0]-ctx.currentTime<1.1));stop();
- }
- assert.deepEqual(counts,[2,4,6]);assert.ok(intervals[0]>intervals[1]&&intervals[1]>intervals[2]);
-});
 
-test('Secret impact retains the deep boom while all non-Secret reveal cues contain only high chimes',()=>{
+
+
+
+test('ordinary relic reveals keep their high chimes',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
  for(const rarity of ['common','uncommon','rare','epic','legendary']){
   const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=3);assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
  }
- const before=ctx.voices.length;g.api.play('relic-secret-impact');const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
- assert.ok(voices.some(v=>v.type==='noise'&&v.filterNode.frequencyValue>=9000&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.type==='noise'?v.filterNode.end<v.filterNode.frequencyValue:v.end<v.frequencyValue));
+
 });
 
 test('all pack cues are louder while ordinary game effects retain their existing volume',()=>{
@@ -170,16 +155,10 @@ test('all pack cues are louder while ordinary game effects retain their existing
  const peak=name=>{const before=ctx.voices.length,stop=g.api.play(name),voices=ctx.voices.slice(before);const result=voices[0].gainNode.events[1].value;stop();return result;};
  assert.ok(Math.abs(peak('relic-open')-.135)<1e-10);assert.ok(Math.abs(peak('relic-deal')-.135)<1e-10);assert.ok(Math.abs(peak('relic-charge-common')-.0855)<1e-10);
  assert.ok(Math.abs(peak('collect')-.09)<1e-10);assert.ok(Math.abs(peak('orb-small')-.1125)<1e-10);
- const before=ctx.voices.length;g.api.play('relic-secret-impact');const boom=ctx.voices.slice(before);assert.equal(boom.length,8);assert.ok(boom.some(v=>v.frequencyValue<70&&v.stops[0]-v.time>2));assert.ok(boom.some(v=>v.gainNode.events[1].value>.18));
+
 });
 
-test('Secret explosions layer filtered crack, debris and rolling noise over a deep thud, using one cached buffer',()=>{
- const g=boot();g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0];const stop=g.api.play('relic-secret-impact');
- const noise=ctx.voices.filter(v=>v.type==='noise');assert.equal(noise.length,5);assert.ok(noise.every(v=>v.filterNode.type==='lowpass'&&v.filterNode.end<v.filterNode.frequencyValue));
- assert.ok(noise.some(v=>v.stops[0]-v.time>2));assert.ok(noise.some(v=>v.time-ctx.currentTime>=.19));assert.equal(ctx.buffers.length,1);assert.ok(ctx.buffers[0].getChannelData(0).some(v=>v!==0));assert.ok(ctx.buffers[0].getChannelData(0).every(v=>v>=-1&&v<=1));
- stop();assert.ok(noise.every(v=>v.stops.includes('now')&&v.disconnected&&v.filterNode.disconnected));g.api.play('relic-secret-impact');assert.equal(ctx.buffers.length,1);
- g.button.click();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));
-});
+
 
 const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
 test('Mythic plays one original-speed stereo recording continuously through buildup and impact',async()=>{
@@ -228,4 +207,40 @@ test('Mythic has a silent lead-in followed by the complete untouched original re
  assert.deepEqual(refined.subarray(frame(.65)),original,'the entire original buildup, boom and tail are unprocessed');
  assert.deepEqual(refined.subarray(frame(2.3)),original.subarray(frame(1.65)),'the original boom is preserved after moving the audio 100ms later');
  for(let offset=0;offset<refined.length;offset+=2)assert.ok(Math.abs(refined.readInt16LE(offset))<32767,'no clipped samples');
+});
+
+
+test('Secret uses the supplied stereo recording once for blackout, pack animation and reward burst',async()=>{
+ const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(64)};});g.events.pointerdown();
+ await g.api.prepareSecret();const ctx=g.contexts[0];assert.deepEqual(urls,['audio/relic-secret-reference.wav?v=1']);assert.equal(ctx.decodeCalls,1);
+ const stop=g.api.play('relic-secret-blackout'),voice=ctx.voices.at(-1);assert.equal(voice.buffer.secret,'reference');assert.equal(voice.buffer.duration,12.78);assert.equal(voice.buffer.numberOfChannels,2);assert.equal(voice.offset,0);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.gainNode.events[0].value,1);
+ const count=ctx.voices.length;g.api.play('relic-charge-secret');for(let pulse=1;pulse<=3;pulse++)g.api.play(`relic-tick-secret-${pulse}`);assert.equal(ctx.voices.length,count,'no old synthesized heartbeat or charge layers');
+ ctx.currentTime+=10.48;g.api.play('relic-secret-impact');assert.equal(ctx.voices.length,count,'the recorded reward burst is not played twice');assert.ok(!voice.stops.includes('now'));
+ await g.api.prepareSecret();assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);stop();assert.ok(voice.stops.includes('now'));
+ const next=ctx.voices.length;g.api.play('relic-secret-blackout');assert.equal(ctx.voices.length,next+1,'another Secret starts the complete recording again');g.button.click();assert.ok(ctx.voices.at(-1).stops.includes('now'));
+});
+test('Secret reveal audio can resume at the recorded burst without replaying the blackout',async()=>{
+ const g=boot(false,true,async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(64)}));g.events.pointerdown();await g.api.prepareSecret();const ctx=g.contexts[0];
+ const stop=g.api.play('relic-secret-impact'),voice=ctx.voices.at(-1);assert.equal(voice.offset,10.48);assert.equal(voice.time,ctx.currentTime);assert.ok(Math.abs(voice.stops[0]-voice.time-2.315)<1e-9);stop();assert.ok(voice.stops.includes('now'));
+});
+test('pending Secret audio respects cancellation, muting, hidden tabs and closing the opening',async()=>{
+ for(const action of ['cancel','mute','hide','close']){
+  let resolve;const g=boot(false,true,()=>new Promise(done=>{resolve=done;}));g.events.pointerdown();g.api.prepareSecret();const ctx=g.contexts[0],stop=g.api.play('relic-secret-blackout');
+  if(action==='cancel'||action==='close')stop();if(action==='mute')g.button.click();if(action==='hide'){g.document.hidden=true;g.events.visibilitychange();}if(action==='close')g.api.setPackOpening(false);
+  resolve({ok:true,arrayBuffer:async()=>new ArrayBuffer(64)});await flushSample();assert.equal(ctx.voices.length,0,action);
+ }
+ const muted=boot(true,true,()=>assert.fail('muted audio must not be fetched'));muted.events.pointerdown();assert.equal(muted.api.prepareSecret(),null);muted.api.play('relic-secret-blackout');assert.equal(muted.contexts.length,0);
+});
+test('failed Secret recordings remain silent rather than restoring the removed synthetic sounds',async()=>{
+ const g=boot(false,true,async()=>({ok:false}));g.events.pointerdown();await g.api.prepareSecret();
+ for(const name of ['relic-secret-blackout','relic-charge-secret','relic-tick-secret-1','relic-tick-secret-2','relic-tick-secret-3','relic-secret-impact'])g.api.play(name);
+ await flushSample();assert.equal(g.contexts[0].voices.length,0);g.api.play('relic-reveal-rare');assert.ok(g.contexts[0].voices.length>0);
+});
+test('Secret reference asset has the full scene duration, a louder blackout and no clipped samples',()=>{
+ const bytes=fs.readFileSync(path.join(root,'audio/relic-secret-reference.wav'));let format,data;
+ for(let pos=12;pos+8<=bytes.length;){const size=bytes.readUInt32LE(pos+4),id=bytes.toString('ascii',pos,pos+4);if(id==='fmt ')format=bytes.subarray(pos+8,pos+8+size);if(id==='data')data=bytes.subarray(pos+8,pos+8+size);pos+=8+size+(size%2);}
+ assert.ok(format&&data);assert.equal(format.readUInt16LE(0),1);assert.equal(format.readUInt16LE(2),2);assert.equal(format.readUInt32LE(4),44100);assert.equal(format.readUInt16LE(14),16);assert.equal(data.length,Math.round(12.78*44100)*4);
+ let blackoutEnergy=0;const blackoutBytes=Math.round(1.6*44100)*4;
+ for(let i=0;i<data.length;i+=2){const sample=data.readInt16LE(i)/32768;assert.ok(Math.abs(sample)<.999,'no clipping');if(i<blackoutBytes)blackoutEnergy+=sample*sample;}
+ assert.ok(Math.sqrt(blackoutEnergy/(blackoutBytes/2))>.1,'blackout is boosted above its original level');
 });

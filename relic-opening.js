@@ -1,5 +1,5 @@
 (() => {
-  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:2500,secret:4800};
+  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:2500,secret:10480};
   const rarityOrder = Object.keys(revealTimings);
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false, prepareReveal = null} = {}) {
     let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null, batch = [], packNumber = 1, packTotal = 1;
@@ -105,6 +105,7 @@
   const secretScene = root.querySelector('.secret-reveal');
   const secretCard = secretScene.querySelector('.secret-card');
   const secretTitle = secretScene.querySelector('#secret-reveal-title');
+  secretScene.style.setProperty('--secret-reveal-duration', revealTimings.secret+'ms');
   let shownSecretIndex = null, renderedPackNumber = 0;
   let returnFocus = null, previousCount = 0, previousPulse = 0, previousPhase = 'closed', inerted = [], soundStops = [];
   const cue = name => { const stop = window.GameSfx?.play(name); if (typeof stop === 'function') soundStops.push(stop); };
@@ -126,6 +127,7 @@
         window.GameSfx?.setPackOpening?.(true);
         returnFocus = document.activeElement;
       }
+      if (state.rewards.some(key=>key.startsWith('secret:'))) window.GameSfx?.prepareSecret?.();
       previousCount = 0; previousPulse = 0; previousPhase = 'closed'; shownSecretIndex = null; renderedPackNumber = state.packNumber;
       cards.scrollLeft = 0;
       cards.innerHTML = state.rewards.map((id, index) => {
@@ -194,7 +196,7 @@
       const card = cards.querySelector(`[data-card-index="${state.revealingIndex}"]`);
       if (card && cards.scrollWidth > cards.clientWidth) cards.scrollTo({left:cards.scrollLeft+card.getBoundingClientRect().left-cards.getBoundingClientRect().left,behavior:'smooth'});
     }
-    if (state.phase === 'revealing' && active.rarity !== 'mythic' && state.pulse > previousPulse) cue(`relic-tick-${active.rarity}-${state.pulse}`);
+    if (state.phase === 'revealing' && active.rarity !== 'mythic' && active.rarity !== 'secret' && state.pulse > previousPulse) cue(`relic-tick-${active.rarity}-${state.pulse}`);
     if (state.revealed.length > previousCount) {
       const item = api.getRelic(state.rewards[state.revealed.at(-1)]);
       cue(item.rarity === 'secret' ? 'relic-secret-impact' : `relic-reveal-${item.rarity}`);
@@ -202,7 +204,7 @@
     if (state.phase === 'complete' && previousPhase !== 'complete') { (state.packNumber === state.packTotal ? action : dialog).focus({preventScroll: true}); }
     previousPulse = state.pulse;
     previousCount = state.revealed.length; previousPhase = state.phase;
-  }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, prepareReveal: rarity => rarity === 'mythic' ? window.GameSfx?.prepareMythic?.() : null});
+  }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, prepareReveal: rarity => rarity === 'mythic' ? window.GameSfx?.prepareMythic?.() : rarity === 'secret' ? window.GameSfx?.prepareSecret?.() : null});
   dialog.addEventListener('click', controller.openPack);
   skip.addEventListener('click', () => {
     if (!controller.snapshot().canSkip) return;

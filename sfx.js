@@ -14,34 +14,22 @@
   // Original synthesized pack tear, card shuffle, rising tension, and rarity fanfares.
   sounds['relic-open'] = [[92,.24,0,'triangle',370],[1700,.07,.04,'triangle',320],[2200,.08,.14,'triangle',460],[196,.4,.22,'sine',392]];
   sounds['relic-deal'] = [[740,.09,0,'triangle',210],[880,.09,.13,'triangle',250],[1040,.1,.26,'triangle',300]];
-  // A physical crash: broadband crack and debris over a falling thud and rumble.
-  // For noise layers the frequency values control a low-pass filter cutoff.
-  const revealBoom = [[110,.7,0,'sine',28,1.45,.003],[49,2.35,0,'sine',24,1.5,.009],[9500,.16,0,'noise',2200,.85,.002],[3200,.82,.012,'noise',95,1,.004],[170,1.05,.006,'triangle',42,.62,.002],[760,2.2,.035,'noise',55,.68,.012],[1150,.38,.19,'noise',160,.24,.002],[450,.45,.48,'noise',70,.16,.003]];
   const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
   const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
   for (const [rank,rarity] of relicRarities.entries()) {
-    if (rarity === 'mythic') continue; // Mythics use only the recorded buildup and impact.
+    if (rarity === 'mythic' || rarity === 'secret') continue; // Recorded reveals have no synthesized layers.
     sounds[`relic-charge-${rarity}`] = [[70+rank*9,.3+rank*.4,0,'triangle',150+rank*30],[180+rank*22,.25+rank*.3,.08,'sine',350+rank*75]];
     for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[95+rank*10,.13,0,'triangle',55],[360+rank*45+pulse*90,.10+pulse*.02,.025,'sine',430+rank*55+pulse*110]];
     sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
   }
-  // A sudden pitch collapse marks the blackout, then a slow riser and
-  // accelerating double heartbeats build toward a brief hush before the flip.
-  sounds['relic-secret-blackout'] = [[980,.40,0,'triangle',60,.32],[150,.85,0,'sine',34,1.15],[45,1.4,.02,'triangle',28,.65],[1400,.80,.04,'sine',200,.20]];
-  sounds['relic-charge-secret'] = [[46,4.35,0,'sine',68,.75,3.2],[93,4.25,0,'triangle',196,.22,3.4],[185,4.10,.2,'sine',740,.35,3.7],[392,3.4,.65,'sine',1568,.18,3.1]];
-  for (let pulse=1;pulse<=3;pulse++) {
-    const beats = pulse===1 ? [0,.22] : pulse===2 ? [0,.16,.38,.52] : [0,.11,.23,.34,.46,.57];
-    sounds[`relic-tick-secret-${pulse}`] = beats.map((offset,index)=>[index%2?65:84,.16,offset,'sine',34,index%2?.75:1]);
-    sounds[`relic-tick-secret-${pulse}`].push([280+pulse*120,.25,beats.at(-1)+.03,'triangle',620+pulse*220,.22,.12]);
-  }
-  sounds['relic-secret-impact'] = revealBoom;
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
   const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=10', buffer:null, promise:null};
   const mythicImpactOffset = 2.3;
-  let mythicVoice = null;
+  let mythicVoice = null, secretVoice = null;
+  const secretSample = {url:'audio/relic-secret-reference.wav?v=1', buffer:null, promise:null};
   let unlocked = false;
   let muted = false;
   let packOpening = false;
@@ -50,6 +38,7 @@
   function stopVoice(voice) {
     if (!active.delete(voice)) return;
     if (mythicVoice === voice) mythicVoice = null;
+    if (secretVoice === voice) secretVoice = null;
     try { voice.osc.stop(); } catch (_) {}
     voice.osc?.disconnect(); voice.filter?.disconnect(); voice.gain?.disconnect();
   }
@@ -79,20 +68,22 @@
     return noiseBuffer;
   }
 
-  // A quiet lead-in followed by the untouched original stereo recording.
-  function loadMythicSample() {
-    if (mythicSample.buffer) return Promise.resolve(mythicSample.buffer);
-    if (!mythicSample.promise && context && typeof fetch === 'function') {
+  // Decode and cache the stereo recordings before their visual reveals begin.
+  function loadRecordedSample(sample) {
+    if (sample.buffer) return Promise.resolve(sample.buffer);
+    if (!sample.promise && context && typeof fetch === 'function') {
       const decoder = context;
       const options = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? {signal:AbortSignal.timeout(5000)} : undefined;
-      mythicSample.promise = fetch(mythicSample.url, options)
+      sample.promise = fetch(sample.url, options)
         .then(response => { if (!response.ok) throw new Error('Hatch sound unavailable'); return response.arrayBuffer(); })
         .then(bytes => decoder.decodeAudioData(bytes))
-        .then(buffer => { mythicSample.buffer = buffer; return buffer; })
+        .then(buffer => { sample.buffer = buffer; return buffer; })
         .catch(() => null);
     }
-    return mythicSample.promise || Promise.resolve(null);
+    return sample.promise || Promise.resolve(null);
   }
+  function loadMythicSample() { return loadRecordedSample(mythicSample); }
+  function prepareSecret() { return wake() ? loadRecordedSample(secretSample) : null; }
   function prepareMythic() {
     return wake() ? loadMythicSample() : null;
   }
@@ -122,7 +113,27 @@
     if (mythicSample.buffer) start(mythicSample.buffer); else loadMythicSample().then(start);
     return () => stopVoice(voice);
   }
+  function playSecret(name, delay) {
+    // Blackout, charge and final reveal all belong to one continuous recording.
+    if (secretVoice && active.has(secretVoice)) { const voice = secretVoice; return () => stopVoice(voice); }
+    if (active.size >= 24) stopAll();
+    const voice = {osc:null, gain:null}; secretVoice = voice; active.add(voice);
+    function start(buffer) {
+      if (!active.has(voice) || muted || document.hidden) return;
+      if (!buffer) { stopVoice(voice); return; }
+      const source = context.createBufferSource(), gain = context.createGain();
+      voice.osc = source; voice.gain = gain; source.buffer = buffer;
+      const offset = name === 'relic-secret-impact' ? (window.GameRelicReveal?.revealTimings?.secret || 10480) / 1000 : 0;
+      const at = context.currentTime + Math.max(0, delay);
+      gain.gain.setValueAtTime(1, at); source.connect(gain); gain.connect(context.destination);
+      source.onended = () => { active.delete(voice); if (secretVoice === voice) secretVoice = null; source.disconnect(); gain.disconnect(); };
+      source.start(at, offset); source.stop(at + buffer.duration - offset + .015);
+    }
+    if (secretSample.buffer) start(secretSample.buffer); else loadRecordedSample(secretSample).then(start);
+    return () => stopVoice(voice);
+  }
   function play(name, delay = 0) {
+    if (['relic-secret-blackout','relic-charge-secret','relic-secret-impact'].includes(name)) return wake() ? playSecret(name, delay) : undefined;
     if (name === 'relic-charge-mythic' || name === 'relic-reveal-mythic') return wake() ? playMythic(name, delay) : undefined;
     return playSynth(name, delay);
   }
@@ -195,6 +206,6 @@
     } else wake();
   });
   window.addEventListener('pagehide', stopAll);
-  window.GameSfx = {play, prepareMythic, setPackOpening(active) { packOpening = !!active; if (packOpening) { stopAll(); lastOrb.clear(); prepareMythic(); } }};
+  window.GameSfx = {play, prepareMythic, prepareSecret, setPackOpening(active) { packOpening = !!active; if (packOpening) { stopAll(); lastOrb.clear(); prepareMythic(); } }};
   render();
 })();
