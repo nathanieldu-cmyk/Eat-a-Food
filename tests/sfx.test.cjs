@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {test} = require('node:test');
 const root = path.resolve(__dirname, '..');
-function boot(muted = false, supported = true, sampleFetch = undefined, timingsOverride = null) {
+function boot(muted = false, supported = true, sampleFetch = undefined) {
   const events = {}, windowEvents = {}, contexts = [];
   const button = {addEventListener(k,fn) {this[k]=fn;}, setAttribute(k,v) {this[k]=v;}};
   const storage = new Map([['eatAFoodSfxMuted', String(muted)]]);
@@ -26,7 +26,6 @@ function boot(muted = false, supported = true, sampleFetch = undefined, timingsO
   }
   const window = {AudioContext:supported ? AudioContext : undefined, addEventListener(k,fn) {windowEvents[k]=fn;}};
   vm.runInNewContext(fs.readFileSync(path.join(root,'relic-opening.js'),'utf8'), {window});
-  if (timingsOverride) window.GameRelicReveal.revealTimings = timingsOverride;
   vm.runInNewContext(fs.readFileSync(path.join(root,'sfx.js'),'utf8'), {window,document,fetch:sampleFetch,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}});
   return {events,windowEvents,button,storage,document,contexts,api:window.GameSfx};
 }
@@ -118,8 +117,8 @@ test('relic openings have distinct tear, deal, rising charges, beats and increas
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0],play=name=>{const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.ok(voices.length>0,name);stop();return voices;};
  const tear=play('relic-open'),deal=play('relic-deal');assert.notDeepEqual(tear.map(v=>v.frequencyValue),deal.map(v=>v.frequencyValue));
  let previousNotes=0,previousCharge=0;
- for(const rarity of ['common','uncommon','rare','epic','legendary','secret']){
-  const charge=play(`relic-charge-${rarity}`);assert.ok(charge[0].stops[0]>previousCharge);previousCharge=charge[0].stops[0];
+ for(const rarity of ['uncommon','rare','epic','legendary']){
+  const charge=play(`relic-charge-${rarity}`);const end=Math.max(...charge.map(v=>v.stops[0]));assert.ok(end>previousCharge);previousCharge=end;
   const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`).at(-1).frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
   const reveal=play(`relic-reveal-${rarity}`);assert.ok(reveal.length>=previousNotes);previousNotes=reveal.length;
  }
@@ -160,7 +159,7 @@ test('Secret heartbeats accelerate across the three suspense pulses and leave a 
 test('Secret impact retains the deep boom while all non-Secret reveal cues contain only high chimes',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
  for(const rarity of ['common','uncommon','rare','epic','legendary']){
-  const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=3);assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
+  const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=(rarity==='common'?2:3));assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
  }
  const before=ctx.voices.length;g.api.play('relic-secret-impact');const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
  assert.ok(voices.some(v=>v.type==='noise'&&v.filterNode.frequencyValue>=9000&&v.stops[0]-v.time<.2));assert.ok(voices.some(v=>v.frequencyValue<60&&v.stops[0]-v.time>1.5));assert.ok(voices.every(v=>v.type==='noise'?v.filterNode.end<v.filterNode.frequencyValue:v.end<v.frequencyValue));
@@ -169,7 +168,7 @@ test('Secret impact retains the deep boom while all non-Secret reveal cues conta
 test('all pack cues are louder while ordinary game effects retain their existing volume',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
  const peak=name=>{const before=ctx.voices.length,stop=g.api.play(name),voices=ctx.voices.slice(before);const result=voices[0].gainNode.events[1].value;stop();return result;};
- assert.ok(Math.abs(peak('relic-open')-.135)<1e-10);assert.ok(Math.abs(peak('relic-deal')-.135)<1e-10);assert.ok(Math.abs(peak('relic-charge-common')-.0855)<1e-10);
+ assert.ok(Math.abs(peak('relic-open')-.135)<1e-10);assert.ok(Math.abs(peak('relic-deal')-.135)<1e-10);assert.ok(Math.abs(peak('relic-reveal-common')-.1215)<1e-10);
  assert.ok(Math.abs(peak('collect')-.09)<1e-10);assert.ok(Math.abs(peak('orb-small')-.1125)<1e-10);
  const before=ctx.voices.length;g.api.play('relic-secret-impact');const boom=ctx.voices.slice(before);assert.equal(boom.length,8);assert.ok(boom.some(v=>v.frequencyValue<70&&v.stops[0]-v.time>2));assert.ok(boom.some(v=>v.gainNode.events[1].value>.18));
 });
@@ -217,27 +216,26 @@ test('an unavailable recording never restores the removed synthesized Mythic sou
 });
 
 
-test('shorter ordinary rarity sounds preserve their tones, sweeps and levels in increasing duration order',()=>{
- const baseline={common:650,uncommon:900,rare:1300,epic:1850,legendary:2450};
- const original=boot(false,true,undefined,baseline),shorter=boot();original.events.pointerdown();shorter.events.pointerdown();
- const context=g=>g.contexts[0];
- const play=(g,name)=>{const ctx=context(g),count=ctx.voices.length,stop=g.api.play(name),voices=ctx.voices.slice(count);stop();return voices;};
- for(const kind of ['charge','reveal']){
-  let previous=0;
-  for(const rarity of Object.keys(baseline)){
-   const old=play(original,`relic-${kind}-${rarity}`),now=play(shorter,`relic-${kind}-${rarity}`);
-   const signature=voices=>voices.map(v=>[v.type,v.frequencyValue,v.end,v.gainNode.events[1].value]);
-   assert.deepEqual(signature(now),signature(old),`${rarity} ${kind} keeps its sound`);
-   const duration=voices=>Math.max(...voices.map(v=>v.stops[0]))-1;
-   const total=duration(now);assert.ok(total<duration(old),`${rarity} ${kind} is shorter`);assert.ok(total>previous,`${rarity} ${kind} remains longer than lower rarities`);previous=total;
-   assert.ok(now.every(v=>v.stops[0]>v.gainNode.events[2].time));
-  }
+test('Common is a single bell with a quiet harmonic and no charge or pulse sounds',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
+ for(const name of ['relic-charge-common','relic-tick-common-1','relic-tick-common-2','relic-tick-common-3'])g.api.play(name);
+ assert.equal(ctx.voices.length,0);g.api.play('relic-reveal-common');assert.equal(ctx.voices.length,2);
+ assert.ok(ctx.voices.every(v=>v.type==='sine'&&v.time===ctx.currentTime&&v.stops[0]-v.time<.2));
+ assert.equal(ctx.voices[1].frequencyValue,ctx.voices[0].frequencyValue*2);
+ assert.ok(ctx.voices[1].gainNode.events[1].value<ctx.voices[0].gainNode.events[1].value/5);
+});
+test('new rarity chimes use clean major arpeggios and richer chords without low thuds or overlapping the next card',()=>{
+ const g=boot();g.events.pointerdown();const ctx=g.contexts[0];let previousCharge=0,previousTail=0,previousNotes=0;
+ const play=name=>{const count=ctx.voices.length,stop=g.api.play(name),voices=ctx.voices.slice(count);stop();return voices;};
+ const timings={uncommon:.5,rare:.75,epic:1.05,legendary:1.35};
+ for(const rarity of Object.keys(timings)){
+  const charge=play(`relic-charge-${rarity}`),duration=Math.max(...charge.map(v=>v.stops[0]-.015))-ctx.currentTime;
+  assert.ok(duration>previousCharge);assert.ok(Math.abs(duration-timings[rarity])<1e-9);previousCharge=duration;
+  assert.ok(charge.every(v=>v.type==='sine'&&v.frequencyValue>=523&&!v.end));
+  for(let i=1;i<charge.length;i++){assert.ok(charge[i].frequencyValue>charge[i-1].frequencyValue);assert.ok(charge[i].time>charge[i-1].time);}
+  const reveal=play(`relic-reveal-${rarity}`),tail=Math.max(...reveal.map(v=>v.stops[0]))-ctx.currentTime;
+  assert.ok(reveal.length>previousNotes);previousNotes=reveal.length;assert.ok(tail>previousTail&&tail<.95);previousTail=tail;
+  assert.ok(reveal.every(v=>v.type==='sine'&&v.frequencyValue>=523&&!v.end&&v.gainNode.events[1].value<=.09));
+  for(let n=1;n<=3;n++){const tick=play(`relic-tick-${rarity}-${n}`);assert.equal(tick.length,1);assert.ok(tick[0].frequencyValue>=1046);assert.ok(tick[0].gainNode.events[1].value<.02);}
  }
- for(const rarity of Object.keys(baseline))for(let pulse=1;pulse<=3;pulse++){
-  const old=play(original,`relic-tick-${rarity}-${pulse}`),now=play(shorter,`relic-tick-${rarity}-${pulse}`);
-  assert.deepEqual(now.map(v=>[v.type,v.frequencyValue,v.end]),old.map(v=>[v.type,v.frequencyValue,v.end]));
-  assert.ok(now.every((v,index)=>v.stops[0]-v.time<old[index].stops[0]-old[index].time));
- }
- const oldSecret=play(original,'relic-charge-secret'),newSecret=play(shorter,'relic-charge-secret');
- assert.deepEqual(newSecret.map(v=>[v.type,v.frequencyValue,v.time,v.stops[0]]),oldSecret.map(v=>[v.type,v.frequencyValue,v.time,v.stops[0]]),'Secret sound timing stays unchanged');
 });

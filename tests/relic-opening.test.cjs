@@ -20,7 +20,7 @@ test('all three cards reveal in sequence without further taps, with suspense bea
  g.advance(20000);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);assert.equal(g.jobs.size,0);assert.equal(g.c.revealAll,undefined);assert.deepEqual(plain(g.c.snapshot().rewards),results);
 });
 test('each rarity increases suspense duration; the biggest reveal is saved for last',()=>{
- let lastDelay=0;for(const rarity of ['common','uncommon','rare','epic','legendary','mythic','secret']){
+ let lastDelay=0;for(const rarity of ['uncommon','rare','epic','legendary','mythic','secret']){
   const g=boot();g.c.show(Array(3).fill(`${rarity}:spoon`));g.c.openPack();g.advance(1650);
   const firstBeat=[...g.jobs.values()][0],delay=(firstBeat.at-1650)*4;assert.ok(delay>lastDelay);lastDelay=delay;
   g.advance(delay-1);assert.equal(g.c.snapshot().phase,'revealing');g.advance(1);assert.deepEqual(plain(g.c.snapshot().revealed),[0]);
@@ -51,8 +51,8 @@ test('the purchase handler saves all three awards before animation, blocks dupli
 });
 
 test('only Secret cards take over the screen, flip once, and hold before the next reveal',()=>{
- const g=boot();g.c.show(['secret:dragon','common:spoon','secret:hat']);g.c.openPack();g.advance(1650);
- assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(300+950);assert.equal(g.c.snapshot().spotlightIndex,1);assert.equal(g.c.snapshot().spotlightStage,'charging');
+ const g=boot();g.c.show(['secret:dragon','common:spoon','secret:hat']);g.c.openPack();g.advance(1000);
+ assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(650);assert.equal(g.c.snapshot().spotlightIndex,1);assert.equal(g.c.snapshot().spotlightStage,'charging');
  g.advance(4799);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(1);assert.equal(g.c.snapshot().phase,'spotlight');assert.equal(g.c.snapshot().spotlightStage,'revealed');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);
  g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(1);assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
 });
@@ -207,4 +207,16 @@ test('Mythic animation waits for audio preparation and stale readiness cannot re
 test('reduced motion preserves every Mythic and Secret reveal instead of jumping to the last card',()=>{
  const g=boot(true);g.c.show(['secret:dragon','mythic:fork','secret:hat']);g.c.openPack();assert.equal(g.c.snapshot().revealingIndex,0);assert.deepEqual(plain(g.c.snapshot().revealed),[]);
  g.advance(1650);assert.equal(g.c.snapshot().phase,'mythic');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(2600+950);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(7400+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(7400);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
+});
+
+
+test('Commons reveal at unsealing without charge states, while higher rarities keep their sequence',()=>{
+ for(const keys of [['common:spoon','common:fork','common:chili'],['common:spoon','rare:fork','common:chili'],['common:spoon','mythic:fork','secret:dragon']]){
+  const g=boot();g.c.show(keys);g.c.openPack();g.advance(999);assert.deepEqual(plain(g.c.snapshot().revealed),[]);
+  g.advance(1);const commons=keys.filter(key=>key.startsWith('common:')).length;
+  assert.deepEqual(plain(g.c.snapshot().revealed),Array.from({length:commons},(_,i)=>i));
+  assert.ok(g.changes.every(s=>s.revealingIndex===null||!s.rewards[s.revealingIndex].startsWith('common:')),'Commons never enter suspense or pulse states');
+  if(commons===3){assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.jobs.size,0);}
+  else{assert.equal(g.c.snapshot().phase,'cards');g.advance(649);assert.equal(g.c.snapshot().revealingIndex,null);g.advance(1);assert.equal(g.c.snapshot().revealingIndex,commons);g.advance(30000);assert.equal(g.c.snapshot().phase,'complete');}
+ }
 });

@@ -17,13 +17,20 @@
   // A physical crash: broadband crack and debris over a falling thud and rumble.
   // For noise layers the frequency values control a low-pass filter cutoff.
   const revealBoom = [[110,.7,0,'sine',28,1.45,.003],[49,2.35,0,'sine',24,1.5,.009],[9500,.16,0,'noise',2200,.85,.002],[3200,.82,.012,'noise',95,1,.004],[170,1.05,.006,'triangle',42,.62,.002],[760,2.2,.035,'noise',55,.68,.012],[1150,.38,.19,'noise',160,.24,.002],[450,.45,.48,'noise',70,.16,.003]];
-  const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
-  const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
-  for (const [rank,rarity] of relicRarities.entries()) {
-    if (rarity === 'mythic') continue; // Mythics use only the recorded buildup and impact.
-    sounds[`relic-charge-${rarity}`] = [[70+rank*9,.3+rank*.4,0,'triangle',150+rank*30],[180+rank*22,.25+rank*.3,.08,'sine',350+rank*75]];
-    for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[95+rank*10,.13,0,'triangle',55],[360+rank*45+pulse*90,.10+pulse*.02,.025,'sine',430+rank*55+pulse*110]];
-    sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
+  // A short bell for Commons; higher rarities build through warm major arpeggios.
+  // Sine tones and quiet upper harmonics keep these bright without the old buzz/thud.
+  sounds['relic-reveal-common'] = [[1046.5,.16,0,'sine',null,.9,.003],[2093,.11,0,'sine',null,.12,.002]];
+  const relicChimes = {
+    uncommon: {duration:.5, rise:[523.25,659.25,783.99], chord:[783.99,1046.5,2093], levels:[.65,.5,.12], tail:.25},
+    rare: {duration:.75, rise:[523.25,659.25,783.99,1046.5], chord:[1046.5,1318.51,1567.98,2093], levels:[.65,.45,.3,.12], tail:.32},
+    epic: {duration:1.05, rise:[523.25,659.25,783.99,1046.5,1318.51], chord:[523.25,783.99,1046.5,1318.51,1567.98], levels:[.35,.4,.65,.45,.25], tail:.38},
+    legendary: {duration:1.35, rise:[523.25,659.25,783.99,1046.5,1318.51,1567.98], chord:[523.25,783.99,1046.5,1318.51,1567.98,2093], levels:[.35,.4,.6,.45,.3,.2], tail:.45},
+  };
+  for (const [rarity, chime] of Object.entries(relicChimes)) {
+    const spacing = (chime.duration - .18) / (chime.rise.length - 1);
+    sounds[`relic-charge-${rarity}`] = chime.rise.map((frequency,index)=>[frequency,.18,index*spacing,'sine',null,.35+index*.035,.025]);
+    for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[[1046.5,1318.51,1567.98][pulse-1],.07,0,'sine',null,.12,.004]];
+    sounds[`relic-reveal-${rarity}`] = chime.chord.map((frequency,index)=>[frequency,chime.tail,index*.025,'sine',null,chime.levels[index],.004]);
   }
   // A sudden pitch collapse marks the blackout, then a slow riser and
   // accelerating double heartbeats build toward a brief hush before the flip.
@@ -142,14 +149,8 @@
       stopAll();
     }
     const volume = name.startsWith('orb-') ? 1.25 : name.startsWith('relic-charge-') ? .95 : name.startsWith('relic-') ? 1.5 : 1;
-    // Keep each existing tone, pitch sweep and volume; compress only its timing.
-    const rarity = /^relic-(?:charge|tick|reveal)-(common|uncommon|rare|epic|legendary)(?:-|$)/.exec(name)?.[1];
-    const originalTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450};
-    const timing = rarity && window.GameRelicReveal?.revealTimings[rarity];
-    const timeScale = timing ? timing / originalTimings[rarity] : 1;
     const voices = [];
-    for (const [frequency, originalDuration, originalOffset, wave = 'sine', end, level = 1, originalAttack = .008] of notes) {
-      const duration = originalDuration * timeScale, offset = originalOffset * timeScale, attack = originalAttack * timeScale;
+    for (const [frequency, duration, offset, wave = 'sine', end, level = 1, attack = .008] of notes) {
       const start = now + Math.max(0, delay) + offset;
       const noisy = wave === 'noise';
       const osc = noisy ? context.createBufferSource() : context.createOscillator();

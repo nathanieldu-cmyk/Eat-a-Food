@@ -1,5 +1,5 @@
 (() => {
-  const revealTimings = {common:300,uncommon:500,rare:750,epic:1050,legendary:1350,mythic:1650,secret:4800};
+  const revealTimings = {common:0,uncommon:500,rare:750,epic:1050,legendary:1350,mythic:1650,secret:4800};
   const rarityOrder = Object.keys(revealTimings);
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false, prepareReveal = null} = {}) {
     let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null, batch = [], packNumber = 1, packTotal = 1;
@@ -30,6 +30,7 @@
       if (ready?.then) ready.then(begin, begin); else begin();
     }
     function startReveal(index) {
+      if (rewards[index].startsWith('common:')) { revealed.add(index); finishCard(); return; }
       const secret = rewards[index].startsWith('secret:');
       const mythic = rewards[index].startsWith('mythic:');
       revealingIndex = index; pulse = 0;
@@ -53,7 +54,12 @@
         if (revealed.size === rewards.length) finishCard();
         else { phase = 'cards'; emit(); revealNext(); }
       } else {
-        later(1000, () => { phase = 'cards'; emit(); later(650, revealNext); });
+        later(1000, () => {
+          // Commons turn face-up as soon as the pack unseals, without suspense.
+          for (const index of order) if (rewards[index].startsWith('common:')) revealed.add(index);
+          if (revealed.size === rewards.length) finishCard();
+          else { phase = 'cards'; emit(); later(650, revealNext); }
+        });
       }
       return true;
     }
@@ -188,7 +194,7 @@
     status.textContent = state.phase === 'sealed' ? 'Your three relics are waiting inside. Tap anywhere in this box to break the seal.' : state.phase === 'opening' ? 'Breaking the seal…' : state.phase === 'complete' ? (state.packNumber < state.packTotal ? `Pack ${state.packNumber} of ${state.packTotal} complete. The next pack is coming up…` : `All ${state.packTotal*3} relics were added permanently to your collection. Repeats count as extra copies. Only your equipped relic provides bonuses.`) : state.phase === 'mythic' ? 'Your Mythic relic has awakened.' : state.phase === 'revealing' ? 'Hold on… your relic is emerging.' : `${state.revealed.length} / 3 revealed. The cards will reveal automatically, one at a time.`;
     if (packChanged) packButton.focus({preventScroll: true});
     if (state.phase === 'opening' && previousPhase !== 'opening') { cue('relic-open'); dialog.focus({preventScroll: true}); }
-    if (state.phase === 'cards' && previousPhase === 'opening') cue('relic-deal');
+    if (state.phase === 'cards' && previousPhase === 'opening' && !state.revealed.length) cue('relic-deal');
     if (state.phase === 'revealing' && previousPhase !== 'revealing') {
       cue(`relic-charge-${active.rarity}`);
       const card = cards.querySelector(`[data-card-index="${state.revealingIndex}"]`);
