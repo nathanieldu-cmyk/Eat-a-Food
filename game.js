@@ -3820,7 +3820,7 @@
     relicPacksEl.innerHTML = api.packs.map(pack => {
       const rarity = api.rarities.find(rarity => rarity.id === pack.rarity);
       return `<article class="relic-shop-pack" tabindex="-1" style="--relic-rarity-color:${rarity.color}">
-        <img class="relic-shop-pack-art" src="relic-pack.svg?v=2" width="180" height="244" alt="" />
+        <img class="relic-shop-pack-art" src="relic-pack.svg?v=3" width="180" height="244" alt="" />
         <div><span class="relic-rarity-tag rarity-${rarity.id}">${rarity.label}</span><h3>${pack.name}</h3><p>${api.config.relicsPerPack} permanent relics · ${pack.price.toLocaleString()} diamonds</p><p class="relic-pack-odds">${api.oddsText(pack)}</p></div>
         <div class="relic-pack-actions"><button class="btn primary small" type="button" aria-label="Buy ${pack.name} for ${pack.price.toLocaleString()} diamonds" data-relic-buy="${pack.id}" data-relic-quantity="1" ${state.running || save.diamonds < pack.price ? "disabled" : ""}>Buy · ${pack.price.toLocaleString()} 💎</button><button class="btn ghost small" type="button" aria-label="Buy 3 ${pack.name}s for ${(pack.price*3).toLocaleString()} diamonds" data-relic-buy="${pack.id}" data-relic-quantity="3" ${state.running || save.diamonds < pack.price*3 ? "disabled" : ""}>Buy 3 · ${(pack.price*3).toLocaleString()} 💎</button></div>
       </article>`;

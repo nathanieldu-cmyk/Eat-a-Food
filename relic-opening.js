@@ -172,8 +172,8 @@
     const best = state.revealed.map(index=>api.getRelic(state.rewards[index])).reduce((best,item) => !best || api.tiers.indexOf(item.rarity)>api.tiers.indexOf(best.rarity) ? item : best, null);
     root.style.setProperty('--relic-rarity-color', (active || best || api.rarities.find(rarity => rarity.id === pack.rarity)).color);
     root.style.setProperty('--suspense-strength', active ? api.tiers.indexOf(active.rarity)+1 : 0);
-    title.textContent = state.phase === 'sealed' ? 'Tap your pack to open' : state.phase === 'opening' ? 'Unsealing your pack…' : state.phase === 'complete' ? 'Your three permanent relics' : state.phase === 'revealing' ? 'Something is awakening…' : 'The next relic is stirring…';
-    status.textContent = state.phase === 'sealed' ? 'Your three relics are waiting inside. Tap the pack to break the seal.' : state.phase === 'opening' ? 'Breaking the seal…' : state.phase === 'complete' ? (state.packNumber < state.packTotal ? `Pack ${state.packNumber} of ${state.packTotal} complete. The next pack is coming up…` : `All ${state.packTotal*3} relics were added permanently to your collection. Repeats count as extra copies. Only your equipped relic provides bonuses.`) : state.phase === 'revealing' ? 'Hold on… your relic is emerging.' : `${state.revealed.length} / 3 revealed. The cards will reveal automatically, one at a time.`;
+    title.textContent = state.phase === 'sealed' ? 'Tap anywhere to open' : state.phase === 'opening' ? 'Unsealing your pack…' : state.phase === 'complete' ? 'Your three permanent relics' : state.phase === 'revealing' ? 'Something is awakening…' : 'The next relic is stirring…';
+    status.textContent = state.phase === 'sealed' ? 'Your three relics are waiting inside. Tap anywhere in this box to break the seal.' : state.phase === 'opening' ? 'Breaking the seal…' : state.phase === 'complete' ? (state.packNumber < state.packTotal ? `Pack ${state.packNumber} of ${state.packTotal} complete. The next pack is coming up…` : `All ${state.packTotal*3} relics were added permanently to your collection. Repeats count as extra copies. Only your equipped relic provides bonuses.`) : state.phase === 'revealing' ? 'Hold on… your relic is emerging.' : `${state.revealed.length} / 3 revealed. The cards will reveal automatically, one at a time.`;
     if (packChanged) packButton.focus({preventScroll: true});
     if (state.phase === 'opening' && previousPhase !== 'opening') { cue('relic-open'); dialog.focus({preventScroll: true}); }
     if (state.phase === 'cards' && previousPhase === 'opening') cue('relic-deal');
@@ -191,7 +191,7 @@
     previousPulse = state.pulse;
     previousCount = state.revealed.length; previousPhase = state.phase;
   }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches});
-  packButton.addEventListener('click', controller.openPack);
+  dialog.addEventListener('click', controller.openPack);
   skip.addEventListener('click', () => {
     if (!controller.snapshot().canSkip) return;
     for (const stop of soundStops) stop(); soundStops = [];

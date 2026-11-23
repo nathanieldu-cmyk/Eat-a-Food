@@ -37,7 +37,7 @@
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();
-  let context = null, noiseBuffer = null;
+  let context = null, noiseBuffer = null, hatchBuffer = null, hatchPromise = null;
   let unlocked = false;
   let muted = false;
   let packOpening = false;
@@ -46,7 +46,7 @@
   function stopVoice(voice) {
     if (!active.delete(voice)) return;
     try { voice.osc.stop(); } catch (_) {}
-    voice.osc.disconnect(); voice.filter?.disconnect(); voice.gain.disconnect();
+    voice.osc?.disconnect(); voice.filter?.disconnect(); voice.gain?.disconnect();
   }
   function stopAll() { for (const voice of [...active]) stopVoice(voice); }
 
@@ -74,7 +74,46 @@
     return noiseBuffer;
   }
 
+  // The owner's 3M+ Hatch excerpt is fetched and decoded once per session.
+  function preloadHatch() {
+    if (hatchBuffer) return Promise.resolve(hatchBuffer);
+    if (!hatchPromise && context && typeof fetch === 'function') {
+      const decoder = context;
+      hatchPromise = fetch('audio/relic-mythic-hatch.mp3?v=1')
+        .then(response => { if (!response.ok) throw new Error('Hatch sound unavailable'); return response.arrayBuffer(); })
+        .then(bytes => decoder.decodeAudioData(bytes))
+        .then(buffer => { hatchBuffer = buffer; return buffer; })
+        .catch(() => null);
+    }
+    return hatchPromise || Promise.resolve(null);
+  }
+
+  function playHatch(delay) {
+    if (active.size >= 24) stopAll();
+    const voice = {osc:null, gain:null};
+    let fallbackStop = null;
+    active.add(voice);
+    function start(buffer) {
+      if (!active.has(voice) || muted || document.hidden) return;
+      if (!buffer) { stopVoice(voice); fallbackStop = playSynth('relic-reveal-mythic', delay); return; }
+      const source = context.createBufferSource(), gain = context.createGain();
+      voice.osc = source; voice.gain = gain; source.buffer = buffer;
+      const at = context.currentTime + Math.max(0, delay);
+      gain.gain.setValueAtTime(.9, at);
+      source.connect(gain); gain.connect(context.destination);
+      source.onended = () => { active.delete(voice); source.disconnect(); gain.disconnect(); };
+      source.start(at); source.stop(at + buffer.duration + .015);
+    }
+    if (hatchBuffer) start(hatchBuffer); else preloadHatch().then(start);
+    return () => { stopVoice(voice); fallbackStop?.(); };
+  }
+
   function play(name, delay = 0) {
+    if (name === 'relic-reveal-mythic' && typeof fetch === 'function' && wake()) return playHatch(delay);
+    return playSynth(name, delay);
+  }
+
+  function playSynth(name, delay = 0) {
     if (packOpening && !name.startsWith('relic-')) return;
     const notes = sounds[name];
     if (!notes || !wake()) return;
@@ -142,6 +181,6 @@
     } else wake();
   });
   window.addEventListener('pagehide', stopAll);
-  window.GameSfx = {play, setPackOpening(active) { packOpening = !!active; if (packOpening) { stopAll(); lastOrb.clear(); } }};
+  window.GameSfx = {play, setPackOpening(active) { packOpening = !!active; if (packOpening) { stopAll(); lastOrb.clear(); if (wake()) preloadHatch(); } }};
   render();
 })();

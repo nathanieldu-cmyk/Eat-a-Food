@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const {test} = require('node:test');
 const root = path.resolve(__dirname, '..');
-function boot(muted = false, supported = true) {
+function boot(muted = false, supported = true, sampleFetch = undefined) {
   const events = {}, windowEvents = {}, contexts = [];
   const button = {addEventListener(k,fn) {this[k]=fn;}, setAttribute(k,v) {this[k]=v;}};
   const storage = new Map([['eatAFoodSfxMuted', String(muted)]]);
@@ -17,14 +17,15 @@ function boot(muted = false, supported = true) {
       this.voices.push(voice); return voice;
     }
     createBuffer(channels,length,sampleRate) {const data=new Float32Array(length),buffer={length,sampleRate,getChannelData:()=>data};this.buffers.push(buffer);return buffer;}
-    createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time){this.time=time;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
+    createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time){this.time=time;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
     createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
+    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:4.2,hatch:true});}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
   const window = {AudioContext:supported ? AudioContext : undefined, addEventListener(k,fn) {windowEvents[k]=fn;}};
-  vm.runInNewContext(fs.readFileSync(path.join(root,'sfx.js'),'utf8'), {window,document,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}});
+  vm.runInNewContext(fs.readFileSync(path.join(root,'sfx.js'),'utf8'), {window,document,fetch:sampleFetch,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}});
   return {events,windowEvents,button,storage,document,contexts,api:window.GameSfx};
 }
 test('effects wait for a gesture and all five orb sizes have different notes or timbres', () => {
@@ -177,4 +178,27 @@ test('Secret explosions layer filtered crack, debris and rolling noise over a de
  assert.ok(noise.some(v=>v.stops[0]-v.time>2));assert.ok(noise.some(v=>v.time-ctx.currentTime>=.19));assert.equal(ctx.buffers.length,1);assert.ok(ctx.buffers[0].getChannelData(0).some(v=>v!==0));assert.ok(ctx.buffers[0].getChannelData(0).every(v=>v>=-1&&v<=1));
  stop();assert.ok(noise.every(v=>v.stops.includes('now')&&v.disconnected&&v.filterNode.disconnected));g.api.play('relic-secret-impact');assert.equal(ctx.buffers.length,1);
  g.button.click();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));
+});
+
+const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
+test('Mythic reveals play the supplied 3M+ Hatch sample, fetched and decoded once, while other rarities keep their sounds',async()=>{
+ const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(8)};});
+ g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await flushSample();
+ assert.deepEqual(urls,['audio/relic-mythic-hatch.mp3?v=1']);assert.equal(ctx.decodeCalls,1);
+ const before=ctx.voices.length,stop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,before+1);const sample=ctx.voices.at(-1);assert.equal(sample.buffer.hatch,true);assert.equal(sample.gainNode.events[0].value,.9);stop();assert.ok(sample.stops.includes('now'));
+ g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.at(-1).buffer.hatch,true);assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);
+ const next=ctx.voices.length;g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.slice(next).every(v=>!v.buffer?.hatch));
+ const secret=ctx.voices.length;g.api.play('relic-secret-impact');assert.ok(ctx.voices.slice(secret).every(v=>!v.buffer?.hatch));
+});
+test('pending hatch audio cannot play after cancellation, mute, hiding or leaving the opening',async()=>{
+ for(const action of ['cancel','mute','hide','close']){
+  let resolveFetch;const g=boot(false,true,()=>new Promise(resolve=>{resolveFetch=resolve;}));g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0],stop=g.api.play('relic-reveal-mythic');
+  if(action==='cancel'||action==='close')stop();if(action==='mute')g.button.click();if(action==='hide'){g.document.hidden=true;g.events.visibilitychange();}
+  if(action==='close')g.api.setPackOpening(false);
+  resolveFetch({ok:true,arrayBuffer:async()=>new ArrayBuffer(8)});await flushSample();assert.equal(ctx.voices.length,0,action);
+ }
+});
+test('an unavailable hatch sample falls back to the existing Mythic chime without breaking playback',async()=>{
+ const g=boot(false,true,async()=>({ok:false}));g.events.pointerdown();const ctx=g.contexts[0],stop=g.api.play('relic-reveal-mythic');await flushSample();assert.ok(ctx.voices.length>0);assert.ok(ctx.voices.every(v=>!v.buffer?.hatch));stop();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));
+ const muted=boot(true,true,()=>assert.fail('muted effects must not request audio'));muted.events.pointerdown();muted.api.play('relic-reveal-mythic');assert.equal(muted.contexts.length,0);
 });

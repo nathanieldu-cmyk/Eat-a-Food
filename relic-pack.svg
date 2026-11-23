@@ -1,23 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="180" height="244" viewBox="0 0 180 244">
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="244" viewBox="0 0 180 244" preserveAspectRatio="xMidYMid meet">
 <defs>
- <linearGradient id="foil" x2="1" y2=".5"><stop stop-color="#93ebce"/><stop offset=".15" stop-color="#1d796e"/><stop offset=".45" stop-color="#123b48"/><stop offset=".75" stop-color="#277869"/><stop offset="1" stop-color="#91d4b6"/></linearGradient>
+ <linearGradient id="foil" x2="1" y2="0"><stop stop-color="#78c8b1"/><stop offset=".10" stop-color="#246c63"/><stop offset=".42" stop-color="#143d48"/><stop offset=".76" stop-color="#225d56"/><stop offset="1" stop-color="#79bda3"/></linearGradient>
  <linearGradient id="gold" x2=".7" y2="1"><stop stop-color="#fff1b1"/><stop offset=".4" stop-color="#e9be67"/><stop offset="1" stop-color="#98682d"/></linearGradient>
- <linearGradient id="gem" x2="1" y2="1"><stop stop-color="#dffff0"/><stop offset=".4" stop-color="#8ff1cf"/><stop offset="1" stop-color="#3ba697"/></linearGradient>
- <pattern id="seam" width="6" height="12" patternUnits="userSpaceOnUse"><path d="M1 0v12" stroke="#806433" stroke-width="2"/><path d="M4 0v12" stroke="#ffe6a5"/></pattern>
- <radialGradient id="glow"><stop stop-color="#b0ffe1" stop-opacity=".3"/><stop offset="1" stop-color="#a5ffe3" stop-opacity="0"/></radialGradient>
+ <linearGradient id="gem" x2="1" y2="1"><stop stop-color="#e9fff4"/><stop offset=".4" stop-color="#96eed1"/><stop offset="1" stop-color="#3ba697"/></linearGradient>
+ <linearGradient id="shine" x2="1" y2="0"><stop stop-color="#e5fff2" stop-opacity="0"/><stop offset=".5" stop-color="#e5fff2" stop-opacity=".12"/><stop offset="1" stop-color="#e5fff2" stop-opacity="0"/></linearGradient>
+ <pattern id="seam" width="6" height="16" patternUnits="userSpaceOnUse"><path d="M1 0v16" stroke="#806433" stroke-width="2"/><path d="M4 0v16" stroke="#ffe6a5"/></pattern>
+ <radialGradient id="glow"><stop stop-color="#b0ffe1" stop-opacity=".22"/><stop offset="1" stop-color="#a5ffe3" stop-opacity="0"/></radialGradient>
 </defs>
-<path d="m14 5 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 5-3 5 3 2 226-7 4-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3-6-3-6 3Z" fill="url(#foil)" stroke="#edce8d" stroke-width="2"/>
-<path d="M15 9h150v16H15Zm1 211h149v14H16Z" fill="url(#gold)"/>
-<path d="M15 9h150v16H15Zm1 211h149v14H16Z" fill="url(#seam)" opacity=".65"/>
-<path d="M25 33h130v176H25Z" fill="none" stroke="#e4c387" stroke-width="1.5"/>
-<path d="M30 39h120v164H30Z" fill="none" stroke="#e4c387" stroke-opacity=".35"/>
-<path d="M25 53V33h20m90 0h20v20m0 136v20h-20M45 209H25v-20" fill="none" stroke="#ffe2a0" stroke-width="4"/>
-<circle cx="90" cy="104" r="66" fill="url(#glow)"/>
+<path d="M15 8 L18 4 L21 8 L24 4 L27 8 L30 4 L33 8 L36 4 L39 8 L42 4 L45 8 L48 4 L51 8 L54 4 L57 8 L60 4 L63 8 L66 4 L69 8 L72 4 L75 8 L78 4 L81 8 L84 4 L87 8 L90 4 L93 8 L96 4 L99 8 L102 4 L105 8 L108 4 L111 8 L114 4 L117 8 L120 4 L123 8 L126 4 L129 8 L132 4 L135 8 L138 4 L141 8 L144 4 L147 8 L150 4 L153 8 L156 4 L159 8 L162 4 L165 8 L165 236 L162 240 L159 236 L156 240 L153 236 L150 240 L147 236 L144 240 L141 236 L138 240 L135 236 L132 240 L129 236 L126 240 L123 236 L120 240 L117 236 L114 240 L111 236 L108 240 L105 236 L102 240 L99 236 L96 240 L93 236 L90 240 L87 236 L84 240 L81 236 L78 240 L75 236 L72 240 L69 236 L66 240 L63 236 L60 240 L57 236 L54 240 L51 236 L48 240 L45 236 L42 240 L39 236 L36 240 L33 236 L30 240 L27 236 L24 240 L21 236 L18 240 L15 236 Z" fill="url(#foil)" stroke="#edce8d" stroke-width="2" stroke-linejoin="round"/>
+<path d="M16 10h148v16H16Zm0 208h148v16H16Z" fill="url(#gold)"/>
+<path d="M16 10h148v16H16Zm0 208h148v16H16Z" fill="url(#seam)" opacity=".6"/>
+<path d="M21 29h138v186H21Z" fill="none" stroke="#e4c387" stroke-width="1.5"/>
+<path d="M27 35h126v174H27Z" fill="none" stroke="#e4c387" stroke-opacity=".3"/>
+<path d="M22 50V30h20m96 0h20v20m0 144v20h-20M42 214H22v-20" fill="none" stroke="#ffe2a0" stroke-width="3"/>
+<path d="M35 36h110v172H35Z" fill="url(#shine)"/>
+<circle cx="90" cy="101" r="59" fill="url(#glow)"/>
 <path d="m90 48 38 25-7 53-31 21-31-21-7-53Z" fill="#103039" stroke="url(#gold)" stroke-width="3"/>
 <path d="m90 62 25 30-25 43-25-43Z" fill="url(#gem)" stroke="#dcffe8" stroke-width="1.5"/>
 <path d="M90 62v73M65 92h50M90 62 77 92l13 43 13-43Z" fill="none" stroke="#efffe9" stroke-width="1.5" opacity=".8"/>
 <path d="m42 88 3 8 8 3-8 3-3 8-3-8-8-3 8-3Zm95 32 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#f8df9e"/>
-<text x="90" y="169" text-anchor="middle" fill="#ffebb5" font-family="Trebuchet MS,sans-serif" font-size="24" font-weight="bold" letter-spacing="3">RELICS</text>
-<path d="M44 179h92" stroke="#d7b673"/>
-<text x="90" y="194" text-anchor="middle" fill="#d7eedb" font-family="Trebuchet MS,sans-serif" font-size="9" font-weight="bold" letter-spacing="2">PERMANENT RELIC PACK</text>
+<text x="90" y="169" text-anchor="middle" fill="#ffebb5" font-family="Trebuchet MS,sans-serif" font-size="23" font-weight="bold" letter-spacing="2">RELICS</text>
+<path d="M46 180h88" stroke="#d7b673"/>
+<text x="90" y="196" text-anchor="middle" fill="#d7eedb" font-family="Trebuchet MS,sans-serif" font-size="7.5" font-weight="bold" letter-spacing="1.1">PERMANENT RELIC PACK</text>
 </svg>
