@@ -20,7 +20,7 @@ function boot(muted = false, supported = true, sampleFetch = undefined) {
     createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time,offset=0){this.time=time;this.offset=offset;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
     createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
-    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:5.25,numberOfChannels:2,hatch:'clean'});}
+    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:5.45,numberOfChannels:2,hatch:'clean'});}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
@@ -185,10 +185,10 @@ const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
 test('Mythic plays one original-speed stereo recording continuously through buildup and impact',async()=>{
  const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(16)};});
  g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await g.api.prepareMythic();
- assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=6']);assert.equal(ctx.decodeCalls,1);
- const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,5.25);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
+ assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=7']);assert.equal(ctx.decodeCalls,1);
+ const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,5.45);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
  assert.equal(charge.time,ctx.currentTime,'buildup starts with the moving outline');
- assert.ok(Math.abs((ctx.currentTime+3.0)-(charge.time+2.7)-.3)<1e-9,'the card stays at three seconds while the recording starts 300ms earlier');
+ assert.ok(Math.abs((ctx.currentTime+3.0)-(charge.time+2.9)-.1)<1e-9,'the card stays at three seconds after the audio is moved 200ms later');
  const count=ctx.voices.length;g.api.play('relic-charge-mythic');assert.equal(ctx.voices.length,count,'a repeated charge cue cannot layer or restart the recording');assert.ok(!charge.stops.includes('now'));for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,count);
  ctx.currentTime+=3.0;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
  chargeStop();impactStop();assert.ok(charge.stops.includes('now'));
@@ -198,7 +198,7 @@ test('Mythic plays one original-speed stereo recording continuously through buil
 });
 test('a Mythic impact without an active buildup starts at the original impact rather than replaying the rise',async()=>{
  const g=boot(false,true,async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(16)}));g.events.pointerdown();await g.api.prepareMythic();const ctx=g.contexts[0];
- const stop=g.api.play('relic-reveal-mythic'),voice=ctx.voices.at(-1);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.offset,2.7);assert.ok(Math.abs(voice.stops[0]-voice.time-2.565)<1e-9);stop();assert.ok(voice.stops.includes('now'));
+ const stop=g.api.play('relic-reveal-mythic'),voice=ctx.voices.at(-1);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.offset,2.9);assert.ok(Math.abs(voice.stops[0]-voice.time-2.565)<1e-9);stop();assert.ok(voice.stops.includes('now'));
 });
 test('pending Mythic audio cannot play after cancellation, mute, hiding or leaving the opening',async()=>{
  for(const action of ['cancel','mute','hide','close']){
@@ -223,9 +223,9 @@ test('Mythic has a silent lead-in followed by the complete untouched original re
   assert.ok(format&&data);assert.equal(format.readUInt16LE(0),1);assert.equal(format.readUInt16LE(2),2);assert.equal(format.readUInt32LE(4),44100);assert.equal(format.readUInt16LE(14),16);return data;
  };
  const original=wav('audio/relic-mythic-clean.wav'),refined=wav('audio/relic-mythic-continuous.wav'),frame=seconds=>Math.round(seconds*44100)*4;
- assert.equal(refined.length,frame(5.25));assert.equal(original.length,frame(4.2));
- assert.ok(refined.subarray(0,frame(1.05)).every(sample=>sample===0),'the beginning is truly silent');
- assert.deepEqual(refined.subarray(frame(1.05)),original,'the entire original buildup, boom and tail are unprocessed');
- assert.deepEqual(refined.subarray(frame(2.7)),original.subarray(frame(1.65)),'the original boom is 300ms earlier than the unchanged three-second reveal');
+ assert.equal(refined.length,frame(5.45));assert.equal(original.length,frame(4.2));
+ assert.ok(refined.subarray(0,frame(1.25)).every(sample=>sample===0),'the beginning is truly silent');
+ assert.deepEqual(refined.subarray(frame(1.25)),original,'the entire original buildup, boom and tail are unprocessed');
+ assert.deepEqual(refined.subarray(frame(2.9)),original.subarray(frame(1.65)),'the original boom is preserved after moving the recording 200ms later');
  for(let offset=0;offset<refined.length;offset+=2)assert.ok(Math.abs(refined.readInt16LE(offset))<32767,'no clipped samples');
 });
