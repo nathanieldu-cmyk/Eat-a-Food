@@ -39,8 +39,8 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
-  const mythicSample = {url:'audio/relic-mythic-clean.wav?v=1', buffer:null, promise:null};
-  const mythicImpactOffset = 1.65;
+  const mythicSample = {url:'audio/relic-mythic-extended.wav?v=1', buffer:null, promise:null};
+  const mythicImpactOffset = 3.2;
   let mythicVoice = null;
   let unlocked = false;
   let muted = false;
@@ -79,7 +79,7 @@
     return noiseBuffer;
   }
 
-  // One lossless stereo excerpt: preserve the recording's speed and continuity.
+  // Native-speed stereo shimmer, extended with smooth overlaps into the original impact.
   function loadMythicSample() {
     if (mythicSample.buffer) return Promise.resolve(mythicSample.buffer);
     if (!mythicSample.promise && context && typeof fetch === 'function') {
