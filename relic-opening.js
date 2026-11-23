@@ -1,9 +1,10 @@
 (() => {
   const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:3200,secret:4800};
   const rarityOrder = Object.keys(revealTimings);
-  function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false} = {}) {
+  function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false, prepareReveal = null} = {}) {
     let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null, batch = [], packNumber = 1, packTotal = 1;
-    const canSkip = () => ['opening','cards','revealing'].includes(phase) && spotlightIndex === null && rewards.some((key,index)=>!key.startsWith('secret:')&&!revealed.has(index));
+    const protectedCard = key => key.startsWith('mythic:') || key.startsWith('secret:');
+    const canSkip = () => ['opening','cards','revealing'].includes(phase) && spotlightIndex === null && (revealingIndex === null || !protectedCard(rewards[revealingIndex])) && rewards.some((key,index)=>!protectedCard(key)&&!revealed.has(index));
     const snapshot = () => ({canSkip:canSkip(),phase, rewards: [...rewards], revealed: [...revealed], packId, ownedCounts: [...ownedCounts], revealingIndex, pulse, spotlightIndex, spotlightStage, packNumber, packTotal});
     const emit = () => onChange(snapshot());
     function clear() { for (const timer of timers) cancel(timer); timers.clear(); }
@@ -19,7 +20,18 @@
       else if (packNumber < packTotal) later(1200, () => loadPack(packNumber));
     }
     function revealNext() {
-      const index = order[revealed.size], secret = rewards[index].startsWith('secret:');
+      const index = order[revealed.size], epoch = generation;
+      const ready = prepareReveal?.(rewards[index].split(':')[0]);
+      let started = false;
+      const begin = () => {
+        if (started || epoch !== generation || phase === 'closed') return;
+        started = true; startReveal(index);
+      };
+      if (ready?.then) ready.then(begin, begin); else begin();
+    }
+    function startReveal(index) {
+      const secret = rewards[index].startsWith('secret:');
+      const mythic = rewards[index].startsWith('mythic:');
       revealingIndex = index; pulse = 0;
       spotlightIndex = secret ? index : null; spotlightStage = secret ? 'charging' : null;
       phase = 'revealing'; emit();
@@ -28,6 +40,7 @@
         if (step < 4) { pulse = step; emit(); later(duration / 4, () => beat(step + 1)); return; }
         revealed.add(index); revealingIndex = null; pulse = 0;
         if (secret) { spotlightStage = 'revealed'; phase = 'spotlight'; emit(); later(2600, finishCard); }
+        else if (mythic) { phase = 'mythic'; emit(); later(2600, finishCard); }
         else finishCard();
       }
       later(duration / 4, () => beat(1));
@@ -36,10 +49,9 @@
       if (phase !== 'sealed') return false;
       phase = 'opening'; emit();
       if (reducedMotion) {
-        revealed = new Set(order);
-        spotlightIndex = order.filter(index=>rewards[index].startsWith('secret:')).at(-1) ?? null;
-        if (spotlightIndex !== null) { spotlightStage = 'revealed'; phase = 'spotlight'; emit(); later(2600, finishCard); }
-        else finishCard();
+        for (const index of order) if (!protectedCard(rewards[index])) revealed.add(index);
+        if (revealed.size === rewards.length) finishCard();
+        else { phase = 'cards'; emit(); revealNext(); }
       } else {
         later(1000, () => { phase = 'cards'; emit(); later(650, revealNext); });
       }
@@ -48,9 +60,9 @@
     function skipReveal() {
       if (!canSkip()) return false;
       clear(); generation++;
-      for (const index of order) if (!rewards[index].startsWith('secret:')) revealed.add(index);
+      for (const index of order) if (!protectedCard(rewards[index])) revealed.add(index);
       revealingIndex = null; pulse = 0;
-      // Keep every Secret hidden so it still gets its full cinematic, in order.
+      // Mythics and Secrets always keep their full reveals, in rarity order.
       finishCard();
       return true;
     }
@@ -172,8 +184,8 @@
     const best = state.revealed.map(index=>api.getRelic(state.rewards[index])).reduce((best,item) => !best || api.tiers.indexOf(item.rarity)>api.tiers.indexOf(best.rarity) ? item : best, null);
     root.style.setProperty('--relic-rarity-color', (active || best || api.rarities.find(rarity => rarity.id === pack.rarity)).color);
     root.style.setProperty('--suspense-strength', active ? api.tiers.indexOf(active.rarity)+1 : 0);
-    title.textContent = state.phase === 'sealed' ? 'Tap anywhere to open' : state.phase === 'opening' ? 'Unsealing your pack…' : state.phase === 'complete' ? 'Your three permanent relics' : state.phase === 'revealing' ? 'Something is awakening…' : 'The next relic is stirring…';
-    status.textContent = state.phase === 'sealed' ? 'Your three relics are waiting inside. Tap anywhere in this box to break the seal.' : state.phase === 'opening' ? 'Breaking the seal…' : state.phase === 'complete' ? (state.packNumber < state.packTotal ? `Pack ${state.packNumber} of ${state.packTotal} complete. The next pack is coming up…` : `All ${state.packTotal*3} relics were added permanently to your collection. Repeats count as extra copies. Only your equipped relic provides bonuses.`) : state.phase === 'revealing' ? 'Hold on… your relic is emerging.' : `${state.revealed.length} / 3 revealed. The cards will reveal automatically, one at a time.`;
+    title.textContent = state.phase === 'sealed' ? 'Tap anywhere to open' : state.phase === 'opening' ? 'Unsealing your pack…' : state.phase === 'complete' ? 'Your three permanent relics' : state.phase === 'mythic' ? 'Mythic discovered' : state.phase === 'revealing' ? 'Something is awakening…' : 'The next relic is stirring…';
+    status.textContent = state.phase === 'sealed' ? 'Your three relics are waiting inside. Tap anywhere in this box to break the seal.' : state.phase === 'opening' ? 'Breaking the seal…' : state.phase === 'complete' ? (state.packNumber < state.packTotal ? `Pack ${state.packNumber} of ${state.packTotal} complete. The next pack is coming up…` : `All ${state.packTotal*3} relics were added permanently to your collection. Repeats count as extra copies. Only your equipped relic provides bonuses.`) : state.phase === 'mythic' ? 'Your Mythic relic has awakened.' : state.phase === 'revealing' ? 'Hold on… your relic is emerging.' : `${state.revealed.length} / 3 revealed. The cards will reveal automatically, one at a time.`;
     if (packChanged) packButton.focus({preventScroll: true});
     if (state.phase === 'opening' && previousPhase !== 'opening') { cue('relic-open'); dialog.focus({preventScroll: true}); }
     if (state.phase === 'cards' && previousPhase === 'opening') cue('relic-deal');
@@ -182,7 +194,7 @@
       const card = cards.querySelector(`[data-card-index="${state.revealingIndex}"]`);
       if (card && cards.scrollWidth > cards.clientWidth) cards.scrollTo({left:cards.scrollLeft+card.getBoundingClientRect().left-cards.getBoundingClientRect().left,behavior:'smooth'});
     }
-    if (state.phase === 'revealing' && state.pulse > previousPulse) cue(`relic-tick-${active.rarity}-${state.pulse}`);
+    if (state.phase === 'revealing' && active.rarity !== 'mythic' && state.pulse > previousPulse) cue(`relic-tick-${active.rarity}-${state.pulse}`);
     if (state.revealed.length > previousCount) {
       const item = api.getRelic(state.rewards[state.revealed.at(-1)]);
       cue(item.rarity === 'secret' ? 'relic-secret-impact' : `relic-reveal-${item.rarity}`);
@@ -190,7 +202,7 @@
     if (state.phase === 'complete' && previousPhase !== 'complete') { (state.packNumber === state.packTotal ? action : dialog).focus({preventScroll: true}); }
     previousPulse = state.pulse;
     previousCount = state.revealed.length; previousPhase = state.phase;
-  }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches});
+  }, {reducedMotion: !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, prepareReveal: rarity => rarity === 'mythic' ? window.GameSfx?.prepareMythic?.() : null});
   dialog.addEventListener('click', controller.openPack);
   skip.addEventListener('click', () => {
     if (!controller.snapshot().canSkip) return;

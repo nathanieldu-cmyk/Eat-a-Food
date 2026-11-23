@@ -20,7 +20,7 @@ function boot(muted = false, supported = true, sampleFetch = undefined) {
     createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time){this.time=time;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
     createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
-    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:4.2,hatch:true});}
+    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve({duration:bytes.byteLength===32?3.2:2.55,hatch:bytes.byteLength===32?'buildup':'impact'});}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
@@ -116,7 +116,7 @@ test('relic openings have distinct tear, deal, rising charges, beats and increas
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0],play=name=>{const before=ctx.voices.length;const stop=g.api.play(name);const voices=ctx.voices.slice(before);assert.ok(voices.length>0,name);stop();return voices;};
  const tear=play('relic-open'),deal=play('relic-deal');assert.notDeepEqual(tear.map(v=>v.frequencyValue),deal.map(v=>v.frequencyValue));
  let previousNotes=0,previousCharge=0;
- for(const rarity of ['common','uncommon','rare','epic','legendary','mythic','secret']){
+ for(const rarity of ['common','uncommon','rare','epic','legendary','secret']){
   const charge=play(`relic-charge-${rarity}`);assert.ok(charge[0].stops[0]>previousCharge);previousCharge=charge[0].stops[0];
   const beats=[1,2,3].map(p=>play(`relic-tick-${rarity}-${p}`).at(-1).frequencyValue);assert.ok(beats[0]<beats[1]&&beats[1]<beats[2]);
   const reveal=play(`relic-reveal-${rarity}`);assert.ok(reveal.length>=previousNotes);previousNotes=reveal.length;
@@ -157,7 +157,7 @@ test('Secret heartbeats accelerate across the three suspense pulses and leave a 
 
 test('Secret impact retains the deep boom while all non-Secret reveal cues contain only high chimes',()=>{
  const g=boot();g.events.pointerdown();const ctx=g.contexts[0];
- for(const rarity of ['common','uncommon','rare','epic','legendary','mythic']){
+ for(const rarity of ['common','uncommon','rare','epic','legendary']){
   const before=ctx.voices.length,stop=g.api.play(`relic-reveal-${rarity}`),voices=ctx.voices.slice(before);assert.ok(voices.length>=3);assert.ok(voices.every(v=>v.frequencyValue>=392&&v.type==='sine'&&!v.end),rarity);stop();
  }
  const before=ctx.voices.length;g.api.play('relic-secret-impact');const voices=ctx.voices.slice(before);assert.equal(voices.length,8);
@@ -181,24 +181,29 @@ test('Secret explosions layer filtered crack, debris and rolling noise over a de
 });
 
 const flushSample=()=>new Promise(resolve=>setImmediate(resolve));
-test('Mythic reveals play the supplied 3M+ Hatch sample, fetched and decoded once, while other rarities keep their sounds',async()=>{
- const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(8)};});
- g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await flushSample();
- assert.deepEqual(urls,['audio/relic-mythic-hatch.mp3?v=1']);assert.equal(ctx.decodeCalls,1);
- const before=ctx.voices.length,stop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,before+1);const sample=ctx.voices.at(-1);assert.equal(sample.buffer.hatch,true);assert.equal(sample.gainNode.events[0].value,.9);stop();assert.ok(sample.stops.includes('now'));
- g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.at(-1).buffer.hatch,true);assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);
+test('Mythic uses only the recorded buildup and impact, decoded once and played in the two reveal phases',async()=>{
+ const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(url.includes('buildup')?32:16)};});
+ g.events.pointerdown();const ctx=g.contexts[0];g.api.setPackOpening(true);await g.api.prepareMythic();
+ assert.deepEqual(urls,['audio/relic-mythic-buildup.mp3?v=1','audio/relic-mythic-impact.mp3?v=1']);assert.equal(ctx.decodeCalls,2);
+ const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'buildup');assert.equal(charge.time,1);assert.equal(charge.buffer.duration,3.2);
+ const count=ctx.voices.length;for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,count,'old Mythic ticks are removed');
+ ctx.currentTime+=3.2;const impactStop=g.api.play('relic-reveal-mythic'),impact=ctx.voices.at(-1);assert.equal(impact.buffer.hatch,'impact');assert.equal(impact.time,4.2);assert.equal(impact.gainNode.events[0].value,.9);
+ chargeStop();impactStop();assert.ok(charge.stops.includes('now'));assert.ok(impact.stops.includes('now'));
+ await g.api.prepareMythic();assert.equal(urls.length,2);assert.equal(ctx.decodeCalls,2);
  const next=ctx.voices.length;g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.slice(next).every(v=>!v.buffer?.hatch));
  const secret=ctx.voices.length;g.api.play('relic-secret-impact');assert.ok(ctx.voices.slice(secret).every(v=>!v.buffer?.hatch));
 });
-test('pending hatch audio cannot play after cancellation, mute, hiding or leaving the opening',async()=>{
+test('pending Mythic audio cannot play after cancellation, mute, hiding or leaving the opening',async()=>{
  for(const action of ['cancel','mute','hide','close']){
-  let resolveFetch;const g=boot(false,true,()=>new Promise(resolve=>{resolveFetch=resolve;}));g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0],stop=g.api.play('relic-reveal-mythic');
+  const resolvers=[];const g=boot(false,true,()=>new Promise(resolve=>{resolvers.push(resolve);}));g.events.pointerdown();g.api.setPackOpening(true);const ctx=g.contexts[0],stop=g.api.play('relic-reveal-mythic');
   if(action==='cancel'||action==='close')stop();if(action==='mute')g.button.click();if(action==='hide'){g.document.hidden=true;g.events.visibilitychange();}
   if(action==='close')g.api.setPackOpening(false);
-  resolveFetch({ok:true,arrayBuffer:async()=>new ArrayBuffer(8)});await flushSample();assert.equal(ctx.voices.length,0,action);
+  resolvers.forEach(resolve=>resolve({ok:true,arrayBuffer:async()=>new ArrayBuffer(16)}));await flushSample();assert.equal(ctx.voices.length,0,action);
  }
 });
-test('an unavailable hatch sample falls back to the existing Mythic chime without breaking playback',async()=>{
- const g=boot(false,true,async()=>({ok:false}));g.events.pointerdown();const ctx=g.contexts[0],stop=g.api.play('relic-reveal-mythic');await flushSample();assert.ok(ctx.voices.length>0);assert.ok(ctx.voices.every(v=>!v.buffer?.hatch));stop();assert.ok(ctx.voices.every(v=>v.stops.includes('now')));
+test('an unavailable recording never restores the removed synthesized Mythic sounds',async()=>{
+ const g=boot(false,true,async()=>({ok:false}));g.events.pointerdown();const ctx=g.contexts[0];await g.api.prepareMythic();g.api.play('relic-charge-mythic');g.api.play('relic-reveal-mythic');await flushSample();assert.equal(ctx.voices.length,0);
+ for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,0);
+ g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.length>0);
  const muted=boot(true,true,()=>assert.fail('muted effects must not request audio'));muted.events.pointerdown();muted.api.play('relic-reveal-mythic');assert.equal(muted.contexts.length,0);
 });

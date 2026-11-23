@@ -20,6 +20,7 @@
   const relicRarities = ['common','uncommon','rare','epic','legendary','mythic','secret'];
   const fanfare = [392,493.88,587.33,783.99,987.77,1174.66,1567.98];
   for (const [rank,rarity] of relicRarities.entries()) {
+    if (rarity === 'mythic') continue; // Mythics use only the recorded buildup and impact.
     sounds[`relic-charge-${rarity}`] = [[70+rank*9,.3+rank*.4,0,'triangle',150+rank*30],[180+rank*22,.25+rank*.3,.08,'sine',350+rank*75]];
     for (let pulse=1;pulse<=3;pulse++) sounds[`relic-tick-${rarity}-${pulse}`] = [[95+rank*10,.13,0,'triangle',55],[360+rank*45+pulse*90,.10+pulse*.02,.025,'sine',430+rank*55+pulse*110]];
     sounds[`relic-reveal-${rarity}`] = fanfare.slice(0,3+Math.floor(rank/1.5)).map((frequency,index)=>[frequency,.25+rank*.06,index*.065,'sine']);
@@ -37,7 +38,11 @@
   const button = document.getElementById('sfx-toggle');
   const active = new Set();
   const lastOrb = new Map();
-  let context = null, noiseBuffer = null, hatchBuffer = null, hatchPromise = null;
+  let context = null, noiseBuffer = null;
+  const mythicSamples = {
+    'relic-charge-mythic': {url:'audio/relic-mythic-buildup.mp3?v=1', buffer:null, promise:null},
+    'relic-reveal-mythic': {url:'audio/relic-mythic-impact.mp3?v=1', buffer:null, promise:null},
+  };
   let unlocked = false;
   let muted = false;
   let packOpening = false;
@@ -74,28 +79,31 @@
     return noiseBuffer;
   }
 
-  // The owner's 3M+ Hatch excerpt is fetched and decoded once per session.
-  function preloadHatch() {
-    if (hatchBuffer) return Promise.resolve(hatchBuffer);
-    if (!hatchPromise && context && typeof fetch === 'function') {
+  // Decode both parts before the expanding-outline animation starts.
+  function loadMythicSample(name) {
+    const sample = mythicSamples[name];
+    if (sample.buffer) return Promise.resolve(sample.buffer);
+    if (!sample.promise && context && typeof fetch === 'function') {
       const decoder = context;
-      hatchPromise = fetch('audio/relic-mythic-hatch.mp3?v=1')
+      const options = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? {signal:AbortSignal.timeout(5000)} : undefined;
+      sample.promise = fetch(sample.url, options)
         .then(response => { if (!response.ok) throw new Error('Hatch sound unavailable'); return response.arrayBuffer(); })
         .then(bytes => decoder.decodeAudioData(bytes))
-        .then(buffer => { hatchBuffer = buffer; return buffer; })
+        .then(buffer => { sample.buffer = buffer; return buffer; })
         .catch(() => null);
     }
-    return hatchPromise || Promise.resolve(null);
+    return sample.promise || Promise.resolve(null);
   }
-
-  function playHatch(delay) {
+  function prepareMythic() {
+    return wake() ? Promise.all(Object.keys(mythicSamples).map(loadMythicSample)) : null;
+  }
+  function playMythic(name, delay) {
     if (active.size >= 24) stopAll();
     const voice = {osc:null, gain:null};
-    let fallbackStop = null;
     active.add(voice);
     function start(buffer) {
       if (!active.has(voice) || muted || document.hidden) return;
-      if (!buffer) { stopVoice(voice); fallbackStop = playSynth('relic-reveal-mythic', delay); return; }
+      if (!buffer) { stopVoice(voice); return; }
       const source = context.createBufferSource(), gain = context.createGain();
       voice.osc = source; voice.gain = gain; source.buffer = buffer;
       const at = context.currentTime + Math.max(0, delay);
@@ -104,12 +112,11 @@
       source.onended = () => { active.delete(voice); source.disconnect(); gain.disconnect(); };
       source.start(at); source.stop(at + buffer.duration + .015);
     }
-    if (hatchBuffer) start(hatchBuffer); else preloadHatch().then(start);
-    return () => { stopVoice(voice); fallbackStop?.(); };
+    if (mythicSamples[name].buffer) start(mythicSamples[name].buffer); else loadMythicSample(name).then(start);
+    return () => stopVoice(voice);
   }
-
   function play(name, delay = 0) {
-    if (name === 'relic-reveal-mythic' && typeof fetch === 'function' && wake()) return playHatch(delay);
+    if (mythicSamples[name]) return wake() ? playMythic(name, delay) : undefined;
     return playSynth(name, delay);
   }
 
@@ -181,6 +188,6 @@
     } else wake();
   });
   window.addEventListener('pagehide', stopAll);
-  window.GameSfx = {play, setPackOpening(active) { packOpening = !!active; if (packOpening) { stopAll(); lastOrb.clear(); if (wake()) preloadHatch(); } }};
+  window.GameSfx = {play, prepareMythic, setPackOpening(active) { packOpening = !!active; if (packOpening) { stopAll(); lastOrb.clear(); prepareMythic(); } }};
   render();
 })();
