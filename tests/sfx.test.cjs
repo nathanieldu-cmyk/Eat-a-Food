@@ -25,6 +25,7 @@ function boot(muted = false, supported = true, sampleFetch = undefined) {
     suspend() {this.state='suspended';return Promise.resolve();}
   }
   const window = {AudioContext:supported ? AudioContext : undefined, addEventListener(k,fn) {windowEvents[k]=fn;}};
+  vm.runInNewContext(fs.readFileSync(path.join(root,'relic-opening.js'),'utf8'), {window});
   vm.runInNewContext(fs.readFileSync(path.join(root,'sfx.js'),'utf8'), {window,document,fetch:sampleFetch,localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}});
   return {events,windowEvents,button,storage,document,contexts,api:window.GameSfx};
 }
@@ -187,9 +188,9 @@ test('Mythic plays one original-speed stereo recording continuously through buil
  assert.deepEqual(urls,['audio/relic-mythic-continuous.wav?v=4']);assert.equal(ctx.decodeCalls,1);
  const chargeStop=g.api.play('relic-charge-mythic'),charge=ctx.voices.at(-1);assert.equal(charge.buffer.hatch,'clean');assert.equal(charge.buffer.numberOfChannels,2);assert.equal(charge.buffer.duration,5.75);assert.equal(charge.offset,0);assert.equal(charge.gainNode.events[0].value,1);
  assert.equal(charge.time,ctx.currentTime,'buildup starts with the moving outline');
- assert.ok(Math.abs(charge.time+3.2-(ctx.currentTime+3.2))<1e-9,'the original impact lands at the visual flip without stretching');
+ assert.ok(Math.abs((ctx.currentTime+3.4)-(charge.time+3.2)-.2)<1e-9,'the card reveals 200ms later without shifting the recording');
  const count=ctx.voices.length;g.api.play('relic-charge-mythic');assert.equal(ctx.voices.length,count,'a repeated charge cue cannot layer or restart the recording');assert.ok(!charge.stops.includes('now'));for(let n=1;n<=3;n++)g.api.play(`relic-tick-mythic-${n}`);assert.equal(ctx.voices.length,count);
- ctx.currentTime+=3.2;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
+ ctx.currentTime+=3.4;const impactStop=g.api.play('relic-reveal-mythic');assert.equal(ctx.voices.length,count,'the flip does not start a second sound');assert.ok(!charge.stops.includes('now'),'the recording is not cut at the flip');
  chargeStop();impactStop();assert.ok(charge.stops.includes('now'));
  await g.api.prepareMythic();assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);
  const next=ctx.voices.length;g.api.play('relic-reveal-legendary');assert.ok(ctx.voices.slice(next).every(v=>!v.buffer?.hatch));
@@ -225,6 +226,6 @@ test('Mythic has a silent lead-in followed by the complete untouched original re
  assert.equal(refined.length,frame(5.75));assert.equal(original.length,frame(4.2));
  assert.ok(refined.subarray(0,frame(1.55)).every(sample=>sample===0),'the beginning is truly silent');
  assert.deepEqual(refined.subarray(frame(1.55)),original,'the entire original buildup, boom and tail are unprocessed');
- assert.deepEqual(refined.subarray(frame(3.2)),original.subarray(frame(1.65)),'the original boom stays aligned with the unchanged card flip');
+ assert.deepEqual(refined.subarray(frame(3.2)),original.subarray(frame(1.65)),'the original boom remains unchanged while the card flips slightly later');
  for(let offset=0;offset<refined.length;offset+=2)assert.ok(Math.abs(refined.readInt16LE(offset))<32767,'no clipped samples');
 });

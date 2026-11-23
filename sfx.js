@@ -111,10 +111,9 @@
       if (!buffer) { stopVoice(voice); return; }
       const source = context.createBufferSource(), gain = context.createGain();
       voice.osc = source; voice.gain = gain; source.buffer = buffer;
-      const chargeSeconds = (window.GameRelicReveal?.revealTimings.mythic || 3200) / 1000;
-      const lead = impactOnly ? 0 : Math.max(0, chargeSeconds - mythicImpactOffset);
       const offset = impactOnly ? mythicImpactOffset : 0;
-      const at = context.currentTime + Math.max(0, delay) + lead;
+      // Keep the recording in place when the visual flip is delayed slightly.
+      const at = context.currentTime + Math.max(0, delay);
       gain.gain.setValueAtTime(1, at);
       source.connect(gain); gain.connect(context.destination);
       source.onended = () => { active.delete(voice); if (mythicVoice === voice) mythicVoice = null; source.disconnect(); gain.disconnect(); };
