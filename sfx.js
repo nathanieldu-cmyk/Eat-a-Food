@@ -39,7 +39,7 @@
   const active = new Set();
   const lastOrb = new Map();
   let context = null, noiseBuffer = null;
-  const mythicSample = {url:'audio/relic-mythic-extended.wav?v=1', buffer:null, promise:null};
+  const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=1', buffer:null, promise:null};
   const mythicImpactOffset = 3.2;
   let mythicVoice = null;
   let unlocked = false;
@@ -79,7 +79,7 @@
     return noiseBuffer;
   }
 
-  // Native-speed stereo shimmer, extended with smooth overlaps into the original impact.
+  // One continuous stereo rise into the original impact, without a repeating shimmer loop.
   function loadMythicSample() {
     if (mythicSample.buffer) return Promise.resolve(mythicSample.buffer);
     if (!mythicSample.promise && context && typeof fetch === 'function') {
@@ -98,12 +98,11 @@
   }
   function playMythic(name, delay) {
     const impactOnly = name === 'relic-reveal-mythic';
-    // The impact is already part of the active recording; never replay or splice it.
-    if (impactOnly && mythicVoice && active.has(mythicVoice)) {
+    // Repeated buildup or reveal cues must reuse the one active recording.
+    if (mythicVoice && active.has(mythicVoice)) {
       const voice = mythicVoice;
       return () => stopVoice(voice);
     }
-    if (mythicVoice) stopVoice(mythicVoice);
     if (active.size >= 24) stopAll();
     const voice = {osc:null, gain:null};
     mythicVoice = voice; active.add(voice);
