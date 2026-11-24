@@ -20,7 +20,7 @@ function boot(muted = false, supported = true, sampleFetch = undefined) {
     createBufferSource() {const voice={type:'noise',get gainNode(){return this.filterNode?.gainNode || this.filterNode;},connect(node){this.filterNode=node;},disconnect(){this.disconnected=true;},start(time,offset=0){this.time=time;this.offset=offset;},stops:[],stop(time){this.stops.push(time??'now');}};this.voices.push(voice);return voice;}
     createBiquadFilter() {const node={Q:{value:0},frequency:{setValueAtTime(f,time){node.frequencyValue=f;node.time=time;},exponentialRampToValueAtTime(f){node.end=f;}},connect(gain){node.gainNode=gain;},disconnect(){node.disconnected=true;}};return node;}
     createGain() {const events=[];return {events,gain:{setValueAtTime(value,time) {events.push({type:'set',value,time});}, exponentialRampToValueAtTime(value,time) {events.push({type:'ramp',value,time});}}, connect() {}, disconnect() {}};}
-    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve(bytes.byteLength===64?{duration:12.78,numberOfChannels:2,secret:'reference'}:{duration:4.85,numberOfChannels:2,hatch:'clean'});}
+    decodeAudioData(bytes) {this.decodeCalls=(this.decodeCalls||0)+1;return Promise.resolve(bytes.byteLength===64?{duration:12.98,numberOfChannels:2,secret:'reference'}:{duration:4.85,numberOfChannels:2,hatch:'clean'});}
     resume() {this.state='running';return Promise.resolve();}
     suspend() {this.state='suspended';return Promise.resolve();}
   }
@@ -212,16 +212,16 @@ test('Mythic has a silent lead-in followed by the complete untouched original re
 
 test('Secret uses the supplied stereo recording once for blackout, pack animation and reward burst',async()=>{
  const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(64)};});g.events.pointerdown();
- await g.api.prepareSecret();const ctx=g.contexts[0];assert.deepEqual(urls,['audio/relic-secret-reference.wav?v=1']);assert.equal(ctx.decodeCalls,1);
- const stop=g.api.play('relic-secret-blackout'),voice=ctx.voices.at(-1);assert.equal(voice.buffer.secret,'reference');assert.equal(voice.buffer.duration,12.78);assert.equal(voice.buffer.numberOfChannels,2);assert.equal(voice.offset,0);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.gainNode.events[0].value,1);
+ await g.api.prepareSecret();const ctx=g.contexts[0];assert.deepEqual(urls,['audio/relic-secret-synced.wav?v=1']);assert.equal(ctx.decodeCalls,1);
+ const stop=g.api.play('relic-secret-blackout'),voice=ctx.voices.at(-1);assert.equal(voice.buffer.secret,'reference');assert.equal(voice.buffer.duration,12.98);assert.equal(voice.buffer.numberOfChannels,2);assert.equal(voice.offset,0);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.gainNode.events[0].value,1);
  const count=ctx.voices.length;g.api.play('relic-charge-secret');for(let pulse=1;pulse<=3;pulse++)g.api.play(`relic-tick-secret-${pulse}`);assert.equal(ctx.voices.length,count,'no old synthesized heartbeat or charge layers');
- ctx.currentTime+=10.48;g.api.play('relic-secret-impact');assert.equal(ctx.voices.length,count,'the recorded reward burst is not played twice');assert.ok(!voice.stops.includes('now'));
+ ctx.currentTime+=10.68;g.api.play('relic-secret-impact');assert.equal(ctx.voices.length,count,'the recorded reward burst is not played twice');assert.ok(!voice.stops.includes('now'));
  await g.api.prepareSecret();assert.equal(urls.length,1);assert.equal(ctx.decodeCalls,1);stop();assert.ok(voice.stops.includes('now'));
  const next=ctx.voices.length;g.api.play('relic-secret-blackout');assert.equal(ctx.voices.length,next+1,'another Secret starts the complete recording again');g.button.click();assert.ok(ctx.voices.at(-1).stops.includes('now'));
 });
 test('Secret reveal audio can resume at the recorded burst without replaying the blackout',async()=>{
  const g=boot(false,true,async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(64)}));g.events.pointerdown();await g.api.prepareSecret();const ctx=g.contexts[0];
- const stop=g.api.play('relic-secret-impact'),voice=ctx.voices.at(-1);assert.equal(voice.offset,10.48);assert.equal(voice.time,ctx.currentTime);assert.ok(Math.abs(voice.stops[0]-voice.time-2.315)<1e-9);stop();assert.ok(voice.stops.includes('now'));
+ const stop=g.api.play('relic-secret-impact'),voice=ctx.voices.at(-1);assert.equal(voice.offset,10.68);assert.equal(voice.time,ctx.currentTime);assert.ok(Math.abs(voice.stops[0]-voice.time-2.315)<1e-9);stop();assert.ok(voice.stops.includes('now'));
 });
 test('pending Secret audio respects cancellation, muting, hidden tabs and closing the opening',async()=>{
  for(const action of ['cancel','mute','hide','close']){
@@ -243,4 +243,15 @@ test('Secret reference asset has the full scene duration, a louder blackout and 
  let blackoutEnergy=0;const blackoutBytes=Math.round(1.6*44100)*4;
  for(let i=0;i<data.length;i+=2){const sample=data.readInt16LE(i)/32768;assert.ok(Math.abs(sample)<.999,'no clipping');if(i<blackoutBytes)blackoutEnergy+=sample*sample;}
  assert.ok(Math.sqrt(blackoutEnergy/(blackoutBytes/2))>.1,'blackout is boosted above its original level');
+});
+
+
+test('synced Secret audio boosts only the blackout and adds exactly 200ms before the first tap without clipping',()=>{
+ function pcm(name){const bytes=fs.readFileSync(path.join(root,'audio',name));for(let pos=12;pos+8<=bytes.length;){const size=bytes.readUInt32LE(pos+4);if(bytes.toString('ascii',pos,pos+4)==='data')return bytes.subarray(pos+8,pos+8+size);pos+=8+size+(size%2);}assert.fail('missing PCM');}
+ const original=pcm('relic-secret-reference.wav'),synced=pcm('relic-secret-synced.wav'),frame=s=>Math.round(s*44100)*4;
+ assert.equal(synced.length,original.length+frame(.2));assert.ok(synced.subarray(frame(4),frame(4.2)).every(value=>value===0));
+ assert.deepEqual(synced.subarray(frame(2.2),frame(4)-Math.round(.008*44100)*4),original.subarray(frame(2.2),frame(4)-Math.round(.008*44100)*4),'landing audio is unchanged');
+ assert.deepEqual(synced.subarray(frame(4.2)+Math.round(.008*44100)*4),original.subarray(frame(4)+Math.round(.008*44100)*4),'all later taps and the final burst move exactly 200ms without processing');
+ let oldEnergy=0,newEnergy=0,peak=0;for(let pos=0;pos<synced.length;pos+=2){const v=synced.readInt16LE(pos);peak=Math.max(peak,Math.abs(v));if(pos<frame(1.6)){oldEnergy+=original.readInt16LE(pos)**2;newEnergy+=v*v;}}
+ assert.ok(Math.abs(Math.sqrt(newEnergy/oldEnergy)-2.4)<.0001);assert.ok(peak<32767,'no clipped samples');
 });

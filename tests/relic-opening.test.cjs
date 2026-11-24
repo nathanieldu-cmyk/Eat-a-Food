@@ -36,7 +36,7 @@ test('exactly three cards are required and duplicate pack taps cannot start para
  assert.ok(g.c.show(results));assert.equal(g.c.show(results),false);assert.ok(g.c.openPack());assert.equal(g.c.openPack(),false);g.advance(60000);assert.equal(g.changes.filter(s=>s.phase==='complete').length,1);
 });
 test('reduced motion reveals ordinary cards immediately but preserves each protected reveal',()=>{
- const g=boot(true);g.c.show(results);assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().revealed.length,0);g.c.openPack();assert.equal(g.c.snapshot().phase,'revealing');assert.equal(g.c.snapshot().spotlightIndex,2);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(10480);assert.equal(g.c.snapshot().spotlightStage,'revealed');g.advance(2600);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.jobs.size,0);
+ const g=boot(true);g.c.show(results);assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().revealed.length,0);g.c.openPack();assert.equal(g.c.snapshot().phase,'revealing');assert.equal(g.c.snapshot().spotlightIndex,2);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(10680);assert.equal(g.c.snapshot().spotlightStage,'revealed');g.advance(2600);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.jobs.size,0);
 });
 test('the purchase handler saves all three awards before animation, blocks duplicate clicks and rejects runs',()=>{
  const window={};let rolls=0,open=false;const math=Object.create(Math);math.random=()=>{rolls++;return 0;};vm.runInNewContext(fs.readFileSync(path.join(root,'relics.js'),'utf8'),{window,Math:math});
@@ -53,11 +53,11 @@ test('the purchase handler saves all three awards before animation, blocks dupli
 test('only Secret cards take over the screen, flip once, and hold before the next reveal',()=>{
  const g=boot();g.c.show(['secret:dragon','common:spoon','secret:hat']);g.c.openPack();g.advance(1650);
  assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(650+950);assert.equal(g.c.snapshot().spotlightIndex,1);assert.equal(g.c.snapshot().spotlightStage,'charging');
- g.advance(10479);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(1);assert.equal(g.c.snapshot().phase,'spotlight');assert.equal(g.c.snapshot().spotlightStage,'revealed');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);
- g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(1);assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13080);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
+ g.advance(10679);assert.equal(g.c.snapshot().spotlightStage,'charging');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(1);assert.equal(g.c.snapshot().phase,'spotlight');assert.equal(g.c.snapshot().spotlightStage,'revealed');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);
+ g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(1);assert.equal(g.c.snapshot().spotlightIndex,null);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13280);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
 });
 test('closing during a Secret cinematic clears the spotlight and all timers',()=>{
- const g=boot();g.c.show(['secret:dragon','secret:hat','secret:truffle']);g.c.openPack();g.advance(1650+10480);assert.equal(g.c.snapshot().phase,'spotlight');g.c.close();assert.equal(g.c.snapshot().spotlightIndex,null);assert.equal(g.jobs.size,0);g.advance(60000);assert.equal(g.c.snapshot().phase,'closed');
+ const g=boot();g.c.show(['secret:dragon','secret:hat','secret:truffle']);g.c.openPack();g.advance(1650+10680);assert.equal(g.c.snapshot().phase,'spotlight');g.c.close();assert.equal(g.c.snapshot().spotlightIndex,null);assert.equal(g.jobs.size,0);g.advance(60000);assert.equal(g.c.snapshot().phase,'closed');
 });
 test('reduced motion with only ordinary cards completes immediately without timers',()=>{
  const g=boot(true);g.c.show(['common:spoon','rare:spoon','legendary:spoon']);g.c.openPack();assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().spotlightIndex,null);assert.equal(g.jobs.size,0);
@@ -131,7 +131,7 @@ test('skipping every mix of Secrets reveals only non-Secrets and keeps all Secre
   }
   for(let index=normal;index<3;index++){
    let s=g.c.snapshot();assert.equal(s.phase,'revealing');assert.equal(s.spotlightIndex,index);assert.equal(s.spotlightStage,'charging');assert.equal(s.canSkip,false);
-   g.advance(10479);assert.equal(g.c.snapshot().revealed.includes(index),false);g.advance(1);s=g.c.snapshot();assert.equal(s.phase,'spotlight');assert.equal(s.spotlightStage,'revealed');assert.equal(s.revealed.includes(index),true);
+   g.advance(10679);assert.equal(g.c.snapshot().revealed.includes(index),false);g.advance(1);s=g.c.snapshot();assert.equal(s.phase,'spotlight');assert.equal(s.spotlightStage,'revealed');assert.equal(s.revealed.includes(index),true);
    g.advance(2599);assert.equal(g.c.snapshot().spotlightIndex,index);g.advance(1);
    if(index<2)g.advance(950);
   }
@@ -140,12 +140,12 @@ test('skipping every mix of Secrets reveals only non-Secrets and keeps all Secre
 });
 test('skipping after a normal card has revealed keeps it and reveals the remaining non-Secrets once',()=>{
  const g=boot();g.c.show(['common:spoon','legendary:fork','secret:dragon']);g.c.openPack();g.advance(2400);assert.deepEqual(plain(g.c.snapshot().revealed),[0]);
- assert.equal(g.c.skipReveal(),true);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13080);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
+ assert.equal(g.c.skipReveal(),true);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13280);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
 });
 test('Skip Reveal cannot interrupt or restart a charging or revealed Secret',()=>{
  const g=boot();g.c.show(results);g.c.openPack();g.c.skipReveal();g.advance(950+1200);
  let before=plain(g.c.snapshot()),jobs=g.jobs.size;assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);assert.equal(g.jobs.size,jobs);
- g.advance(9280);before=plain(g.c.snapshot());assert.equal(before.phase,'spotlight');assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);
+ g.advance(9480);before=plain(g.c.snapshot());assert.equal(before.phase,'spotlight');assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);
  g.advance(2600);assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.changes.filter(s=>s.phase==='spotlight').length,1);
 });
 test('skipping cancels earlier card timers and stale callbacks cannot reveal Secrets or later packs',()=>{
@@ -157,7 +157,7 @@ test('Skip Reveal applies separately to each pack in a three-pack purchase',()=>
  for(let pack=1;pack<=3;pack++){
   assert.equal(g.c.snapshot().phase,'sealed');assert.equal(g.c.snapshot().packNumber,pack);assert.equal(g.c.skipReveal(),false);
   g.c.openPack();assert.equal(g.c.skipReveal(),true);assert.equal(g.c.skipReveal(),false);
-  if(pack===2){assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(950+13080);}
+  if(pack===2){assert.deepEqual(plain(g.c.snapshot().revealed),[0,1]);g.advance(950+13280);}
   assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.c.snapshot().packNumber,pack);
   if(pack<3)g.advance(1200);
  }
@@ -186,7 +186,7 @@ test('Skip Reveal preserves the full Mythic and Secret sequence for all 27 three
   assert.deepEqual(plain(g.c.snapshot().revealed),Array.from({length:ordinary},(_,i)=>i));g.advance(ordinary?950:1150);
   for(let index=ordinary;index<3;index++){
    let s=g.c.snapshot();const secret=s.rewards[index].startsWith('secret:');assert.equal(s.phase,'revealing');assert.equal(s.revealingIndex,index);assert.equal(s.canSkip,false);assert.equal(g.c.skipReveal(),false);
-   const duration=secret?10480:2500;g.advance(duration-1);assert.equal(g.c.snapshot().revealed.includes(index),false);g.advance(1);s=g.c.snapshot();assert.equal(s.phase,secret?'spotlight':'mythic');assert.equal(s.revealed.includes(index),true);
+   const duration=secret?10680:2500;g.advance(duration-1);assert.equal(g.c.snapshot().revealed.includes(index),false);g.advance(1);s=g.c.snapshot();assert.equal(s.phase,secret?'spotlight':'mythic');assert.equal(s.revealed.includes(index),true);
    assert.equal(g.c.skipReveal(),false);g.advance((secret?2600:2800)-1);assert.equal(g.c.snapshot().phase,secret?'spotlight':'mythic');g.advance(1);if(index<2)g.advance(950);
   }
   assert.equal(g.c.snapshot().phase,'complete');assert.equal(g.jobs.size,0);assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
@@ -196,7 +196,7 @@ test('skip never cancels or restarts an active Mythic buildup or impact hold',()
  const g=boot();g.c.show(['common:spoon','mythic:fork','secret:dragon']);g.c.openPack();g.c.skipReveal();g.advance(950+800);
  let before=plain(g.c.snapshot()),jobs=g.jobs.size;assert.equal(before.revealingIndex,1);assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);assert.equal(g.jobs.size,jobs);
  g.advance(1700);before=plain(g.c.snapshot());assert.equal(before.phase,'mythic');assert.equal(g.c.skipReveal(),false);assert.deepEqual(plain(g.c.snapshot()),before);
- g.advance(2800+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13080);assert.equal(g.c.snapshot().phase,'complete');
+ g.advance(2800+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13280);assert.equal(g.c.snapshot().phase,'complete');
 });
 test('Mythic animation waits for audio preparation and stale readiness cannot resume a closed pack',async()=>{
  let ready;const prepared=new Promise(resolve=>{ready=resolve;}),g=boot(false,{prepareReveal:rarity=>rarity==='mythic'?prepared:null});
@@ -206,7 +206,7 @@ test('Mythic animation waits for audio preparation and stale readiness cannot re
 });
 test('reduced motion preserves every Mythic and Secret reveal instead of jumping to the last card',()=>{
  const g=boot(true);g.c.show(['secret:dragon','mythic:fork','secret:hat']);g.c.openPack();assert.equal(g.c.snapshot().revealingIndex,0);assert.deepEqual(plain(g.c.snapshot().revealed),[]);
- g.advance(2500);assert.equal(g.c.snapshot().phase,'mythic');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(2800+950);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(13080+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13080);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
+ g.advance(2500);assert.equal(g.c.snapshot().phase,'mythic');assert.deepEqual(plain(g.c.snapshot().revealed),[0]);g.advance(2800+950);assert.equal(g.c.snapshot().spotlightIndex,1);g.advance(13280+950);assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(13280);assert.equal(g.c.snapshot().phase,'complete');assert.deepEqual(plain(g.c.snapshot().revealed),[0,1,2]);
 });
 
 
@@ -214,7 +214,17 @@ test('Secret waits for its recorded audio before blackout and late readiness can
  let ready;const audio=new Promise(resolve=>{ready=resolve;}),g=boot(false,{prepareReveal:rarity=>rarity==='secret'?audio:null});
  g.c.show(['common:spoon','mythic:fork','secret:dragon']);g.c.openPack();g.c.skipReveal();g.advance(950+2500+2800+950);
  assert.equal(g.c.snapshot().phase,'cards');assert.equal(g.c.snapshot().spotlightIndex,null);
- ready();await Promise.resolve();assert.equal(g.c.snapshot().phase,'revealing');assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(10479);assert.equal(g.c.snapshot().spotlightStage,'charging');g.advance(1);assert.equal(g.c.snapshot().spotlightStage,'revealed');g.advance(2600);assert.equal(g.c.snapshot().phase,'complete');
+ ready();await Promise.resolve();assert.equal(g.c.snapshot().phase,'revealing');assert.equal(g.c.snapshot().spotlightIndex,2);g.advance(10679);assert.equal(g.c.snapshot().spotlightStage,'charging');g.advance(1);assert.equal(g.c.snapshot().spotlightStage,'revealed');g.advance(2600);assert.equal(g.c.snapshot().phase,'complete');
  let staleReady;const staleAudio=new Promise(resolve=>{staleReady=resolve;}),stale=boot(false,{prepareReveal:()=>staleAudio});
  stale.c.show(['secret:dragon','secret:hat','secret:truffle']);stale.c.openPack();stale.advance(1650);stale.c.close();stale.c.show(results);staleReady();await Promise.resolve();stale.advance(60000);assert.equal(stale.c.snapshot().phase,'sealed');assert.deepEqual(plain(stale.c.snapshot().revealed),[]);
+});
+
+test('Secret landing and first tap visual keyframes align with the recorded cues after the extra pause',()=>{
+ const window={};vm.runInNewContext(source,{window});const {secretTimeline,revealTimings}=window.GameRelicReveal;
+ assert.equal(secretTimeline.landing,3300);assert.equal(secretTimeline.postLandingPause,200);assert.equal(revealTimings.secret,10680);
+ const css=fs.readFileSync(path.join(root,'style.css'),'utf8');
+ const landing=css.match(/([\d.]+)% \{ opacity: 1; transform: translate\(-50%,-36%\) scale\(1.3,.68\)/);
+ const tap=css.match(/([\d.]+)% \{ transform: rotateY\(-10deg\); filter: brightness\(10\)/);
+ assert.ok(landing&&tap);assert.ok(Math.abs(Number(landing[1])*revealTimings.secret/100-secretTimeline.landing)<.01);
+ assert.ok(Math.abs(Number(tap[1])*revealTimings.secret/100-secretTimeline.firstTap)<.01);
 });

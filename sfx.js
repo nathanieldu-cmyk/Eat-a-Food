@@ -29,7 +29,7 @@
   const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=10', buffer:null, promise:null};
   const mythicImpactOffset = 2.3;
   let mythicVoice = null, secretVoice = null;
-  const secretSample = {url:'audio/relic-secret-reference.wav?v=1', buffer:null, promise:null};
+  const secretSample = {url:'audio/relic-secret-synced.wav?v=1', buffer:null, promise:null};
   let unlocked = false;
   let muted = false;
   let packOpening = false;
@@ -123,7 +123,7 @@
       if (!buffer) { stopVoice(voice); return; }
       const source = context.createBufferSource(), gain = context.createGain();
       voice.osc = source; voice.gain = gain; source.buffer = buffer;
-      const offset = name === 'relic-secret-impact' ? (window.GameRelicReveal?.revealTimings?.secret || 10480) / 1000 : 0;
+      const offset = name === 'relic-secret-impact' ? (window.GameRelicReveal?.revealTimings?.secret || 10680) / 1000 : 0;
       const at = context.currentTime + Math.max(0, delay);
       gain.gain.setValueAtTime(1, at); source.connect(gain); gain.connect(context.destination);
       source.onended = () => { active.delete(voice); if (secretVoice === voice) secretVoice = null; source.disconnect(); gain.disconnect(); };

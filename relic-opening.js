@@ -1,5 +1,6 @@
 (() => {
-  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:2500,secret:10480};
+  const secretTimeline = {landing:3300, pauseAt:4000, postLandingPause:200, firstTap:4480, reveal:10680};
+  const revealTimings = {common:650,uncommon:900,rare:1300,epic:1850,legendary:2450,mythic:2500,secret:secretTimeline.reveal};
   const rarityOrder = Object.keys(revealTimings);
   function createController(onChange, {schedule = setTimeout, cancel = clearTimeout, reducedMotion = false, prepareReveal = null} = {}) {
     let phase = 'closed', rewards = [], revealed = new Set(), timers = new Set(), generation = 0, packId = 'common', ownedCounts = [], revealingIndex = null, pulse = 0, order = [], spotlightIndex = null, spotlightStage = null, batch = [], packNumber = 1, packTotal = 1;
@@ -90,7 +91,7 @@
     }
     return {show, showBatch, openPack, skipReveal, close, snapshot, isOpen: () => phase !== 'closed'};
   }
-  window.GameRelicReveal = {createController, revealTimings};
+  window.GameRelicReveal = {createController, revealTimings, secretTimeline};
   const root = typeof document === 'undefined' ? null : document.getElementById('relic-reveal');
   const api = window.GameRelics;
   if (!root || !api) return;
