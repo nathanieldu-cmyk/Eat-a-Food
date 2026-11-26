@@ -29,7 +29,7 @@
   const mythicSample = {url:'audio/relic-mythic-continuous.wav?v=10', buffer:null, promise:null};
   const mythicImpactOffset = 2.3;
   let mythicVoice = null, secretVoice = null;
-  const secretSample = {url:'audio/relic-secret-synced.wav?v=2', buffer:null, promise:null};
+  const secretSample = {url:'audio/relic-secret-synced.wav?v=3', buffer:null, promise:null};
   let unlocked = false;
   let muted = false;
   let packOpening = false;

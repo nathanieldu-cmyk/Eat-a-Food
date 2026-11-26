@@ -212,7 +212,7 @@ test('Mythic has a silent lead-in followed by the complete untouched original re
 
 test('Secret uses the supplied stereo recording once for blackout, pack animation and reward burst',async()=>{
  const urls=[],g=boot(false,true,async url=>{urls.push(url);return{ok:true,arrayBuffer:async()=>new ArrayBuffer(64)};});g.events.pointerdown();
- await g.api.prepareSecret();const ctx=g.contexts[0];assert.deepEqual(urls,['audio/relic-secret-synced.wav?v=2']);assert.equal(ctx.decodeCalls,1);
+ await g.api.prepareSecret();const ctx=g.contexts[0];assert.deepEqual(urls,['audio/relic-secret-synced.wav?v=3']);assert.equal(ctx.decodeCalls,1);
  const stop=g.api.play('relic-secret-blackout'),voice=ctx.voices.at(-1);assert.equal(voice.buffer.secret,'reference');assert.equal(voice.buffer.duration,12.98);assert.equal(voice.buffer.numberOfChannels,2);assert.equal(voice.offset,0);assert.equal(voice.time,ctx.currentTime);assert.equal(voice.gainNode.events[0].value,1);
  const count=ctx.voices.length;g.api.play('relic-charge-secret');for(let pulse=1;pulse<=3;pulse++)g.api.play(`relic-tick-secret-${pulse}`);assert.equal(ctx.voices.length,count,'no old synthesized heartbeat or charge layers');
  ctx.currentTime+=10.68;g.api.play('relic-secret-impact');assert.equal(ctx.voices.length,count,'the recorded reward burst is not played twice');assert.ok(!voice.stops.includes('now'));
@@ -253,5 +253,5 @@ test('synced Secret audio boosts only the blackout and adds exactly 200ms before
  assert.deepEqual(synced.subarray(frame(2.2),frame(4)-Math.round(.008*44100)*4),original.subarray(frame(2.2),frame(4)-Math.round(.008*44100)*4),'landing audio is unchanged');
  assert.deepEqual(synced.subarray(frame(4.2)+Math.round(.008*44100)*4),original.subarray(frame(4)+Math.round(.008*44100)*4),'all later taps and the final burst move exactly 200ms without processing');
  let oldEnergy=0,newEnergy=0,peak=0;for(let pos=0;pos<synced.length;pos+=2){const v=synced.readInt16LE(pos);peak=Math.max(peak,Math.abs(v));if(pos<frame(1.6)){oldEnergy+=original.readInt16LE(pos)**2;newEnergy+=v*v;}}
- assert.ok(Math.sqrt(newEnergy/oldEnergy)>4.0,'blackout is substantially louder than the earlier 2.4x version');assert.ok(peak<32767,'no clipped samples');
+ assert.ok(Math.sqrt(newEnergy/oldEnergy)>5.3,'blackout remains louder than both previous boosts');assert.ok(peak<32767,'no clipped samples');
 });
